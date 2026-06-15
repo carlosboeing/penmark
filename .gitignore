@@ -52,3 +52,6 @@ playwright-report/
 # Generated knowledge-graph outputs and cache
 graphify-out/
 
+# Local private working-memory repo (nested independent clone; never tracked or published)
+.workbench/
+
