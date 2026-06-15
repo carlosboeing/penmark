@@ -13,11 +13,11 @@ Operator-facing brief for AI coding assistants working on this repo; `README.md`
 - **Roadmap**: docs/ROADMAP.md
 - **Changelog**: docs/CHANGELOG.md
 - **Architecture**: docs/architecture.md (current state); README.md `## Architecture` is the short version
-- **Working memory**: the private `penmark-workbench` repo (numbered-lifecycle convention) — brainstorms, discovery, plans, reviews, notes, spike
+- **Working memory**: a separate private working-memory repo (numbered-lifecycle convention) — brainstorms, discovery, plans, reviews, notes, spike
 - **Other**:
   - Compatibility floor: `engines.vscode ^1.105.0` (Cursor 1.105 base; Antigravity 1.107; verified 2026-06-11). Stable APIs only — no proposed APIs.
   - Distribution: **local-first** — VSIX sideloaded into VS Code/Cursor/Antigravity. The repository is public (source-visibility only, ADR 0004 amendment); marketplace publishing stays a deferred decision (dual publishing to MS Marketplace + Open VSX per the plan's deferred publish track if it ever happens).
-  - Discovery/design working memory (multi-model second-opinion reviews, research, and the requirements brain-dump) lives in the private `penmark-workbench` repo, not in this public repo.
+  - Discovery/design working memory (multi-model second-opinion reviews, research, and the requirements brain-dump) is kept in a separate private repo, not in this public repo.
 
 ## `docs/` — public documentation
 
@@ -36,7 +36,7 @@ docs/
 └── guides/                 — maintainer release-smoke checklists
 ```
 
-The build-process working memory (brainstorms, discovery, phased plans, cross-model reviews, scratch notes, the anchor torture-test spike) lives in the private `penmark-workbench` repo under the same numbered-lifecycle convention. It is not public.
+The build-process working memory (brainstorms, discovery, phased plans, cross-model reviews, scratch notes, the anchor torture-test spike) is kept in a separate private working-memory repo under the same numbered-lifecycle convention. It is not public.
 
 ## Conventions
 
@@ -48,11 +48,11 @@ The build-process working memory (brainstorms, discovery, phased plans, cross-mo
 
 ## Commits
 
-Conventional Commits: `<type>(<scope>): <description>`, imperative, subject ≤72 chars, body explains *why*. Reference ADRs (and, where useful, the private workbench design/plan docs) in the body when relevant.
+Conventional Commits: `<type>(<scope>): <description>`, imperative, subject ≤72 chars, body explains *why*. Reference ADRs (and, where useful, the maintainer's private design/plan docs) in the body when relevant.
 
 ## Working principles for agent sessions
 
-- **Design gate:** no extension implementation until the maintainer has approved a design (the v1 design is approved and shipped; design docs live in the private `penmark-workbench` repo).
+- **Design gate:** no extension implementation until the maintainer has approved a design (the v1 design is approved and shipped; design docs are kept in the maintainer's private working-memory repo).
 - **Performance is a requirement, not a nice-to-have:** slim bundle (esbuild), lazy activation, no full re-renders. Treat `shd101wyy.markdown-preview-enhanced` as the cautionary tale.
 - **Stay inside the compatibility floor** (`^1.105.0`, stable APIs only).
 - Verify before answering; no speculative features; don't suppress errors; no emojis in files.
