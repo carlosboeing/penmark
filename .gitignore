@@ -44,6 +44,8 @@ out/
 coverage/
 test-results/
 playwright-report/
+blob-report/
+.playwright/
 .playwright-mcp/
 
 # Antigravity CLI local settings
