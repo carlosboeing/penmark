@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # workflow_dispatch builds the VSIX as a workflow artifact without creating a
+  # release (useful for testing the workflow before tagging). Note: this trigger
+  # only activates once the workflow file is on the default branch.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build + size gate + publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production + package VSIX
+        run: npm run package
+
+      - name: VSIX size gate
+        run: node scripts/check-vsix-size.mjs penmark-*.vsix
+
+      - name: Upload VSIX as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: penmark-vsix
+          path: penmark-*.vsix
+          retention-days: 30
+
+      # Attach the VSIX to a GitHub Release only when triggered by a version tag.
+      # workflow_dispatch skips this step — the VSIX is available as an artifact above.
+      # NO marketplace publish steps (vsce publish / ovsx publish) — Penmark is
+      # local-first; publishing is a deferred track (ADR 0004 amendment 2026-06-12).
+      - name: Create GitHub Release and attach VSIX
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release create "${TAG_NAME}" \
+            --title "Penmark ${TAG_NAME}" \
+            --generate-notes \
+            penmark-*.vsix

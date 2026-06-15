@@ -1,0 +1,57 @@
+# Roadmap
+
+Forward view of the Penmark project: what's in flight, queued, parked, and recently shipped. Single source of truth for "what's next".
+
+## In flight
+
+- **v0.5.0 Review MVP shipped (2026-06-14)** — all v0.5 tasks R1–R17 merged per the v0.5 plan; inline comments (anchor format core, select-to-comment, highlights + gutter dots + resolve popover, drawer + needs-attention + attention chip, single-`WorkspaceEdit` add/resolve, reconcile degradation ladder, export-as-prompt) on a local-first VSIX on the `v0.5.0` GitHub Release. **Awaiting Carlos: the v0.5 manual cross-IDE smoke checklist** ([guides/release-smoke-checklist-v0.5.md](guides/release-smoke-checklist-v0.5.md)) — sideload the VSIX into VS Code / Cursor / Antigravity and run the add→resolve→drawer→orphan→export journey (the layer-4 / real-IDE verification deferred by plan D16) before the Review MVP is signed off.
+- **v0.1.0 Reading MVP shipped (2026-06-13)** — Phase 0 + all v0.1 tasks T1–T13 merged per the Phase 0 + v0.1 plan; local-first VSIX on the `v0.1.0` GitHub Release. **Awaiting Carlos: the manual cross-IDE smoke checklist** ([guides/release-smoke-checklist.md](guides/release-smoke-checklist.md)) — sideload the VSIX into VS Code / Cursor / Antigravity and confirm rendering, themes, highlighting, mermaid, copy buttons, and scroll sync before the MVP is signed off.
+
+## Next actions
+
+- **Carlos:** run [guides/release-smoke-checklist-v0.5.md](guides/release-smoke-checklist-v0.5.md) against the `v0.5.0` VSIX across the three IDEs (add→resolve→drawer→orphan→export); file issues for any breakage. Also covers the still-open v0.1.0 reading-path smoke ([guides/release-smoke-checklist.md](guides/release-smoke-checklist.md)).
+- **Next phase: v1.0 Polish** — settings (fonts, sizes, line spacing, theme presets), image lightbox, interactive task checkboxes, frontmatter metadata card, keyboard navigation, a performance pass against the design §8 budgets, and the two tracked post-v0.5 follow-ups below (§8.5 two-block reconcile, exact selection→source mapping for marked-up prose).
+
+## Planned release phases (per design §11)
+
+- **Phase 0 — Foundation**: scaffold (TypeScript, esbuild), CI matrix (3 OS × VS Code 1.105/stable/insiders), 4-layer test harness, VSIX smoke-install across VS Code/Cursor/Antigravity.
+- **Phase 1 — Reading MVP (v0.1)**: custom webview preview panel; GitHub-style light/dark/auto themes independent of IDE theme; GFM rendering (markdown-it, host-side parse); syntax highlighting; scroll sync; code-block copy buttons; mermaid lazy render + lightbox modal; DOMPurify + nonce CSP.
+- **Phase 2 — Review MVP (v0.5)**: select-to-comment in preview; subtle highlights; comments drawer; resolve/delete; comment storage v1 (documented public spec); author identity; "copy review as prompt" + export review.md (agent handoff).
+- **Phase 3 — Polish (v1.0)**: settings (fonts, sizes, line spacing, theme presets); image lightbox; interactive task checkboxes; frontmatter metadata card; basic keyboard navigation; performance pass against budgets. *(CONTRIBUTING / CODE_OF_CONDUCT / issue+PR templates / Discussions landed early on 2026-06-14 when the repo went public.)* Dual-registry launch remains deferred *(repo is public as of 2026-06-14, but marketplace publishing is still a separate deferred decision — ADR 0004 amendments)*.
+- **Phase 4 — v2**: comment threads/replies; comment markers in TOC/scrollbar + next/prev navigation; PlantUML (Kroki, configurable server); diagram PNG/SVG export; agent integration (an agent skill, `languageModelTools`, possibly MCP); edit-mode exploration (CustomTextEditor, `priority: "option"`).
+
+## Future considerations
+
+- **Self-hosted/deployable web app** offering the same review experience outside the IDE, connected to a GitHub repo — premise for keeping the render/comment core platform-agnostic and the comment format an open protocol.
+- **"Send review to agent" integrations** (Carlos, 2026-06-12): beyond clipboard/file export, detect a running coding agent or terminal session and inject the review prompt directly. Deferred for session-detection complexity across three IDEs; design §4.3.
+- Doc-revision diff review (re-review only what changed since last review round).
+- Workspace-level review view (tree of docs with open-comment counts).
+- Worker-thread markdown parsing for very large documents.
+- Additional diagram formats behind the same fence abstraction (Graphviz/DOT via viz-js WASM, D2).
+- Comment format interop (CriticMarkup import/export).
+- **Two-review-block reconcile (post-v0.5, R16/§8.5 follow-up):** when a 3-way merge is resolved by keeping *both* `pmk:review` blocks instead of unioning them, reconcile keeps only the EOF block's entries as live anchors; the non-EOF block's entries are surfaced via the `secondReviewBlock` corruption flag but **not** added to the needs-attention list (normative §8.5 says they should be "preserved for needs-attention rather than dropped"). No data is lost (entries stay verbatim in the `.md`) and the corruption is flagged (§9 satisfied), and the common union resolution is fully lossless and tested — so this is a UX-surfacing gap, not a data-integrity bug. Pinned as an `it.fails` in `test/golden/merge/merge-goldens.test.ts`; fixing it teaches the parser + reconcile to enumerate every review block's entries and flips that test to passing (promote it then).
+- **Exact selection->source mapping for marked-up prose (post-v0.5, R10 follow-up):** v0.5's `selectionToSourceRange` sums rendered-text length within a block, which under-counts the source offset wherever the render drops characters (block prefixes `## `/`- `/`> `, inline markup `**b**`->`b`, `[t](u)`->`t`, entities). It is always AST-safe (planAnchor/snapSpan guarantee well-formed anchors) and the snap-preview is pixel-accurate, but a persisted anchor on marked-up prose can cover a slightly different span than selected. Fix: stamp source char offsets per inline text node at render time so each selection endpoint maps to its own node's source position (exact, since rendered==source within a single text node, modulo entities). Deferred as it requires inline source mapping markdown-it does not expose out of the box; v0.5's approximation is plan-sanctioned ("keep the webview side simple").
+- **Mermaid diagram compaction (cosmetic, deferred 2026-06-14):** tall/large flowcharts could be made more compact by tuning mermaid's `flowchart.padding` (smaller node padding, ~15→8) and `rankSpacing` (gap between nodes, ~50→35) in `initMermaid` — shorter diagrams with the text size unchanged. Measured ~7–14% height reduction before boxes look cramped; affects all flowcharts (a small divergence from mermaid defaults). Purely cosmetic; revisit if tall diagrams become a nuisance. Rejected alongside it: a *scaling* max-height (shrinks text — reintroduces the small-text problem) — prefer the Expand lightbox for full-detail viewing.
+
+## Open questions
+
+- ~~Span-anchor mechanics~~ **Resolved (2026-06-12, ADR 0006):** inline spans use wrapping marker pairs — editing highlighted text no longer orphans comments (Carlos's fragility objection); point+quote demoted to fallback in the degradation ladder, quote demoted to advisory snapshot. Phase 0 torture-test spike validates the grammar with measured orphan rates before the v0.5 spec freeze.
+- ~~Range-comment UI~~ **Resolved (2026-06-12, plan):** confirmed — lands in v0.5 (attempted) with permission to slip to v1.0.
+- ~~Pre-release versioning scheme~~ **Resolved (2026-06-12, plan D3):** `--pre-release` channel (`0.1.x`/`0.5.x` pre-release, `1.0.0` stable); even/odd minor rejected — everything pre-1.0 is pre-release anyway.
+- ~~Go public at all?~~ **Resolved (2026-06-14, [ADR 0004 amendment](adrs/0004-name-penmark-and-dual-publishing.md)):** the *repository* is now public — source-visibility only. This unblocks CI/Release (unlimited free Actions minutes) and brought the standard OSS security + community gates online. **Distribution is unchanged** — still local-first VSIX; **marketplace / dual-registry publishing remains deferred** (publisher ID and npm core-package name get decided only on a publish yes — the plan's deferred publish track).
+- (Resolved 2026-06-11/12: name = Penmark, ADR 0004; storage = single-file, ADR 0002; anchors/escaping = ADR 0006 superseding 0003; entry format = markdown-style chat shape with advisory quote, design §4.2; granularity = contiguous block-range snapping; support forum = GitHub Discussions per design §10.)
+
+## Parked
+
+- **Declined: Word/PPT preview** — scope creep outside the markdown mission (markdown-review tries this; it produced a 3,000-line god class).
+- **Declined: PDF/DOCX export** — vscode-markdown-pdf already owns this niche well; revisit only on strong user demand.
+- **Declined: real-time multi-user collaboration** — git is the collaboration layer for this product.
+- **Deferred: WYSIWYG editing** — v2 exploration at most (CustomTextEditor as `option`); the failure mode is markdown-docs (16 MB per tab).
+
+## Recently shipped
+
+- 2026-06-14 — **v0.5.0 Review MVP** — inline review comments on rendered markdown: the `src/core/comments` format core (parser/serializer/placement/reconcile, ≥95% coverage, TDD'd fresh from the frozen `spec/penmark-format.md`), select-to-comment with snap preview, theme-aware highlights + gutter dots + resolve popover, the comments drawer with a needs-attention bucket and amber attention chip, single-`WorkspaceEdit` add/resolve with author identity, the §8 reconcile degradation ladder, export-review-as-prompt, and the release-blocking merge/orphan golden suite. Local-first VSIX (core 581 KiB, mermaid excluded) on the `v0.5.0` GitHub Release. See [CHANGELOG.md](CHANGELOG.md).
+- 2026-06-13 — **v0.1.0 Reading MVP** — custom webview preview, GitHub light/dark/auto themes, GFM rendering with source offsets, lazy highlight.js, code-copy buttons, lazy mermaid + pan/zoom lightbox, bidirectional scroll sync, DOMPurify + nonce CSP. Local-first VSIX on the `v0.1.0` GitHub Release. Quality-gated: 4-layer test matrix, coverage/size/formatter-conformance/perf budgets all green in CI. See [CHANGELOG.md](CHANGELOG.md).
+- 2026-06-12 — **Phase 0 + v0.1 implementation plan approved** — 18 executable tasks (Phase 0 foundation + v0.1 Reading MVP, local-first VSIX distribution), spike-gated spec freeze, enforced coverage/size/perf gates.
+- 2026-06-12 — **v1 design approved** — the v1 design flipped to `status: approved` after three review rounds (11 inline comments; span anchors reworked to wrapping pairs, [ADR 0006](adrs/0006-span-anchor-wrapping-with-degradation-ladder.md) superseding 0003; review-block entry format finalized). Decisions of record: ADRs 0001–0006.
+- 2026-06-11 — Discovery phase: repo bootstrap, reference-repo audits, landscape research, multi-AI probe, product brainstorm, naming shortlist. See [CHANGELOG.md](CHANGELOG.md).

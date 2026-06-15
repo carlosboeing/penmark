@@ -1,0 +1,39 @@
+{
+  "comments": [
+    {
+      "id": "d3t4y6km",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:30 +10:00",
+      "quote": "First, all rendering happens in the extension host.",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "range",
+      "extent": {
+        "start": 177,
+        "end": 734,
+        "text": "\nFirst, all rendering happens in the extension host. The webview receives sanitized HTML over a versioned protocol, never raw markdown, so the untrusted-content boundary sits in exactly one place.\n\nSecond, the core engine has zero IDE imports. The same render and comment code must serve a future web app, and a lint-enforced boundary is cheaper than a monorepo split.\n\nThird, every block element carries a source position. Selection mapping and scroll sync both derive from this one attribute, so it is an acceptance criterion rather than an optimization.\n"
+      }
+    },
+    {
+      "id": "u3i7o2pe",
+      "author": "claude-code",
+      "provenance": "agent",
+      "timestamp": "2026-06-12 09:32 +10:00",
+      "quote": "webview behavior drift between the forks",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 806,
+        "end": 846,
+        "text": "webview behavior drift between the forks"
+      }
+    }
+  ],
+  "needsAttention": [],
+  "strayClosers": [],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 0
+}

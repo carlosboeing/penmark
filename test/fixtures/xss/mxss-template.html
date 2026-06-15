@@ -1,0 +1,3 @@
+<!-- mXSS: template/table confusion — DOMPurify docs example -->
+<table><tbody><tr><td><noscript><p></noscript><img src=x onerror=alert(1)></td></tr></tbody></table>
+<p data-pmk-offset="2:3">Safe content after mXSS attempt.</p>

@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an enhancement or new capability for Penmark
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please skim docs/ROADMAP.md - the feature may already be
+        planned, parked, or explicitly declined (scope is deliberately tight:
+        a markdown preview with inline review comments, not a markdown IDE).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that Penmark does not support today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Penmark do? Sketch the behavior or UI if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you have tried, or other approaches you weighed.
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I have read docs/ROADMAP.md and this is not already planned or declined.
+          required: true

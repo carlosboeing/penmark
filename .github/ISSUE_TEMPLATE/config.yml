@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/carlosboeing/penmark/discussions
+    about: Ask questions or discuss ideas in Discussions rather than opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/carlosboeing/penmark/security/policy
+    about: Report security issues privately. Do not open a public issue.

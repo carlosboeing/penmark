@@ -1,0 +1,67 @@
+name: Bug report
+description: Report a defect in Penmark (rendering, comments, themes, performance)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Penmark is a local-first VSIX sideloaded into
+        VS Code, Cursor, and Antigravity. Please do not report security issues
+        here - see SECURITY.md for private disclosure.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal sequence. Include sample markdown if the bug is render- or comment-specific.
+      placeholder: |
+        1. Open a markdown file with '...'
+        2. Run "Penmark: Open Preview to the Side"
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: ide
+    attributes:
+      label: IDE
+      options:
+        - VS Code
+        - Cursor
+        - Antigravity
+        - Other (note in description)
+    validations:
+      required: true
+  - type: input
+    id: ide-version
+    attributes:
+      label: IDE version
+      placeholder: "e.g. 1.105.0"
+    validations:
+      required: true
+  - type: input
+    id: penmark-version
+    attributes:
+      label: Penmark version
+      placeholder: "e.g. 0.5.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. macOS 15.5, Windows 11, Ubuntu 24.04"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Relevant output from the Developer Tools console, or a screenshot/GIF. Optional but helpful for visual bugs.
+    validations:
+      required: false

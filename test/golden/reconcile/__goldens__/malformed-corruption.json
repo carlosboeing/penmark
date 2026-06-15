@@ -1,0 +1,17 @@
+{
+  "comments": [],
+  "needsAttention": [],
+  "strayClosers": [
+    {
+      "id": "mn4p6q2r",
+      "index": 1504
+    },
+    {
+      "id": "d6t4y6km",
+      "index": 1761
+    }
+  ],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 2
+}

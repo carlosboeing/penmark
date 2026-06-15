@@ -1,0 +1,35 @@
+# Dependabot configuration.
+# Dependencies are exact-pinned (npm i -E discipline); Dependabot raises PRs that
+# bump the pin, which still need the same green CI as any other change.
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    ignore:
+      # Pin @types/vscode to the engines.vscode floor (^1.105.0). Letting the type
+      # definitions drift to a newer SDK would silently lift the compile-time guard
+      # on "stable APIs at the floor only" (CLAUDE.md), so type-check no longer
+      # catches use of APIs newer than the floor.
+      - dependency-name: "@types/vscode"
+    groups:
+      # Batch low-risk minor/patch bumps into a single PR to cut review churn;
+      # majors come through as individual PRs so they get scrutinized on their own.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope

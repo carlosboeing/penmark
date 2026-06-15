@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Penmark v1 — UX concept</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0;
+    --accent: #0969da; --highlight: rgba(255, 212, 0, 0.28); --highlight-border: #d4a72c;
+    --drawer-bg: #f6f8fa; --chip-warn-bg: #fff8c5; --chip-warn-fg: #7d4e00; --chip-warn-border: #d4a72c;
+    --code-bg: #f6f8fa; --popover-shadow: 0 8px 24px rgba(31,35,40,0.12);
+    --btn-bg: #f6f8fa; --btn-border: #d1d9e0;
+  }
+  .dark {
+    --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d;
+    --accent: #4493f8; --highlight: rgba(187, 153, 0, 0.30); --highlight-border: #9e6a03;
+    --drawer-bg: #151b23; --chip-warn-bg: #3a2d12; --chip-warn-fg: #d3a93c; --chip-warn-border: #9e6a03;
+    --code-bg: #151b23; --popover-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    --btn-bg: #21262d; --btn-border: #3d444d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; transition: background .2s; }
+
+  /* ── top bar (webview chrome) ─────────────────────────── */
+  .topbar { display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:5; }
+  .topbar .docname { font-weight:600; font-size:13px; }
+  .topbar .spacer { flex:1; }
+  .iconbtn { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--fg); background:var(--btn-bg); border:1px solid var(--btn-border); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  .chip-warn { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; padding:2px 9px; border-radius:999px; background:var(--chip-warn-bg); color:var(--chip-warn-fg); border:1px solid var(--chip-warn-border); cursor:pointer; }
+  .chip-warn .dot { width:7px; height:7px; border-radius:50%; background:var(--chip-warn-fg); }
+
+  /* ── layout: content + drawer ─────────────────────────── */
+  .layout { display:flex; }
+  .content { flex:1; max-width: 72ch; margin: 0 auto; padding: 28px 40px 80px; }
+  h1 { font-size: 1.9em; border-bottom:1px solid var(--border); padding-bottom:.3em; margin:.6em 0 .6em; }
+  h2 { font-size: 1.4em; border-bottom:1px solid var(--border); padding-bottom:.3em; margin:1.2em 0 .6em; }
+  p { margin: .7em 0; }
+  table { border-collapse: collapse; margin:.8em 0; }
+  th, td { border:1px solid var(--border); padding:5px 12px; font-size:13.5px; }
+  th { background: var(--drawer-bg); }
+  code { background: var(--code-bg); padding:.15em .35em; border-radius:5px; font-size:.88em; }
+
+  /* commented span + gutter dot */
+  .pm-highlight { background: var(--highlight); border-bottom: 2px solid var(--highlight-border); border-radius:2px; cursor:pointer; position:relative; }
+  .pm-block-highlight { outline: 2px solid var(--highlight-border); outline-offset: 4px; border-radius: 2px; background: var(--highlight); }
+  .gutter-dot { position:absolute; left:-26px; top:.45em; width:9px; height:9px; border-radius:50%; background:var(--highlight-border); }
+  .para-anchor { position: relative; }
+
+  /* comment popover */
+  .popover { position:absolute; left: 30%; margin-top:8px; width: 330px; background:var(--bg); border:1px solid var(--border); border-radius:10px; box-shadow: var(--popover-shadow); padding:12px 14px; z-index:6; font-size:13px; }
+  .popover .meta { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .avatar { width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; }
+  .avatar.human { background:#0969da; } .avatar.agent { background:#8250df; }
+  .popover .who { font-weight:600; font-size:12.5px; } .popover .when { color:var(--muted); font-size:11.5px; }
+  .popover .body { margin:4px 0 10px; }
+  .popover .actions { display:flex; gap:8px; }
+  .popover .actions .iconbtn.primary { background:var(--accent); color:#fff; border-color:transparent; }
+
+  /* mermaid mock */
+  .mermaid-box { border:1px solid var(--border); border-radius:8px; padding:18px; margin:.9em 0; position:relative; background:var(--drawer-bg); }
+  .mermaid-box:hover .expand { opacity:1; }
+  .expand { position:absolute; top:8px; right:8px; opacity:.85; }
+  svg text { fill: var(--fg); font: 12px sans-serif; }
+  svg rect { fill: var(--bg); stroke: var(--accent); }
+  svg path { stroke: var(--muted); fill:none; marker-end:url(#arr); }
+
+  /* drawer */
+  .drawer { width: 312px; border-left:1px solid var(--border); background:var(--drawer-bg); padding:14px; font-size:13px; min-height: 92vh; }
+  .drawer h3 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:4px 0 10px; }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; cursor:pointer; }
+  .card .meta { display:flex; gap:7px; align-items:center; margin-bottom:4px; }
+  .card .quote { color:var(--muted); font-size:12px; border-left:3px solid var(--highlight-border); padding-left:8px; margin:4px 0; font-style:italic; }
+  .card .resolve { font-size:11.5px; color:var(--accent); }
+  .orphan-sec { margin-top:18px; }
+  .orphan-sec .card { border-style:dashed; }
+  .orphan-badge { font-size:10.5px; background:var(--chip-warn-bg); color:var(--chip-warn-fg); border:1px solid var(--chip-warn-border); padding:1px 7px; border-radius:999px; }
+
+  .theme-toggle { position:fixed; bottom:14px; right:14px; z-index:9; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="docname">architecture-hld.md — Penmark</span>
+    <span class="chip-warn" title="1 comment could not be re-anchored"><span class="dot"></span>1 orphaned</span>
+    <span class="spacer"></span>
+    <button class="iconbtn">Aa Theme</button>
+    <button class="iconbtn">⤓ Export review</button>
+    <button class="iconbtn">💬 Comments (3)</button>
+  </div>
+
+  <div class="layout">
+    <main class="content">
+      <h1>Checkout Service — High Level Design</h1>
+      <p>This document describes the proposed architecture for the new checkout service, covering the order pipeline, payment integration and the consistency model for reads and writes.</p>
+
+      <h2>1. Consistency model</h2>
+      <p class="para-anchor"><span class="gutter-dot"></span>The checkout service uses <span class="pm-highlight">eventual consistency</span> for the read path. Writes go through the primary store and are replicated to read replicas within an unbounded window. Clients retry on staleness.</p>
+
+      <!-- open comment popover on the highlighted span -->
+      <div class="popover">
+        <div class="meta"><span class="avatar human">C</span><span class="who">carlos</span><span class="when">human · 11 Jun, 11:02</span></div>
+        <div class="body">Why eventual consistency on the read path? Checkout needs read-your-writes — call out the mitigation or change the store.</div>
+        <div class="actions"><button class="iconbtn primary">Reply (v2)</button><button class="iconbtn">✓ Resolve</button></div>
+      </div>
+
+      <p style="margin-top:120px;">Latency budgets per dependency are summarized below.</p>
+
+      <table class="pm-block-highlight">
+        <tr><th>Dependency</th><th>p99 budget</th></tr>
+        <tr><td>Payment gateway</td><td>800 ms</td></tr>
+        <tr><td>Inventory svc</td><td>120 ms</td></tr>
+      </table>
+
+      <h2>2. Order pipeline</h2>
+      <div class="mermaid-box">
+        <button class="iconbtn expand">⛶ Expand</button>
+        <svg width="420" height="120" viewBox="0 0 420 120">
+          <defs><marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6" stroke-width="1"/></marker></defs>
+          <rect x="8"  y="40" width="92" height="34" rx="6"/><text x="22" y="61">Cart svc</text>
+          <rect x="160" y="40" width="100" height="34" rx="6"/><text x="172" y="61">Checkout</text>
+          <rect x="318" y="40" width="92" height="34" rx="6"/><text x="330" y="61">Payments</text>
+          <path d="M100,57 L158,57"/><path d="M260,57 L316,57"/>
+        </svg>
+      </div>
+      <p>Click any diagram to open it in a pan-and-zoom lightbox; export to PNG lives in the lightbox toolbar.</p>
+    </main>
+
+    <aside class="drawer">
+      <h3>Comments · 3 open</h3>
+      <div class="card">
+        <div class="meta"><span class="avatar human">C</span><span class="who">carlos</span><span class="when">11:02</span></div>
+        <div class="quote">eventual consistency</div>
+        Why eventual consistency on the read path? Checkout needs read-your-writes…
+        <div style="margin-top:6px;"><span class="resolve">✓ Resolve</span></div>
+      </div>
+      <div class="card">
+        <div class="meta"><span class="avatar agent">A</span><span class="who">claude-code</span><span class="when">11:10</span></div>
+        <div class="quote">| Dependency | p99 budget |</div>
+        Table is missing the failure-mode column requested in review round 1.
+        <div style="margin-top:6px;"><span class="resolve">✓ Resolve</span></div>
+      </div>
+      <div class="orphan-sec">
+        <h3>Needs attention <span class="orphan-badge">1 orphaned</span></h3>
+        <div class="card">
+          <div class="meta"><span class="avatar human">C</span><span class="who">carlos</span><span class="when">10:48</span></div>
+          <div class="quote">three retries with backoff</div>
+          The anchored text was rewritten by the author. Re-anchor or delete.
+          <div style="margin-top:6px;"><span class="resolve">↻ Re-anchor</span> · <span class="resolve">🗑 Delete</span></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <button class="iconbtn theme-toggle" onclick="document.body.classList.toggle('dark')">◐ Toggle light/dark</button>
+</body>
+</html>

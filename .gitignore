@@ -1,0 +1,54 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Node / build artifacts (for when extension development starts)
+# Match both the directory and a bare `node_modules` symlink (git worktrees
+# symlink it in; a trailing-slash pattern would not ignore the symlink, so
+# `git add -A` could otherwise track it).
+node_modules
+dist/
+build/
+out/
+*.vsix
+*.zip
+
+# Environment / secrets — DO NOT commit
+.env
+*.local
+
+# Editor/agent workspace settings (machine-specific)
+.claude/settings.local.json
+.claude/worktrees/
+
+# AI-tool runtime state (machine-local; never useful in VCS)
+.claude-octopus/
+.cursor/
+# If you ever author shareable Cursor rules, un-ignore them:
+#   !.cursor/
+#   .cursor/*
+#   !.cursor/rules/
+
+# Autonomous MVP runner artifacts (local only)
+.mvp-run-logs/
+.mvp-run-stop
+.mvp-run-lock/
+.v05-run-logs/
+.v05-run-stop
+.v05-run-lock/
+
+# Test artifacts (generated, not committed)
+.vscode-test/
+coverage/
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# Antigravity CLI local settings
+.gemini/
+
+# Generated knowledge-graph outputs and cache
+graphify-out/
+

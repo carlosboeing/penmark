@@ -1,0 +1,95 @@
+/*
+ * Penmark theme — dark token values.
+ * Applied when body carries .theme-dark or [data-theme="dark"].
+ * Derived from github-markdown-css@5.9.0 (MIT).
+ */
+
+body.theme-dark,
+body[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surface */
+  --pmk-color-bg: #0d1117;
+  --pmk-color-bg-muted: #151b23;
+  --pmk-color-bg-inset: #1e2430;
+
+  /* Foreground */
+  --pmk-color-fg: #ffffff;
+  --pmk-color-fg-muted: #9198a1;
+  --pmk-color-fg-subtle: #6e7681;
+
+  /* Links */
+  --pmk-color-accent: #4493f8;
+  --pmk-color-accent-hover: #79c0ff;
+
+  /* Borders */
+  --pmk-color-border-default: #3d444d;
+  --pmk-color-border-muted: #2d333b;
+
+  /* Code */
+  --pmk-color-code-bg: rgba(110, 118, 129, 0.4);
+  --pmk-color-code-fg: #ffffff;
+  --pmk-color-code-border: #3d444d;
+  --pmk-color-code-block-bg: #151b23;
+
+  /* Blockquote */
+  --pmk-color-blockquote-border: #3d444d;
+  --pmk-color-blockquote-fg: #e0e0e0;
+  --pmk-color-blockquote-bg: #161b22;
+
+  /* HR */
+  --pmk-color-hr: #3d444d;
+
+  /* Table */
+  --pmk-color-table-border: #3d444d;
+  --pmk-color-table-bg-header: #151b23;
+  --pmk-color-table-bg-row-alt: #151b23;
+
+  /* Topbar */
+  --pmk-topbar-bg: #161b22;
+  --pmk-topbar-border: #3d444d;
+  --pmk-topbar-fg: #f0f6fc;
+  --pmk-topbar-btn-active-bg: #1c2d3f;
+  --pmk-topbar-btn-active-fg: #4493f8;
+  --pmk-topbar-btn-hover-bg: #21262d;
+
+  /* Copy button (code blocks) — GitHub dark palette */
+  --pmk-copy-btn-bg: #21262d;
+  --pmk-copy-btn-fg: #f0f6fc;
+  --pmk-copy-btn-border: #3d444d;
+  --pmk-copy-btn-hover-bg: #30363d;
+  --pmk-copy-btn-hover-border: #6e7681;
+  --pmk-copy-btn-copied-fg: #3fb950;
+
+  /* Mermaid (T9) — error containment + lightbox */
+  --pmk-mermaid-error-border: #30363d;
+  --pmk-mermaid-error-fg: #ff7b72;
+  --pmk-mermaid-backdrop: rgba(0, 0, 0, 0.7);
+
+  /* Comments (R11) — highlight tint, gutter dot, popover, avatars */
+  --pmk-comment-hl-rgb: 187, 153, 0;
+  --pmk-comment-hl-border: #9e6a03;
+  --pmk-comment-popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --pmk-comment-avatar-fg: #ffffff;
+  --pmk-comment-avatar-human: #1f6feb;
+  --pmk-comment-avatar-agent: #8957e5;
+  --pmk-comment-note-bg: #3a2d12;
+  --pmk-comment-note-fg: #d3a93c;
+  --pmk-comment-note-border: #9e6a03;
+
+  /* Syntax highlighting (highlight.js token classes) — GitHub dark palette */
+  --pmk-hljs-comment: #8b949e;
+  --pmk-hljs-keyword: #ff7b72;
+  --pmk-hljs-string: #a5d6ff;
+  --pmk-hljs-number: #79c0ff;
+  --pmk-hljs-title: #d2a8ff;
+  --pmk-hljs-function: #d2a8ff;
+  --pmk-hljs-attr: #79c0ff;
+  --pmk-hljs-variable: #ffa657;
+  --pmk-hljs-type: #ffa657;
+  --pmk-hljs-built-in: #79c0ff;
+  --pmk-hljs-meta: #79c0ff;
+  --pmk-hljs-symbol: #ffa657;
+  --pmk-hljs-deletion-bg: #490202;
+  --pmk-hljs-addition-bg: #04260f;
+}

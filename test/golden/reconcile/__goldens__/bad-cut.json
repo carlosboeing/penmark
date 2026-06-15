@@ -1,0 +1,62 @@
+{
+  "comments": [
+    {
+      "id": "aaaaaaaa",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:02 +10:00",
+      "quote": "three times with backoff",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 60,
+        "end": 84,
+        "text": "three times with backoff"
+      }
+    },
+    {
+      "id": "cccccccc",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:05 +10:00",
+      "quote": "dangling span closer",
+      "state": "orphan",
+      "flags": [
+        "stray-closer"
+      ],
+      "anchorKind": null,
+      "extent": null
+    },
+    {
+      "id": "dddddddd",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:07 +10:00",
+      "quote": "the budget table",
+      "state": "orphan",
+      "flags": [
+        "half-pair"
+      ],
+      "anchorKind": null,
+      "extent": null
+    }
+  ],
+  "needsAttention": [
+    "cccccccc",
+    "dddddddd"
+  ],
+  "strayClosers": [
+    {
+      "id": "cccccccc",
+      "index": 251
+    },
+    {
+      "id": "dddddddd",
+      "index": 353
+    }
+  ],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 4
+}

@@ -1,0 +1,63 @@
+<h1 id="anchored-document" tabindex="-1" data-pmk-offset="0:1" data-pmk-coff="0">Anchored document</h1>
+<p data-pmk-offset="2:4" data-pmk-coff="21">This fixture exercises span pairs, block anchors, range pairs, and a review block.
+Derived from spec/conformance/ fixtures 01, 03, and 04.</p>
+<h2 id="span-pairs" tabindex="-1" data-pmk-offset="5:6" data-pmk-coff="161">Span pairs</h2>
+<p data-pmk-offset="7:8" data-pmk-coff="176">This document describes the <!--pmk:s k7m2q5ax-->high level<!--/pmk:s k7m2q5ax--> design. We expect <!--pmk:s w3n6d5pz-->fifty thousand requests per second<!--/pmk:s w3n6d5pz--> at peak.</p>
+<h2 id="block-anchor" tabindex="-1" data-pmk-offset="9:10" data-pmk-coff="364">Block anchor</h2>
+<!--pmk:b f3w6r5zn-->
+<table data-pmk-offset="12:16" data-pmk-coff="403">
+<thead>
+<tr>
+<th>IDE</th>
+<th>Base version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VS Code</td>
+<td>1.105</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>1.105</td>
+</tr>
+</tbody>
+</table>
+<h2 id="range-pair" tabindex="-1" data-pmk-offset="17:18" data-pmk-coff="528">Range pair</h2>
+<!--pmk:r d3t4y6km o-->
+<p data-pmk-offset="20:21" data-pmk-coff="567">First, all rendering happens in the extension host. The webview receives sanitized HTML over a versioned protocol, never raw markdown.</p>
+<p data-pmk-offset="22:23" data-pmk-coff="703">Second, the core engine has zero IDE imports.</p>
+<!--pmk:r d3t4y6km c-->
+<p data-pmk-offset="25:26" data-pmk-coff="774">The main risk is <!--pmk:s u3i7o2pe-->webview behavior drift between the forks<!--/pmk:s u3i7o2pe-->.</p>
+<!-- pmk:review v1 -->
+<!--pmk:c k7m2q5ax
+carlos (human) · 2026-06-12 09:02 +10:00
+> high level
+
+This doc should also contain low level details.
+-->
+<!--pmk:c w3n6d5pz
+carlos (human) · 2026-06-12 09:04 +10:00
+> fifty thousand requests per second
+
+Where does this number come from?
+-->
+<!--pmk:c f3w6r5zn
+carlos (human) · 2026-06-12 09:20 +10:00
+> | IDE         | Base version |
+
+Table is missing the verification date column.
+-->
+<!--pmk:c d3t4y6km
+carlos (human) · 2026-06-12 09:30 +10:00
+> First, all rendering happens in the extension host.
+
+This should reference ADR 0001 explicitly.
+-->
+<!--pmk:c u3i7o2pe
+claude-code (agent) · 2026-06-12 09:32 +10:00
+> webview behavior drift between the forks
+
+Antigravity 1.107 changed webview CSP handling.
+-->
+<!-- /pmk:review -->

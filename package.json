@@ -1,0 +1,172 @@
+{
+  "name": "penmark-markdown-review",
+  "displayName": "Penmark — Markdown Review Comments & Preview",
+  "description": "Markdown preview with inline review comments — Google-Docs-style commenting on rendered markdown, built for reviewing AI-authored docs in the IDE.",
+  "version": "0.5.0",
+  "publisher": "local",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/carlosboeing/penmark.git"
+  },
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:penmark.openPreview",
+    "onCommand:penmark.exportReview",
+    "onWebviewPanel:penmark.preview"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Penmark",
+      "properties": {
+        "penmark.theme": {
+          "type": "string",
+          "enum": [
+            "light",
+            "dark",
+            "auto"
+          ],
+          "default": "auto",
+          "description": "Preview theme. 'auto' follows the IDE theme; 'light' and 'dark' override it."
+        },
+        "penmark.scrollSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Synchronise the preview scroll position with the editor cursor."
+        },
+        "penmark.mermaid.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render Mermaid diagrams in the preview."
+        },
+        "penmark.contentWidth": {
+          "type": "string",
+          "enum": [
+            "comfortable",
+            "wide",
+            "full"
+          ],
+          "enumDescriptions": [
+            "Narrow column (~860px) — most comfortable line length for reading prose.",
+            "Wider column (~1200px) — more room for diagrams and tables.",
+            "Fill the panel (responsive, up to ~1600px) — diagrams and tables get the most width."
+          ],
+          "default": "full",
+          "description": "How wide the preview content column may grow. All options are responsive — the column always shrinks to fit a narrow or split-screen pane; this only caps how wide it gets on a large pane."
+        },
+        "penmark.comments.highlightIntensity": {
+          "type": "string",
+          "enum": [
+            "subtle",
+            "medium",
+            "strong"
+          ],
+          "enumDescriptions": [
+            "Faint tint — least distracting over prose.",
+            "Balanced tint — the default.",
+            "Bold tint — most visible."
+          ],
+          "default": "medium",
+          "description": "How strongly commented spans are tinted in the preview. Comments are always highlighted; this only sets the intensity. Applied when the preview is (re)opened."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "penmark.openPreview",
+        "title": "Penmark: Open Preview to the Side",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "penmark.exportReview",
+        "title": "Penmark: Export Review as Prompt",
+        "icon": "$(export)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "penmark.openPreview",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        },
+        {
+          "command": "penmark.exportReview",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "penmark.openPreview",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        },
+        {
+          "command": "penmark.exportReview",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint src test vitest.config.ts playwright.config.ts",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"*.{json,mjs,ts}\"",
+    "build:production": "node esbuild.mjs --production",
+    "package": "npm run build:production && vsce package",
+    "test:unit": "vitest run --coverage",
+    "test:browser": "playwright test",
+    "test:ext": "tsx test/ext/runTests.ts",
+    "test": "npm run build && npm run test:unit && npm run test:browser && npm run test:ext"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.60.0",
+    "@types/jsdom": "21.1.7",
+    "@types/markdown-it": "14.1.2",
+    "@types/markdown-it-footnote": "3.0.4",
+    "@types/mocha": "10.0.10",
+    "@types/morphdom": "2.4.2",
+    "@types/node": "25.9.3",
+    "@types/vscode": "1.105.0",
+    "@vitest/coverage-v8": "3.2.6",
+    "@vscode/test-electron": "3.0.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.1",
+    "eslint": "10.5.0",
+    "jsdom": "29.1.1",
+    "markdownlint-cli2": "0.22.1",
+    "mocha": "11.7.6",
+    "prettier": "3.8.4",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.61.0",
+    "vitest": "3.2.6"
+  },
+  "overrides": {
+    "esbuild": "0.28.1",
+    "serialize-javascript": "7.0.5"
+  },
+  "dependencies": {
+    "dompurify": "3.4.10",
+    "github-markdown-css": "5.9.0",
+    "github-slugger": "2.0.0",
+    "highlight.js": "11.11.1",
+    "markdown-it": "14.2.0",
+    "markdown-it-anchor": "9.2.0",
+    "markdown-it-footnote": "4.0.0",
+    "markdown-it-task-lists": "2.1.1",
+    "mermaid": "11.15.0",
+    "morphdom": "2.7.8",
+    "svg-pan-zoom": "3.6.2"
+  }
+}

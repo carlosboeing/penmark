@@ -1,0 +1,54 @@
+{
+  "comments": [
+    {
+      "id": "k7m2q5ax",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:02 +10:00",
+      "quote": "high level",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 81,
+        "end": 91,
+        "text": "high level"
+      }
+    },
+    {
+      "id": "w3n6d5pz",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:04 +10:00",
+      "quote": "fifty thousand requests per second",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 377,
+        "end": 411,
+        "text": "fifty thousand requests per second"
+      }
+    },
+    {
+      "id": "r6t2v4hq",
+      "author": "claude-code",
+      "provenance": "agent",
+      "timestamp": "2026-06-12 09:06 +10:00",
+      "quote": "stateless and horizontally scalable",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 801,
+        "end": 836,
+        "text": "stateless and horizontally scalable"
+      }
+    }
+  ],
+  "needsAttention": [],
+  "strayClosers": [],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 0
+}

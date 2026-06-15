@@ -1,0 +1,39 @@
+{
+  "comments": [
+    {
+      "id": "aaaaaaaa",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:02 +10:00",
+      "quote": "write-through",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 52,
+        "end": 65,
+        "text": "write-through"
+      }
+    },
+    {
+      "id": "bbbbbbbb",
+      "author": "dana",
+      "provenance": "human",
+      "timestamp": "2026-06-12 10:15 +10:00",
+      "quote": "event-driven",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 401,
+        "end": 413,
+        "text": "event-driven"
+      }
+    }
+  ],
+  "needsAttention": [],
+  "strayClosers": [],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 0
+}

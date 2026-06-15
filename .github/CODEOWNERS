@@ -1,0 +1,7 @@
+# Code owners for Penmark.
+# These owners are requested for review on any pull request that touches matching
+# paths. With branch protection requiring up-to-date branches, this keeps the
+# maintainer in the loop on every change.
+# Docs: https://docs.github.com/articles/about-code-owners
+
+* @carlosboeing

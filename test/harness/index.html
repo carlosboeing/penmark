@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Production-equivalent CSP (mirrors src/vscode/html.ts buildShellHtml). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self' data:; script-src 'nonce-harness-test-nonce'; style-src 'nonce-harness-test-nonce'; font-src 'self'"
+    />
+    <title>Penmark webview test harness</title>
+    <!-- Theme CSS, mirroring production buildShellHtml load order (tokens then base). -->
+    <link rel="stylesheet" nonce="harness-test-nonce" href="/dist/media/theme-light.css" />
+    <link rel="stylesheet" nonce="harness-test-nonce" href="/dist/media/theme-dark.css" />
+    <link rel="stylesheet" nonce="harness-test-nonce" href="/dist/media/penmark.css" />
+  </head>
+  <body>
+    <div id="penmark-topbar"></div>
+    <div id="penmark-root"></div>
+    <script nonce="harness-test-nonce">
+      // Stub acquireVsCodeApi for the harness — records postMessage calls and
+      // allows the test to inject host messages via window.__injectMessage().
+      (function () {
+        var messages = [];
+        var api = {
+          postMessage: function (msg) {
+            messages.push(msg);
+          },
+          getState: function () {
+            return undefined;
+          },
+          setState: function () {},
+        };
+        window.acquireVsCodeApi = function () {
+          return api;
+        };
+        window.__harness = {
+          messages: messages,
+          injectMessage: function (msg) {
+            window.dispatchEvent(new MessageEvent("message", { data: msg }));
+          },
+        };
+      })();
+    </script>
+    <script type="module" nonce="harness-test-nonce" src="/dist/webview/main.js"></script>
+  </body>
+</html>

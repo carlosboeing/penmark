@@ -1,0 +1,41 @@
+{
+  "comments": [
+    {
+      "id": "t4m7k2qx",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 14:10 +10:00",
+      "quote": "the token verification path",
+      "state": "degraded-recovered",
+      "flags": [
+        "closer-destroyed"
+      ],
+      "anchorKind": "span",
+      "extent": {
+        "start": 1023,
+        "end": 1050,
+        "text": "the token verification path"
+      }
+    },
+    {
+      "id": "r5n3p6sw",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 14:12 +10:00",
+      "quote": "fifty thousand requests per second at peak load",
+      "state": "orphan",
+      "flags": [
+        "closer-destroyed"
+      ],
+      "anchorKind": "span",
+      "extent": null
+    }
+  ],
+  "needsAttention": [
+    "r5n3p6sw"
+  ],
+  "strayClosers": [],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 1
+}

@@ -1,0 +1,42 @@
+{
+  "comments": [
+    {
+      "id": "s3d2f5gh",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 11:30 +10:00",
+      "quote": "the ten-thousand-line document with two hundred anchors",
+      "state": "content-removed",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 988,
+        "end": 988,
+        "text": ""
+      }
+    },
+    {
+      "id": "w3n6d2pz",
+      "author": "claude-code",
+      "provenance": "agent",
+      "timestamp": "2026-06-12 11:32 +10:00",
+      "quote": "fifty thousand requests per second",
+      "state": "content-removed",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 1310,
+        "end": 1310,
+        "text": ""
+      }
+    }
+  ],
+  "needsAttention": [
+    "s3d2f5gh",
+    "w3n6d2pz"
+  ],
+  "strayClosers": [],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 2
+}

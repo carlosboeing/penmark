@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "penmark: build",
+      "type": "process",
+      "command": "node",
+      "args": ["esbuild.mjs"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "penmark: watch",
+      "type": "process",
+      "command": "node",
+      "args": ["esbuild.mjs", "--watch"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "penmark-esbuild",
+        "pattern": {
+          "regexp": ".",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^",
+          "endsPattern": "Done in"
+        }
+      }
+    }
+  ]
+}

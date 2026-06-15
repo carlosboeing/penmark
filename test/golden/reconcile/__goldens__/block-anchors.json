@@ -1,0 +1,69 @@
+{
+  "comments": [
+    {
+      "id": "f3w6r5zn",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:20 +10:00",
+      "quote": "| IDE         | Base version | Registry       |",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "block",
+      "extent": {
+        "start": 106,
+        "end": 127,
+        "text": "<!--pmk:b f3w6r5zn-->"
+      }
+    },
+    {
+      "id": "p7q2l4vc",
+      "author": "claude-code",
+      "provenance": "agent",
+      "timestamp": "2026-06-12 09:21 +10:00",
+      "quote": "```ts",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "block",
+      "extent": {
+        "start": 434,
+        "end": 455,
+        "text": "<!--pmk:b p7q2l4vc-->"
+      }
+    },
+    {
+      "id": "a5s4d6fg",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:22 +10:00",
+      "quote": "![preview concept](../assets/concept.png)",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "block",
+      "extent": {
+        "start": 605,
+        "end": 626,
+        "text": "<!--pmk:b a5s4d6fg-->"
+      }
+    },
+    {
+      "id": "z2x5c7vb",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:23 +10:00",
+      "quote": "Stable APIs only. Proposed APIs are unavailable on the forks, and shipping against them would silently break Cursor and Antigravity even though VS Code itself works.",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "block",
+      "extent": {
+        "start": 686,
+        "end": 707,
+        "text": "<!--pmk:b z2x5c7vb-->"
+      }
+    }
+  ],
+  "needsAttention": [],
+  "strayClosers": [],
+  "reviewBlockMisplaced": false,
+  "secondReviewBlock": false,
+  "attentionCount": 0
+}
