@@ -2,6 +2,17 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-06-16
+
+### Table cell inline comments, right-sided drawer layout, and jump-to-comment scroll fixes
+
+Span comments (open/close tags) are now supported on individual words or text selections inside table cells, falling back to block comments only if the selection spans cell delimiters (`|`) or row boundaries (`\n`).
+
+- **Table cell coordinate mapping alignment** — Added custom table layout parsing inside `cleanMarkdown` to strip table syntax (`|` delimiters, separator rows, spaces, newlines) and track character indices precisely, ensuring the host aligns cell-specific selections to the correct source location rather than jumping to a matching quote in a different cell.
+- **Right-sided drawer placement and layout shrinking** — Moved the Comments drawer to the right side (`right: 0`, `border-left`, `transform: translateX(100%)`) and added a responsive CSS transition on wider screens (`min-width: 600px`) that pushes (`padding-right: 320px`) and shrinks the preview document to prevent the drawer from overlaying and hiding highlighted comments.
+- **Jump to comment action** — Renamed "Jump to source" to "Jump to comment". Clicking the action now scrolls the webview preview directly to the highlighted comment span (`scrollIntoView` centered smoothly) instead of shifting focus and jumping the active VS Code editor selection.
+- **Unit and browser tests updated** — Verifies table cell span comments, boundary/row crossing block fallbacks, cell coordinate mapping alignment, and the "Jump to comment" preview scrolling behavior.
+
 ## 2026-06-15
 
 ### Documentation split by audience

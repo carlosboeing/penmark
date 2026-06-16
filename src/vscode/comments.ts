@@ -26,7 +26,7 @@ import { buildBlockMap, planAnchor } from "../core/comments/placement.js";
 import { reconcile } from "../core/comments/reconcile.js";
 import type { ReconciledComment, ReconcileResult } from "../core/comments/reconcile.js";
 import type { NewComment, TextEdit } from "../core/comments/serializer.js";
-import { buildAddCommentEdits, buildResolveCommentEdits } from "../core/comments/serializer.js";
+import { buildAddCommentEdits, buildResolveCommentEdits, buildEditCommentEdits } from "../core/comments/serializer.js";
 import type { ParsedDoc } from "../core/comments/types.js";
 import type { WireComment, WireExtent } from "../core/protocol/messages.js";
 import { stripFrontmatter } from "../core/render/frontmatter.js";
@@ -144,7 +144,7 @@ export function planAddComment(input: AddCommentInput): AddPlan {
 
   const doc = parseDoc(source);
   const blockMap = buildBlockMap(source, tokenize(source));
-  const placement = planAnchor(source, srcRange, blockMap);
+  const placement = planAnchor(source, srcRange, blockMap, quote);
   if ("uncommentable" in placement) return { uncommentable: true };
 
   const id = freshId(existingIds(doc));
@@ -155,6 +155,11 @@ export function planAddComment(input: AddCommentInput): AddPlan {
 /** Plan the edits to resolve (= delete) the comment `id` from `source` (R3). */
 export function planResolveComment(source: string, id: string): TextEdit[] {
   return buildResolveCommentEdits(source, parseDoc(source), id);
+}
+
+/** Plan the edits to edit the comment `id` with `newBody` in `source`. */
+export function planEditComment(source: string, id: string, newBody: string): TextEdit[] | null {
+  return buildEditCommentEdits(source, parseDoc(source), id, newBody);
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +207,11 @@ function charToLineCol(text: string, offset: number): { line: number; col: numbe
  * body-relative). Returns `null` for orphan / content-removed comments, which
  * have no live span to highlight (§8).
  */
-function toWireExtent(body: string, frontmatterLen: number, rc: ReconciledComment): WireExtent | null {
+function toWireExtent(
+  body: string,
+  frontmatterLen: number,
+  rc: ReconciledComment,
+): WireExtent | null {
   if (rc.state === "orphan" || rc.state === "content-removed" || rc.extent === undefined) {
     return null;
   }

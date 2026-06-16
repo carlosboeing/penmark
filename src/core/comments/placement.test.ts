@@ -117,20 +117,12 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
     }
   });
 
-  it("selection splitting an emphasis run → does not land between the * delimiters", () => {
+  it("selection splitting an emphasis run → allows selecting inside without snapping to delimiters, expanding to word boundaries", () => {
     const text = "This is *very important* text here.\n";
     const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
     const sel = rangeOf(text, "very impo");
     const r = planAnchor(text, sel, map);
-    const empStart = offsetOf(text, "*very important*");
-    const empEnd = empStart + "*very important*".length;
-    if ("kind" in r && r.kind === "span") {
-      const insideEmp = (p: number): boolean => p > empStart && p < empEnd;
-      expect(insideEmp(r.range.start)).toBe(false);
-      expect(insideEmp(r.range.end)).toBe(false);
-    } else {
-      expect(r).toEqual({ kind: "block", blockLineStart: 0 });
-    }
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "very important") });
   });
 
   it("selection splitting a link [text](url) → does not land inside the link delimiters", () => {
@@ -172,12 +164,206 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
     expect(r).toEqual({ kind: "span", range: { start: para.startOffset, end: wordEnd } });
   });
 
+  it("clamps selection start to after heading prefix", () => {
+    const text = "## The short version\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "heading" }]);
+    const r = planAnchor(text, { start: 0, end: 3 }, map, "The"); // selection "The" (rendered 0:3)
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "The") });
+  });
+
+  it("falls back to block anchor when selection only covers heading prefix", () => {
+    const text = "## The short version\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "heading" }]);
+    const r = planAnchor(text, { start: 0, end: 0 }, map); // selection inside prefix (caret at start)
+    expect(r).toEqual({ kind: "block", blockLineStart: 0 });
+  });
+
+  it("clamps selection start to after list marker prefix", () => {
+    const text = "- first point\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "list" }]);
+    const r = planAnchor(text, { start: 0, end: 5 }, map, "first"); // selection "first" (rendered 0:5)
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "first") });
+  });
+
+  it("clamps selection start to after blockquote prefix", () => {
+    const text = "> quoted text\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "blockquote" }]);
+    const r = planAnchor(text, { start: 0, end: 6 }, map, "quoted"); // selection "quoted" (rendered 0:6)
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "quoted") });
+  });
+
   it("falls back to block when no safe inline boundary exists (whole content is one code span)", () => {
     const text = "`only-code-here`\n";
     const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
     const sel = rangeOf(text, "only-code");
     const r = planAnchor(text, sel, map);
     expect(r).toEqual({ kind: "block", blockLineStart: 0 });
+  });
+
+  it("allows selecting a single word inside a strong formatting block without snapping to whole block", () => {
+    const text = "This is **very important** text.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    const sel = rangeOf(text, "important");
+    const r = planAnchor(text, sel, map);
+    expect(r).toEqual({ kind: "span", range: sel });
+  });
+
+  it("allows selecting a single word inside emphasis without snapping to whole block", () => {
+    const text = "This is *very important* text.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    const sel = rangeOf(text, "very");
+    const r = planAnchor(text, sel, map);
+    expect(r).toEqual({ kind: "span", range: sel });
+  });
+
+  it("snaps to whole formatting block if selection crosses boundaries (inside/outside)", () => {
+    const text = "This is **very important** text.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    // "important** text" starts inside strong block and ends in plain text
+    const sel = rangeOf(text, "important** text");
+    const r = planAnchor(text, sel, map);
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "**very important** text") });
+  });
+
+  it("allows selecting a word inside link text without wrapping whole link", () => {
+    const text = "Click [here to download](http://example.com) now.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    const sel = rangeOf(text, "download");
+    const r = planAnchor(text, sel, map);
+    expect(r).toEqual({ kind: "span", range: sel });
+  });
+
+  it("snaps to whole link if selection crosses link text and URL destination", () => {
+    const text = "Click [here to download](http://example.com) now.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    // "download](http://example" crosses link text and URL
+    const sel = rangeOf(text, "download](http://example");
+    const r = planAnchor(text, sel, map);
+    expect(r).toEqual({
+      kind: "span",
+      range: rangeOf(text, "[here to download](http://example.com)"),
+    });
+  });
+
+  it("aligns approximate selection coordinates using the quote inside a strong block", () => {
+    const text = "This is **very important** text.\n";
+    // Rendered text is "This is very important text.\n"
+    // "important" starts at index 13 in rendered text.
+    // So webview sends start: 13, end: 22.
+    // The source has "**", so actual start in source is 15.
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    const r = planAnchor(text, { start: 13, end: 22 }, map, "important");
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "important") });
+  });
+
+  it("aligns approximate selection coordinates using the quote inside a heading block", () => {
+    const text = "## The short version\n";
+    // Rendered text is "The short version\n"
+    // "short" starts at index 4 in rendered text.
+    // So webview sends start: 4, end: 9.
+    // The source has "## ", so actual start in source is 7.
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "heading" }]);
+    const r = planAnchor(text, { start: 4, end: 9 }, map, "short");
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "short") });
+  });
+
+  it("reproduces Bug 2: selecting AI in 'no decision is made by AI'", () => {
+    const text =
+      "We're preparing the founding-structure decision the way an investor would later examine it: **evidence first, opinions second, every rule applied equally to both sides, and every step documented so it can be checked or challenged.** Research shows founding teams that _deliberate_ their equity split do measurably better than teams that settle it with a quick handshake — so we're doing the deliberate version, properly. AI tools help us do the heavy analysis consistently and at speed, but **no decision is made by AI**: the process produces evidence and options; the founders decide.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    const renderedText =
+      "We're preparing the founding-structure decision the way an investor would later examine it: evidence first, opinions second, every rule applied equally to both sides, and every step documented so it can be checked or challenged. Research shows founding teams that deliberate their equity split do measurably better than teams that settle it with a quick handshake — so we're doing the deliberate version, properly. AI tools help us do the heavy analysis consistently and at speed, but no decision is made by AI: the process produces evidence and options; the founders decide.";
+    const renderedIdx = renderedText.lastIndexOf("AI");
+    const r = planAnchor(text, { start: renderedIdx, end: renderedIdx + 2 }, map, "AI");
+    expect(r).toEqual({
+      kind: "span",
+      range: { start: text.lastIndexOf("AI"), end: text.lastIndexOf("AI") + 2 },
+    });
+  });
+
+  it("reproduces Bug: selecting 'I' in '**In one line:**' does not swallow delimiters and expands to whole word", () => {
+    const text = "**In one line:**\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    // Rendered text is "In one line:"
+    // "I" starts at index 0 in rendered text.
+    const r = planAnchor(text, { start: 0, end: 1 }, map, "I");
+    expect(r).toEqual({
+      kind: "span",
+      range: { start: 2, end: 4 }, // Index 2:4 in source is "In"
+    });
+  });
+
+  it("automatically expands partial word selections to the full word boundaries", () => {
+    const text = "Overflow signed an agreement.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    // Selecting "ver" (rendered index 2:5)
+    const r = planAnchor(text, { start: 2, end: 5 }, map, "ver");
+    expect(r).toEqual({
+      kind: "span",
+      range: { start: 0, end: 8 }, // Full word "Overflow"
+    });
+  });
+
+  it("automatically expands selections on special characters to the full compound word", () => {
+    const text = "Victor Augusto cc'd for roll-out and/or R&D support.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+
+    // 1. Selecting '-' in "roll-out" (source index 28)
+    const hyphenIdx = text.indexOf("-");
+    const r1 = planAnchor(text, { start: hyphenIdx, end: hyphenIdx + 1 }, map, "-");
+    expect(r1).toEqual({
+      kind: "span",
+      range: rangeOf(text, "roll-out"),
+    });
+
+    // 2. Selecting '/' in "and/or" (source index 36)
+    const slashIdx = text.indexOf("/");
+    const r2 = planAnchor(text, { start: slashIdx, end: slashIdx + 1 }, map, "/");
+    expect(r2).toEqual({
+      kind: "span",
+      range: rangeOf(text, "and/or"),
+    });
+
+    // 3. Selecting '&' in "R&D" (source index 41)
+    const ampIdx = text.indexOf("&");
+    const r3 = planAnchor(text, { start: ampIdx, end: ampIdx + 1 }, map, "&");
+    expect(r3).toEqual({
+      kind: "span",
+      range: rangeOf(text, "R&D"),
+    });
+
+    // 4. Selecting "'" in "cc'd" (source index 17)
+    const apoIdx = text.indexOf("'");
+    const r4 = planAnchor(text, { start: apoIdx, end: apoIdx + 1 }, map, "'");
+    expect(r4).toEqual({
+      kind: "span",
+      range: rangeOf(text, "cc'd"),
+    });
+
+    // 5. Selecting partial word "roll" of "roll-out"
+    const rollIdx = text.indexOf("roll");
+    const r5 = planAnchor(text, { start: rollIdx, end: rollIdx + 4 }, map, "roll");
+    expect(r5).toEqual({
+      kind: "span",
+      range: rangeOf(text, "roll-out"),
+    });
+  });
+
+  it("reproduces Bug: selection of hyphen from 'counter-offer' next to an existing comment tag snaps to hyphen in 'counter-offer', not in comment tag", () => {
+    const text = "<!--pmk:s zguugu44-->Ian's<!--/pmk:s zguugu44--> counter-offer\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+
+    // In the webview, the visible text is "Ian's counter-offer".
+    // Selection of "-" in "counter-offer" has offset relative to the visible text.
+    // Visible text: "Ian's counter-offer"
+    // "-" is at index 13 (Ian's: 5, space: 1, counter: 7).
+    // Webview sends start: 13, end: 14, quote: "-".
+    const r = planAnchor(text, { start: 13, end: 14 }, map, "-");
+
+    expect(r).toEqual({
+      kind: "span",
+      range: rangeOf(text, "counter-offer"),
+    });
   });
 });
 
@@ -209,16 +395,59 @@ describe("planAnchor — block (§4.2)", () => {
     expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
   });
 
-  it("selection inside table internals (one cell) → block", () => {
+  it("selection inside table internals (one cell) → span", () => {
+    const text = "before\n\n| a | b |\n|---|---|\n| 1 | 2 |\n";
+    const map = mapFrom(text, [
+      { line0: 0, line1: 1, type: "paragraph" },
+      { line0: 2, line1: 5, type: "table" },
+    ]);
+    const sel = rangeOf(text, "1"); // a cell value
+    const r = planAnchor(text, sel, map, "1");
+    expect(r).toEqual({ kind: "span", range: sel });
+  });
+
+  it("selection inside table crossing cell separator → block", () => {
     const text = "before\n\n| a | b |\n|---|---|\n| 1 | 2 |\n";
     const map = mapFrom(text, [
       { line0: 0, line1: 1, type: "paragraph" },
       { line0: 2, line1: 5, type: "table" },
     ]);
     const tableStart = offsetOf(text, "| a | b |");
-    const sel = rangeOf(text, "1"); // a cell value
-    const r = planAnchor(text, sel, map);
+    const sel = rangeOf(text, "1 | 2"); // spans cell separator |
+    const r = planAnchor(text, sel, map, "1 | 2");
     expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
+  });
+
+  it("selection inside table crossing row boundary → block", () => {
+    const text = "before\n\n| a | b |\n|---|---|\n| 1 | 2 |\n";
+    const map = mapFrom(text, [
+      { line0: 0, line1: 1, type: "paragraph" },
+      { line0: 2, line1: 5, type: "table" },
+    ]);
+    const tableStart = offsetOf(text, "| a | b |");
+    const sel = rangeOf(text, "b |\n|---|---|\n| 1"); // spans row boundary \n
+    const r = planAnchor(text, sel, map, "b | | 1");
+    expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
+  });
+
+  it("selection of cell content matching end of clean table text snaps correctly", () => {
+    const text = "| a |\n|---|\n| 1 |\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 3, type: "table" }]);
+    const sel = rangeOf(text, "1");
+    const r = planAnchor(text, sel, map, "1");
+    expect(r).toEqual({ kind: "span", range: sel });
+  });
+
+  it("aligns selection coordinates to the correct cell when a word occurs in multiple cells", () => {
+    const text = "| col 1 |\n| --- |\n| person |\n| person |\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 4, type: "table" }]);
+    // Rendered text is "col 1 person person".
+    // Selecting the second "person", which starts at rendered index 11 (after "col 1" (5) + "person" (6))
+    const r = planAnchor(text, { start: 11, end: 17 }, map, "person");
+    expect(r).toEqual({
+      kind: "span",
+      range: rangeOf(text, "person", text.lastIndexOf("person")),
+    });
   });
 
   it("selection that exactly equals one paragraph block → block", () => {
@@ -346,7 +575,7 @@ describe("planAnchor — property: spans are always inline-safe", () => {
     "Mix of _underscore emphasis_ and `code one` and `code two` and a final [a](b) tail piece.",
   ];
 
-  /** Spans inside which a marker boundary is unsafe: inline code, emphasis, link. */
+  /** Spans inside which a marker boundary is unsafe: inline code and link URL parts. */
   function unsafeIntervals(line: string): Array<[number, number]> {
     const out: Array<[number, number]> = [];
     const push = (re: RegExp): void => {
@@ -358,10 +587,12 @@ describe("planAnchor — property: spans are always inline-safe", () => {
       }
     };
     push(/`[^`]+`/g);
-    push(/\*\*[^*]+\*\*/g);
-    push(/(?<![*\w])\*[^*]+\*/g);
-    push(/(?<![_\w])_[^_]+_/g);
-    push(/\[[^\]]*\]\([^)]*\)/g);
+    const linkRe = /\[([^\]]*)\]\(([^)]*)\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = linkRe.exec(line)) !== null) {
+      const linkText = m[1] ?? "";
+      out.push([m.index + 1 + linkText.length, m.index + m[0].length]);
+    }
     return out;
   }
 

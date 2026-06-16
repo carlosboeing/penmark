@@ -117,11 +117,21 @@ describe("formatter golden matrix — anchored conformance corpus survives forma
           it("keeps all pmk markers present and well-formed", () => {
             const after = parseDoc(formatted);
             expect(after.malformed).toEqual([]);
-            expect([...after.spanOpens.keys()].sort()).toEqual([...pristineParsed.spanOpens.keys()].sort());
-            expect([...after.spanCloses.keys()].sort()).toEqual([...pristineParsed.spanCloses.keys()].sort());
-            expect([...after.blocks.keys()].sort()).toEqual([...pristineParsed.blocks.keys()].sort());
-            expect([...after.ranges.keys()].sort()).toEqual([...pristineParsed.ranges.keys()].sort());
-            expect([...after.entries.keys()].sort()).toEqual([...pristineParsed.entries.keys()].sort());
+            expect([...after.spanOpens.keys()].sort()).toEqual(
+              [...pristineParsed.spanOpens.keys()].sort(),
+            );
+            expect([...after.spanCloses.keys()].sort()).toEqual(
+              [...pristineParsed.spanCloses.keys()].sort(),
+            );
+            expect([...after.blocks.keys()].sort()).toEqual(
+              [...pristineParsed.blocks.keys()].sort(),
+            );
+            expect([...after.ranges.keys()].sort()).toEqual(
+              [...pristineParsed.ranges.keys()].sort(),
+            );
+            expect([...after.entries.keys()].sort()).toEqual(
+              [...pristineParsed.entries.keys()].sort(),
+            );
           });
 
           // (b) zero new orphans/corruption — no anchor regresses below baseline.

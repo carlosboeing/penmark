@@ -42,7 +42,16 @@ describe("isSafeStyleValue", () => {
 
 describe("SAFE_STYLE_PROPS", () => {
   it("allows the layout + paint properties mermaid emits", () => {
-    for (const prop of ["display", "max-width", "width", "height", "text-align", "fill", "stroke", "color"]) {
+    for (const prop of [
+      "display",
+      "max-width",
+      "width",
+      "height",
+      "text-align",
+      "fill",
+      "stroke",
+      "color",
+    ]) {
       expect(SAFE_STYLE_PROPS.has(prop)).toBe(true);
     }
   });
@@ -126,7 +135,8 @@ describe("adaptMermaidDarkBackgrounds", () => {
   });
 
   it("is a no-op in light mode and for a null svg", () => {
-    document.body.innerHTML = '<svg><rect class="rect" style="fill: rgb(237,233,254)"></rect></svg>';
+    document.body.innerHTML =
+      '<svg><rect class="rect" style="fill: rgb(237,233,254)"></rect></svg>';
     const svg = document.querySelector("svg") as SVGSVGElement;
     adaptMermaidDarkBackgrounds(svg, false);
     expect(svg.querySelector("rect")!.style.fillOpacity).toBe("");

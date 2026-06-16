@@ -48,7 +48,9 @@ describe("buildReviewPrompt (R9)", () => {
 
   it("notes orphan comments (anchor lost) so the agent locates them by quote", () => {
     const prompt = promptFor(threeComments);
-    expect(prompt).toContain("## 3. Lin (human) · 2026-06-14 09:10 +10:00 (location lost — quote only)");
+    expect(prompt).toContain(
+      "## 3. Lin (human) · 2026-06-14 09:10 +10:00 (location lost — quote only)",
+    );
   });
 
   it("ends in exactly one trailing newline", () => {

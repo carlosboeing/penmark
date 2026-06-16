@@ -197,10 +197,7 @@ describe("reconcile — range states (§8.4)", () => {
   });
 
   it("only the closer present (half-pair) → orphan + half-pair flag", () => {
-    const text = withReview(
-      "Block run.\n<!--pmk:r aaaaaaaa c-->",
-      entry("aaaaaaaa", "the run"),
-    );
+    const text = withReview("Block run.\n<!--pmk:r aaaaaaaa c-->", entry("aaaaaaaa", "the run"));
     const c = run(text).comments.find((x) => x.entry.id === "aaaaaaaa");
     expect(c?.state).toBe("orphan");
     expect(c?.flags).toContain("half-pair");

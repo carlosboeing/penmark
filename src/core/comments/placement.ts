@@ -83,12 +83,7 @@ const KNOWN_BLOCK_TYPES: ReadonlySet<string> = new Set<string>([
  * gets a block anchor"). Images and raw HTML blocks have no inline text model
  * we can safely wrap either, so they get a block anchor too.
  */
-const SPAN_HOSTILE_BLOCKS: ReadonlySet<BlockType> = new Set<BlockType>([
-  "table",
-  "fence",
-  "image",
-  "html",
-]);
+const SPAN_HOSTILE_BLOCKS: ReadonlySet<BlockType> = new Set<BlockType>(["fence", "image", "html"]);
 
 /** Map a markdown-it token type to one of our {@link BlockType}s. */
 function toBlockType(raw: string): BlockType {
@@ -148,6 +143,7 @@ export function planAnchor(
   text: string,
   sel: SourceRange,
   map: BlockMap,
+  quote?: string,
 ): AnchorPlacement | { uncommentable: true } {
   const start = Math.min(sel.start, sel.end);
   const end = Math.max(sel.start, sel.end);
@@ -174,7 +170,7 @@ export function planAnchor(
   }
 
   // Otherwise a span, snapping boundaries to inline-safe positions (§4.1).
-  const snapped = snapSpan(text, block, start, end);
+  const snapped = snapSpan(text, block, start, end, quote);
   if (snapped === null) return { kind: "block", blockLineStart: block.startOffset };
   return { kind: "span", range: snapped };
 }
@@ -256,29 +252,317 @@ function lineStartContaining(text: string, pos: number): number {
  * end moves right to the interval's end. After snapping we clamp to the block's
  * content bounds and reject an empty or whitespace-only result.
  */
-function snapSpan(text: string, block: BlockSpan, start: number, end: number): SourceRange | null {
+/**
+ * Returns the length of block-level structural prefixes (headings, blockquotes, list markers)
+ * at the start of `blockText`. This is used to ensure span comments never wrap these prefixes.
+ */
+function getBlockPrefixLength(blockText: string): number {
+  let len = 0;
+  while (true) {
+    const remaining = blockText.slice(len);
+    // 1. Blockquote prefix: e.g. "> "
+    const blockquoteMatch = /^([ \t]*>[ \t]*)/.exec(remaining);
+    if (blockquoteMatch) {
+      len += blockquoteMatch[0].length;
+      continue;
+    }
+    // 2. List item prefix: e.g. "- ", "1. "
+    const listMatch = /^([ \t]*([-*+]|[0-9]+\.)[ \t]+)/.exec(remaining);
+    if (listMatch) {
+      len += listMatch[0].length;
+      continue;
+    }
+    // 3. Heading prefix: e.g. "## "
+    const headingMatch = /^(#{1,6}[ \t]+)/.exec(remaining);
+    if (headingMatch) {
+      len += headingMatch[0].length;
+      continue;
+    }
+    break;
+  }
+  return len;
+}
+
+interface SnapInterval {
+  start: number;
+  end: number;
+  type: "always" | "cross";
+}
+
+function cleanMarkdown(
+  blockText: string,
+  blockType: BlockType,
+): { cleanText: string; mapping: number[] } {
+  let cleanText = blockText;
+  const mapping = Array.from({ length: blockText.length }, (_, i) => i);
+
+  const removeRange = (start: number, end: number) => {
+    cleanText = cleanText.slice(0, start) + cleanText.slice(end);
+    mapping.splice(start, end - start);
+  };
+
+  // Remove HTML comments (including Penmark markers) first, since they are never rendered as text
+  const commentRe = /<!--[\s\S]*?-->/g;
+  const comments: Array<{ start: number; end: number }> = [];
+  let cm: RegExpExecArray | null;
+  while ((cm = commentRe.exec(cleanText)) !== null) {
+    comments.push({ start: cm.index, end: cm.index + cm[0].length });
+  }
+  for (let i = comments.length - 1; i >= 0; i--) {
+    const { start, end } = comments[i]!;
+    removeRange(start, end);
+  }
+
+  if (blockType === "table") {
+    // For tables, remove alignment/separator row, newlines, cell delimiters (|),
+    // and leading/trailing padding spaces within cells so that cleanText matches
+    // the concatenated text of the rendered table cells.
+    const lines = cleanText.split("\n");
+    let currentOffset = 0;
+    const rangesToRemove: Array<{ start: number; end: number }> = [];
+
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+      const line = lines[lineIdx]!;
+      const lineStart = currentOffset;
+      const lineEnd = lineStart + line.length;
+
+      // Check for alignment separator row: e.g. |---|---|
+      if (/^[ \t]*\|[ \t]*[:\- \t|]+$/.test(line)) {
+        const endWithNl = lineEnd + (lineIdx < lines.length - 1 ? 1 : 0);
+        rangesToRemove.push({ start: lineStart, end: endWithNl });
+      } else {
+        // Data or header row: remove the newline
+        if (lineIdx < lines.length - 1) {
+          rangesToRemove.push({ start: lineEnd, end: lineEnd + 1 });
+        }
+
+        let i = 0;
+        while (i < line.length) {
+          // If it's an unescaped pipe '|', remove it
+          if (line.charAt(i) === "|" && (i === 0 || line.charAt(i - 1) !== "\\")) {
+            rangesToRemove.push({ start: lineStart + i, end: lineStart + i + 1 });
+            i++;
+            continue;
+          }
+
+          const cellStart = i;
+          while (
+            i < line.length &&
+            (line.charAt(i) !== "|" || (i > 0 && line.charAt(i - 1) === "\\"))
+          ) {
+            i++;
+          }
+          const cellEnd = i;
+
+          const cellStr = line.slice(cellStart, cellEnd);
+          const leadingSpaces = cellStr.length - cellStr.trimStart().length;
+          const trailingSpaces = cellStr.length - cellStr.trimEnd().length;
+
+          if (leadingSpaces > 0) {
+            rangesToRemove.push({
+              start: lineStart + cellStart,
+              end: lineStart + cellStart + leadingSpaces,
+            });
+          }
+          if (trailingSpaces > 0 && cellEnd - trailingSpaces > cellStart) {
+            rangesToRemove.push({
+              start: lineStart + cellEnd - trailingSpaces,
+              end: lineStart + cellEnd,
+            });
+          }
+        }
+      }
+      currentOffset += line.length + 1; // +1 for the \n
+    }
+
+    // Sort ranges descending to remove without shifting preceding offsets
+    rangesToRemove.sort((a, b) => b.start - a.start);
+
+    // Merge overlapping or adjacent ranges
+    const mergedRanges: Array<{ start: number; end: number }> = [];
+    for (const r of rangesToRemove) {
+      if (mergedRanges.length === 0) {
+        mergedRanges.push(r);
+      } else {
+        const last = mergedRanges[mergedRanges.length - 1]!;
+        if (r.end >= last.start) {
+          last.start = Math.min(last.start, r.start);
+          last.end = Math.max(last.end, r.end);
+        } else {
+          mergedRanges.push(r);
+        }
+      }
+    }
+
+    for (const r of mergedRanges) {
+      if (r.start < r.end && r.start >= 0 && r.end <= cleanText.length) {
+        removeRange(r.start, r.end);
+      }
+    }
+  }
+
+  // 1. Handle Links: [text](url)
+  const linkRe = /\[([^\]]*)\]\(([^)]*)\)/g;
+  const links: Array<{ start: number; textEnd: number; end: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(cleanText)) !== null) {
+    const start = m.index;
+    const textLen = m[1]?.length ?? 0;
+    const textEnd = start + 1 + textLen;
+    const end = start + m[0].length;
+    links.push({ start, textEnd, end });
+  }
+  for (let i = links.length - 1; i >= 0; i--) {
+    const { start, textEnd, end } = links[i]!;
+    removeRange(textEnd, end);
+    removeRange(start, start + 1);
+  }
+
+  // 2. Handle simple formatting delimiters: **, __, ~~, *, _, `
+  const delimRe = /~~|`+|\*\*|__|\*|_/g;
+  while (true) {
+    delimRe.lastIndex = 0;
+    const match = delimRe.exec(cleanText);
+    if (!match) break;
+    const start = match.index;
+    const len = match[0].length;
+    removeRange(start, len + start);
+  }
+
+  return { cleanText, mapping };
+}
+
+function snapSpan(
+  text: string,
+  block: BlockSpan,
+  start: number,
+  end: number,
+  quote?: string,
+): SourceRange | null {
   const blockText = text.slice(block.startOffset, block.endOffset);
   const intervals = unsafeIntervals(blockText, block.startOffset);
 
-  // Clamp into the block. Callers pass start <= end (planAnchor normalizes), and
-  // a single-block selection cannot exceed the block's end, so only the lower
-  // edge needs clamping (a selection may begin in the blank gap before a block).
-  let s = Math.max(start, block.startOffset);
-  let e = Math.min(end, block.endOffset);
+  const prefixLen = getBlockPrefixLength(blockText);
+  const contentText = blockText.slice(prefixLen);
+  const { cleanText, mapping } = cleanMarkdown(contentText, block.type);
 
-  // Snap a boundary out of any interval it falls strictly inside.
-  for (const [is, ie] of intervals) {
-    if (s > is && s < ie) s = is; // pull start to interval start (outward = left)
-    if (e > is && e < ie) e = ie; // push end to interval end (outward = right)
+  let s: number;
+  let e: number;
+
+  if (quote) {
+    const relStart = Math.max(0, start - (block.startOffset + prefixLen));
+    const relEnd = Math.max(0, end - (block.startOffset + prefixLen));
+
+    let alignedStart = relStart;
+    let alignedEnd = relEnd;
+
+    let bestStartInClean = -1;
+    let minDiff = Infinity;
+    let idx = cleanText.indexOf(quote);
+    while (idx !== -1) {
+      const diff = Math.abs(idx - relStart);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestStartInClean = idx;
+      }
+      idx = cleanText.indexOf(quote, idx + 1);
+    }
+    if (bestStartInClean !== -1) {
+      alignedStart = bestStartInClean;
+      alignedEnd = bestStartInClean + quote.length;
+    }
+
+    const mapToSourceStart = (cleanIdx: number): number => {
+      if (cleanIdx < 0) return block.startOffset + prefixLen;
+      if (cleanIdx >= cleanText.length) return block.startOffset + blockText.length;
+      return block.startOffset + prefixLen + mapping[cleanIdx]!;
+    };
+
+    const mapToSourceEnd = (cleanIdx: number): number => {
+      if (cleanIdx <= 0) return block.startOffset + prefixLen;
+      if (cleanIdx >= cleanText.length) {
+        if (cleanText.length > 0) {
+          return block.startOffset + prefixLen + mapping[cleanText.length - 1]! + 1;
+        }
+        return block.startOffset + blockText.length;
+      }
+      return block.startOffset + prefixLen + mapping[cleanIdx - 1]! + 1;
+    };
+
+    s = mapToSourceStart(alignedStart);
+    e = mapToSourceEnd(alignedEnd);
+  } else {
+    s = start;
+    e = end;
+  }
+
+  // Clamp into the block. We clamp the lower boundary to start after the block-level structural prefix.
+  s = Math.max(s, block.startOffset + prefixLen);
+  e = Math.min(e, block.endOffset);
+
+  // Sort intervals by length ascending (smaller/inner intervals first)
+  const sortedIntervals = [...intervals].sort((a, b) => a.end - a.start - (b.end - b.start));
+
+  // Snap boundaries using a fixed-point loop up to 10 iterations
+  let changed = true;
+  let iterations = 0;
+  while (changed && iterations < 10) {
+    changed = false;
+    iterations++;
+    for (const interval of sortedIntervals) {
+      const { start: is, end: ie, type: kind } = interval;
+      let newS = s;
+      let newE = e;
+      if (kind === "always") {
+        if (s > is && s < ie) newS = is;
+        if (e > is && e < ie) newE = ie;
+      } else {
+        if (s > is && s < ie && e > ie) newS = is;
+        if (e > is && e < ie && s < is) newE = ie;
+      }
+      if (newS !== s || newE !== e) {
+        s = newS;
+        e = newE;
+        changed = true;
+      }
+    }
   }
 
   // Trim leading/trailing whitespace so a span never wraps only blanks.
   while (s < e && /\s/.test(text.charAt(s))) s++;
   while (e > s && /\s/.test(text.charAt(e - 1))) e--;
 
+  // Expand to word boundaries if selecting a partial word
+  const isWordChar = (char: string): boolean => /[\p{L}\p{N}'\-&/]/u.test(char);
+  if (s < e) {
+    if (
+      s > block.startOffset + prefixLen &&
+      isWordChar(text.charAt(s)) &&
+      isWordChar(text.charAt(s - 1))
+    ) {
+      while (s > block.startOffset + prefixLen && isWordChar(text.charAt(s - 1))) {
+        s--;
+      }
+    }
+    if (e < block.endOffset && isWordChar(text.charAt(e - 1)) && isWordChar(text.charAt(e))) {
+      while (e < block.endOffset && isWordChar(text.charAt(e))) {
+        e++;
+      }
+    }
+  }
+
   if (s >= e) return null;
   // A snap that swallowed the whole block content is really a block selection.
   if (coversWholeBlock(text, block, s, e)) return null;
+
+  // For tables, prevent span comments from crossing cell delimiters (|) or row boundaries (\n)
+  if (block.type === "table") {
+    const selectedSourceText = text.slice(s, e);
+    if (selectedSourceText.includes("|") || selectedSourceText.includes("\n")) {
+      return null;
+    }
+  }
+
   return { start: s, end: e };
 }
 
@@ -287,26 +571,50 @@ function snapSpan(text: string, block: BlockSpan, start: number, end: number): S
  * inline-code spans, emphasis/strong runs, and link `[]()` groups. Offsets are
  * returned relative to the document (caller passes the block's base offset).
  *
- * This is a pragmatic scanner, not a full CommonMark inline parser: it is
- * deliberately conservative — it may flag a few extra runs as unsafe (forcing an
- * outward snap or a block fallback), but it never lets a boundary land inside a
- * real inline-code / emphasis / link run, which is the safety property §4.1
- * requires.
+ * We distinguish between:
+ * - "always" snap intervals: inline code and link URL parts, which can never contain comments.
+ * - "cross" snap intervals: strong/emphasis spans and link text, which can contain comments
+ *   but must not have markers crossing their boundaries.
  */
-function unsafeIntervals(blockText: string, base: number): Array<[number, number]> {
-  const out: Array<[number, number]> = [];
-  const add = (re: RegExp): void => {
+function unsafeIntervals(blockText: string, base: number): SnapInterval[] {
+  const out: SnapInterval[] = [];
+  const add = (re: RegExp, type: "always" | "cross"): void => {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(blockText)) !== null) {
-      out.push([base + m.index, base + m.index + m[0].length]);
+      out.push({
+        start: base + m.index,
+        end: base + m.index + m[0].length,
+        type,
+      });
     }
   };
-  add(/`+[^`]*`+/g); // inline code (one or more backticks per side)
-  add(/\*\*[^*]+\*\*/g); // strong (**)
-  add(/__[^_]+__/g); // strong (__)
-  add(/(?<![*\w])\*[^*\n]+\*/g); // emphasis (*)
-  add(/(?<![_\w])_[^_\n]+_/g); // emphasis (_)
-  add(/\[[^\]]*\]\([^)]*\)/g); // inline link [text](url)
+  add(/`+[^`]*`+/g, "always"); // inline code (one or more backticks per side)
+  add(/\*\*[^*]+\*\*/g, "cross"); // strong (**)
+  add(/__[^_]+__/g, "cross"); // strong (__)
+  add(/(?<![*\w])\*[^*\n]+\*/g, "cross"); // emphasis (*)
+  add(/(?<![_\w])_[^_\n]+_/g, "cross"); // emphasis (_)
+  add(/~~[^~]+~~/g, "cross"); // strikethrough (~~)
+
+  // Links: link text content is a cross-snap interval, while the closing bracket + URL
+  // destination is an always-snap interval to avoid breaking the markdown link syntax.
+  const linkRe = /\[([^\]]*)\]\(([^)]*)\)/g;
+  linkRe.lastIndex = 0;
+  let linkMatch: RegExpExecArray | null;
+  while ((linkMatch = linkRe.exec(blockText)) !== null) {
+    const fullMatchIndex = linkMatch.index;
+    const linkText = linkMatch[1] ?? "";
+    out.push({
+      start: base + fullMatchIndex, // starts at opening [
+      end: base + fullMatchIndex + 1 + linkText.length, // ends after text content (the closing ])
+      type: "cross",
+    });
+    out.push({
+      start: base + fullMatchIndex + 1 + linkText.length,
+      end: base + fullMatchIndex + linkMatch[0].length,
+      type: "always",
+    });
+  }
+
   return out;
 }

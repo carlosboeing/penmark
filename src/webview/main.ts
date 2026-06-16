@@ -220,7 +220,10 @@ let _selectionPreviewInstalled = false;
 let _lastDocName = "";
 
 /** Build the topbar's comments affordances (drawer toggle + attention chip). */
-function topbarCommentsOpts(comments: WireComment[], attention: number): {
+function topbarCommentsOpts(
+  comments: WireComment[],
+  attention: number,
+): {
   openCount: number;
   attention: number;
   onToggleDrawer: () => void;
@@ -351,10 +354,11 @@ function installSelectionPreview(): void {
   getOrCreateOverlay();
 
   document.addEventListener("selectionchange", () => {
+    // Don't fight an open add-box: it owns focus and we want to preserve the selection highlight of the text being commented on.
+    if (isCommentBoxOpen()) return;
+
     const layer = getOrCreateOverlay();
     layer.replaceChildren();
-    // Don't fight an open add-box: it owns focus and a stale preview is noise.
-    if (isCommentBoxOpen()) return;
     // Resolve the root lazily — #penmark-root persists across renders, but
     // reading it per-event keeps this robust to root replacement.
     const root = getRoot();
@@ -367,8 +371,8 @@ function installSelectionPreview(): void {
     for (const rect of rects) {
       const box = document.createElement("div");
       box.className = "pmk-hl-preview";
-      box.style.left = `${rect.left}px`;
-      box.style.top = `${rect.top}px`;
+      box.style.left = `${rect.left + window.scrollX}px`;
+      box.style.top = `${rect.top + window.scrollY}px`;
       box.style.width = `${rect.width}px`;
       box.style.height = `${rect.height}px`;
       layer.appendChild(box);
@@ -393,14 +397,14 @@ function installSelectionPreview(): void {
       addBtn.className = "pmk-add-comment-btn";
       addBtn.textContent = "💬 Add comment"; // 💬
       addBtn.addEventListener("click", () => {
-        // Open first (positionOver reads addBtn's rect), then clear the overlay.
+        // Open first (positionOver reads addBtn's rect), then remove the button but keep highlights.
         openCommentBox(addBtn, range, quote, (m) => vscode.postMessage(m), commentDraftStore);
-        layer.replaceChildren();
+        addBtn.remove();
       });
     }
     if (last) {
-      addBtn.style.left = `${last.right}px`;
-      addBtn.style.top = `${last.bottom}px`;
+      addBtn.style.left = `${last.right + window.scrollX}px`;
+      addBtn.style.top = `${last.bottom + window.scrollY}px`;
     }
     layer.appendChild(addBtn);
   });

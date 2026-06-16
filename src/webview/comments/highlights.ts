@@ -20,7 +20,7 @@
  */
 
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
-import { openCommentPopover } from "./popover.js";
+import { openCommentPopover, getActiveCommentId } from "./popover.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -36,6 +36,9 @@ const SPAN_HOSTILE_HOSTS: ReadonlySet<string> = new Set([
   "DL",
 ]);
 
+const _delegatedRoots = new WeakSet<HTMLElement>();
+const _commentsByRoot = new WeakMap<HTMLElement, WireComment[]>();
+
 /**
  * Install gutter dots + click-to-open-popover on every live highlight in `root`,
  * keyed by `comments`. Highlights whose id is unknown to `comments` are left
@@ -47,8 +50,12 @@ export function installHighlights(
   comments: WireComment[],
   postMessage: PostMessage,
 ): void {
+  _commentsByRoot.set(root, comments);
+
   const byId = new Map<string, WireComment>();
   for (const c of comments) byId.set(c.id, c);
+
+  const activeId = getActiveCommentId();
 
   for (const el of root.querySelectorAll<HTMLElement>("[data-pmk-id]")) {
     const id = el.getAttribute("data-pmk-id");
@@ -58,13 +65,30 @@ export function installHighlights(
 
     addGutterDot(blockHostOf(el, root));
 
-    // Idempotent: skip an element we have already wired this render pass.
-    if (el.dataset.pmkWired === "1") continue;
-    el.dataset.pmkWired = "1";
-    el.addEventListener("click", (e) => {
+    if (activeId === id) {
+      el.classList.add("pmk-hl-active");
+    } else {
+      el.classList.remove("pmk-hl-active");
+    }
+  }
+
+  if (!_delegatedRoots.has(root)) {
+    _delegatedRoots.add(root);
+    root.addEventListener("click", (e) => {
       // Let clicks on a link inside the highlight follow the link.
       if ((e.target as HTMLElement).closest("a")) return;
-      openCommentPopover(el, comment, postMessage);
+
+      const highlightEl = (e.target as HTMLElement).closest<HTMLElement>("[data-pmk-id]");
+      if (!highlightEl || !root.contains(highlightEl)) return;
+
+      const id = highlightEl.getAttribute("data-pmk-id");
+      if (!id) return;
+
+      const currentComments = _commentsByRoot.get(root) ?? [];
+      const comment = currentComments.find((c) => c.id === id);
+      if (!comment) return;
+
+      openCommentPopover(highlightEl, comment, postMessage);
     });
   }
 }

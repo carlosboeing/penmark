@@ -55,8 +55,7 @@ describe("main.ts message loop", () => {
     resetMockState();
 
     // Set up the topbar + root elements (the shell provides both).
-    document.body.innerHTML =
-      '<div id="penmark-topbar"></div><div id="penmark-root"></div>';
+    document.body.innerHTML = '<div id="penmark-topbar"></div><div id="penmark-root"></div>';
 
     // Import main.ts once. Vitest caches modules, so subsequent imports are no-ops.
     // We reset messages before each test above.
@@ -73,7 +72,15 @@ describe("main.ts message loop", () => {
     const root = document.getElementById("penmark-root");
     expect(root).not.toBeNull();
 
-    injectMessage({ v: 1, type: "render", html: "<p>Content</p>", theme: "light", docName: "test.md", comments: [], attention: 0 });
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Content</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
 
     expect(root!.textContent).toContain("Content");
   });
@@ -82,7 +89,7 @@ describe("main.ts message loop", () => {
     injectMessage({
       v: 1,
       type: "render",
-      html: '<p>Safe</p><script>window.__mainXss = true</script>',
+      html: "<p>Safe</p><script>window.__mainXss = true</script>",
       theme: "light",
       docName: "test.md",
       comments: [],
@@ -133,7 +140,13 @@ describe("main.ts message loop", () => {
     // Older host builds / harness fixtures may omit comments; the webview must
     // tolerate it (treat as no comments) rather than crash the message handler.
     expect(() =>
-      injectMessage({ v: 1, type: "render", html: "<p>Plain</p>", theme: "light", docName: "test.md" }),
+      injectMessage({
+        v: 1,
+        type: "render",
+        html: "<p>Plain</p>",
+        theme: "light",
+        docName: "test.md",
+      }),
     ).not.toThrow();
     expect(document.getElementById("penmark-root")!.textContent).toContain("Plain");
   });
@@ -153,8 +166,8 @@ describe("main.ts message loop", () => {
     // jsdom has no layout engine — stub Range.getClientRects so the selection
     // overlay path (which draws preview rects) runs without throwing. Real
     // browsers always have it; the rect rendering itself is covered by Playwright.
-    (Range.prototype as unknown as { getClientRects: () => unknown }).getClientRects =
-      () => [] as unknown[];
+    (Range.prototype as unknown as { getClientRects: () => unknown }).getClientRects = () =>
+      [] as unknown[];
 
     // Select "quick brown" inside the paragraph.
     const p = document.querySelector("#penmark-root p")!;
@@ -182,9 +195,11 @@ describe("main.ts message loop", () => {
     (box!.querySelector("button.primary") as HTMLButtonElement).click();
 
     const posted = getMock()._messages;
-    const add = posted.find(
-      (m) => (m as { type?: string }).type === "addComment",
-    ) as { range: { start: number; end: number }; quote: string; body: string };
+    const add = posted.find((m) => (m as { type?: string }).type === "addComment") as {
+      range: { start: number; end: number };
+      quote: string;
+      body: string;
+    };
     expect(add).toBeTruthy();
     expect(add.quote).toBe("quick brown");
     expect(add.body).toBe("is this the right animal?");
@@ -285,11 +300,13 @@ describe("main.ts message loop", () => {
     expect((document.querySelector(".pmk-drawer") as HTMLElement).getAttribute("aria-hidden")).toBe(
       "true",
     );
-    expect(document.getElementById("penmark-reanchor-hint")!.hasAttribute("data-active")).toBe(true);
+    expect(document.getElementById("penmark-reanchor-hint")!.hasAttribute("data-active")).toBe(
+      true,
+    );
 
     // Stub layout, then select "brown fox" as the new location.
-    (Range.prototype as unknown as { getClientRects: () => unknown }).getClientRects =
-      () => [] as unknown[];
+    (Range.prototype as unknown as { getClientRects: () => unknown }).getClientRects = () =>
+      [] as unknown[];
     const p = document.querySelector("#penmark-root p")!;
     const textNode = p.firstChild!;
     const content = textNode.textContent ?? "";
@@ -345,7 +362,15 @@ describe("main.ts message loop", () => {
     const mock = getMock();
     mock.getState = () => _savedState;
 
-    injectMessage({ v: 1, type: "render", html: "<p>Restored</p>", theme: "light", docName: "test.md", comments: [], attention: 0 });
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Restored</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
 
     // setState is called during/after render to persist state (implementation may vary).
     // At minimum, getState should return something truthy if state was previously set.
@@ -356,8 +381,7 @@ describe("main.ts message loop", () => {
     // Seed the root with blocks that carry data-pmk-offset, then stub their
     // layout geometry (jsdom does not lay out — offsetTop/Height are 0).
     const root = document.getElementById("penmark-root")!;
-    root.innerHTML =
-      '<p data-pmk-offset="0:5">Block 1</p><p data-pmk-offset="10:15">Block 2</p>';
+    root.innerHTML = '<p data-pmk-offset="0:5">Block 1</p><p data-pmk-offset="10:15">Block 2</p>';
 
     const blocks = root.querySelectorAll<HTMLElement>("[data-pmk-offset]");
     Object.defineProperty(blocks[0], "offsetTop", { value: 0, configurable: true });
@@ -413,7 +437,13 @@ describe("main.ts message loop", () => {
     const root = document.getElementById("penmark-root")!;
     const before = root.innerHTML;
     // v: 2 is not handled — should be silently dropped.
-    injectMessage({ v: 2, type: "render", html: "<p>IGNORED</p>", theme: "light", docName: "test.md" });
+    injectMessage({
+      v: 2,
+      type: "render",
+      html: "<p>IGNORED</p>",
+      theme: "light",
+      docName: "test.md",
+    });
     expect(root.innerHTML).toBe(before);
   });
 });

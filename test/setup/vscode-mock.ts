@@ -102,7 +102,7 @@ export const workspace = {
     const values = configStore.get(section) ?? {};
     return {
       get<T>(key: string, defaultValue?: T): T | undefined {
-        return (key in values ? (values[key] as T) : defaultValue);
+        return key in values ? (values[key] as T) : defaultValue;
       },
     };
   },

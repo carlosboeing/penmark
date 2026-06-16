@@ -15,10 +15,10 @@ describe("data-pmk-offset source positions", () => {
     const html = createRenderer({}).render(md);
 
     // Every top-level block must carry data-pmk-offset
-    expect(html).toContain('data-pmk-offset="0:1"');   // # Introduction (line 0)
-    expect(html).toContain('data-pmk-offset="2:3"');   // paragraph (line 2)
-    expect(html).toContain('data-pmk-offset="4:7"');   // fenced code block (lines 4-6, end exclusive 7)
-    expect(html).toContain('data-pmk-offset="8:12"');  // bullet list (lines 8-11, end exclusive 12)
+    expect(html).toContain('data-pmk-offset="0:1"'); // # Introduction (line 0)
+    expect(html).toContain('data-pmk-offset="2:3"'); // paragraph (line 2)
+    expect(html).toContain('data-pmk-offset="4:7"'); // fenced code block (lines 4-6, end exclusive 7)
+    expect(html).toContain('data-pmk-offset="8:12"'); // bullet list (lines 8-11, end exclusive 12)
     expect(html).toContain('data-pmk-offset="12:13"'); // blockquote (line 12)
     expect(html).toContain('data-pmk-offset="14:15"'); // hr (line 14)
     expect(html).toContain('data-pmk-offset="16:17"'); // final paragraph (line 16)

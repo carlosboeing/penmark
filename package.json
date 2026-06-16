@@ -19,9 +19,22 @@
   "activationEvents": [
     "onCommand:penmark.openPreview",
     "onCommand:penmark.exportReview",
-    "onWebviewPanel:penmark.preview"
+    "onWebviewPanel:penmark.preview",
+    "onCustomEditor:penmark.previewEditor"
   ],
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "penmark.previewEditor",
+        "displayName": "Penmark — Markdown Preview & Comments",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "configuration": {
       "title": "Penmark",
       "properties": {

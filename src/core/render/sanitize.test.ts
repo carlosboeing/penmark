@@ -166,8 +166,7 @@ describe("sanitize — pmk HTML comment stripping", () => {
 
   it("strips pmk comments embedded in script-tag fixture", () => {
     // Even if pmk comments appear alongside XSS — both must be gone
-    const input =
-      "<!--pmk:s:abc123--><script>alert(1)</script><!--pmk:e:abc123--><p>safe</p>";
+    const input = "<!--pmk:s:abc123--><script>alert(1)</script><!--pmk:e:abc123--><p>safe</p>";
     const out = sanitize(input);
     expect(out).not.toContain("<!--pmk:");
     expect(out).not.toMatch(/<script/i);
@@ -179,8 +178,7 @@ describe("sanitize — pmk HTML comment stripping", () => {
 
 describe("sanitize — clean HTML passthrough", () => {
   it("returns clean markdown-rendered HTML unchanged in structure", () => {
-    const input =
-      "<h1 data-pmk-offset=\"0:1\">Title</h1><p data-pmk-offset=\"2:3\">Body text.</p>";
+    const input = '<h1 data-pmk-offset="0:1">Title</h1><p data-pmk-offset="2:3">Body text.</p>';
     const out = sanitize(input);
     expect(out).toContain("<h1");
     expect(out).toContain("Title");

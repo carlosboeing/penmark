@@ -21,6 +21,7 @@
  */
 
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
+import { openCommentPopover } from "./popover.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -84,9 +85,11 @@ function applyOpenState(): void {
   if (_open) {
     _d.panel.setAttribute("data-open", "");
     _d.panel.removeAttribute("inert");
+    document.body.setAttribute("data-pmk-drawer-open", "");
   } else {
     _d.panel.removeAttribute("data-open");
     _d.panel.setAttribute("inert", "");
+    document.body.removeAttribute("data-pmk-drawer-open");
   }
 }
 
@@ -231,18 +234,31 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   actions.className = "pmk-drawer-actions";
   if (attention) {
     actions.append(
-      actionButton("↻ Re-anchor", "reanchor", () =>
-        cfg.onReanchor(c.id, c.quote, c.body),
-      ),
+      actionButton("↻ Re-anchor", "reanchor", () => cfg.onReanchor(c.id, c.quote, c.body)),
       actionButton("🗑 Delete", "delete", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),
     );
   } else {
     actions.append(
-      actionButton("Jump to source", "jump", () =>
-        cfg.post({ v: 1, type: "jumpToSource", id: c.id }),
-      ),
+      actionButton("Open", "jump", () => {
+        const target = document.querySelector(
+          `#penmark-root [data-pmk-id="${c.id}"]`
+        ) as HTMLElement;
+        if (target) {
+          target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+          openCommentPopover(target, c, cfg.post);
+        }
+      }),
+      actionButton("Edit", "edit", () => {
+        const target = document.querySelector(
+          `#penmark-root [data-pmk-id="${c.id}"]`
+        ) as HTMLElement;
+        if (target) {
+          target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+          openCommentPopover(target, c, cfg.post, true);
+        }
+      }),
       actionButton("✓ Resolve", "resolve", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),

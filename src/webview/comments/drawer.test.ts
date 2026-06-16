@@ -18,6 +18,7 @@ import {
   bucketComments,
   type DrawerStateStore,
 } from "./drawer.js";
+import { closeCommentPopover } from "./popover.js";
 
 function comment(over: Partial<WireComment>): WireComment {
   return {
@@ -124,10 +125,28 @@ describe("drawer", () => {
     expect(cards[1]!.querySelector(".pmk-avatar-agent")).not.toBeNull();
   });
 
-  it("jump-to on an open card posts jumpToSource with the id", () => {
+  it("jump-to on an open card scrolls the comment into view", () => {
     renderDrawer(ALL);
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const mockHl = document.createElement("mark");
+    mockHl.setAttribute("data-pmk-id", "open0001");
+    const root = document.createElement("div");
+    root.id = "penmark-root";
+    root.appendChild(mockHl);
+    document.body.appendChild(root);
+
+    expect(mockHl.classList.contains("pmk-hl-active")).toBe(false);
+
     (openCards()[0]!.querySelector(".pmk-drawer-action.jump") as HTMLButtonElement).click();
-    expect(post).toHaveBeenCalledWith({ v: 1, type: "jumpToSource", id: "open0001" });
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+
+    expect(mockHl.classList.contains("pmk-hl-active")).toBe(true);
+    expect(document.querySelector(".pmk-popover")).not.toBeNull();
+
+    closeCommentPopover();
+    root.remove();
   });
 
   it("resolve on an open card posts resolveComment with the id", () => {
@@ -152,7 +171,9 @@ describe("drawer", () => {
 
   it("re-anchor in needs-attention invokes onReanchor with id, quote, and body", () => {
     renderDrawer(ALL);
-    (attentionCards()[0]!.querySelector(".pmk-drawer-action.reanchor") as HTMLButtonElement).click();
+    (
+      attentionCards()[0]!.querySelector(".pmk-drawer-action.reanchor") as HTMLButtonElement
+    ).click();
     expect(onReanchor).toHaveBeenCalledWith(
       "orph0001",
       "three retries with backoff",

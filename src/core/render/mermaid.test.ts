@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createRenderer } from "./markdown.js";
 
-const DIAGRAM = "graph TD\n  A[Start] --> B{Is it <ok> & \"safe\"?}\n  B --> C[Done]";
+const DIAGRAM = 'graph TD\n  A[Start] --> B{Is it <ok> & "safe"?}\n  B --> C[Done]';
 
 describe("createRenderer — mermaid fence", () => {
   it("renders a mermaid fence as a container div when mermaid is enabled", () => {
@@ -28,7 +28,9 @@ describe("createRenderer — mermaid fence", () => {
   });
 
   it("renders a mermaid fence as a normal code block when mermaid is disabled", () => {
-    const html = createRenderer({ mermaid: false }).render("```mermaid\ngraph TD\n  A --> B\n```\n");
+    const html = createRenderer({ mermaid: false }).render(
+      "```mermaid\ngraph TD\n  A --> B\n```\n",
+    );
     expect(html).not.toContain("pmk-mermaid");
     expect(html).toContain("<pre");
     expect(html).toContain("<code");

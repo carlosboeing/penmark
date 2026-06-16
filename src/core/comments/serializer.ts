@@ -57,7 +57,9 @@ const REVIEW_CLOSE = "<!-- /pmk:review -->";
  * encoding the quote and body per §6. The returned text starts with the id line
  * and ends with a trailing newline before the comment's `-->` terminator.
  */
-function renderEntry(c: Pick<NewComment, "id" | "author" | "provenance" | "timestamp" | "quote" | "body">): string {
+function renderEntry(
+  c: Pick<NewComment, "id" | "author" | "provenance" | "timestamp" | "quote" | "body">,
+): string {
   const quoteLines = renderQuoteLines(c.quote);
   const body = encodeEntryText(c.body);
   return (
@@ -191,7 +193,11 @@ function anchorRemovalEdits(text: string, anchor: ParsedAnchor): TextEdit[] {
   // the trailing newline they were written with so no blank line is left behind.
   edits.push({ start: anchor.openerStart, end: lineEndAfter(text, anchor.openerEnd), newText: "" });
   if (anchor.closerStart !== undefined && anchor.closerEnd !== undefined) {
-    edits.push({ start: anchor.closerStart, end: lineEndAfter(text, anchor.closerEnd), newText: "" });
+    edits.push({
+      start: anchor.closerStart,
+      end: lineEndAfter(text, anchor.closerEnd),
+      newText: "",
+    });
   }
   return edits;
 }
@@ -272,4 +278,38 @@ function nextLineEnd(text: string, from: number, limit: number): number {
   let i = from;
   while (i < limit && text.charAt(i) !== "\n") i++;
   return i;
+}
+
+/**
+ * Build the edits to edit/update the body of the comment with `id`.
+ * Returns `null` if the entry is not found.
+ */
+export function buildEditCommentEdits(
+  text: string,
+  doc: ParsedDoc,
+  id: string,
+  newBody: string,
+): TextEdit[] | null {
+  const entry = doc.entries.find((e) => e.id === id);
+  if (entry === undefined) return null;
+
+  const qRegion = quoteRegion(text, entry);
+  let start = qRegion.end;
+  // Skip the blank line (which is just \r?\n).
+  let eol = "\n";
+  if (start < entry.rawEnd && text.charAt(start) === "\r") {
+    start++;
+    eol = "\r\n";
+  }
+  if (start < entry.rawEnd && text.charAt(start) === "\n") {
+    start++;
+  }
+
+  const end = entry.rawEnd - "-->".length;
+
+  // We replace the body region with the encoded new body plus the appropriate EOL.
+  const encodedBody = encodeEntryText(newBody);
+  const newText = `${encodedBody}${eol}`;
+
+  return [{ start, end, newText }];
 }

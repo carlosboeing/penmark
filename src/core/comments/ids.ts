@@ -23,7 +23,9 @@ export function isValidId(s: string): boolean {
  * the default draws from `node:crypto` (40 bits of entropy, spec §3) and is
  * quantized to 1/32 so `floor(rng() * 32)` recovers the chosen index exactly.
  */
-export function generateId(rng: () => number = () => randomInt(0, ALPHABET.length) / ALPHABET.length): string {
+export function generateId(
+  rng: () => number = () => randomInt(0, ALPHABET.length) / ALPHABET.length,
+): string {
   let id = "";
   for (let i = 0; i < ID_LENGTH; i++) {
     const idx = Math.min(ALPHABET.length - 1, Math.max(0, Math.floor(rng() * ALPHABET.length)));

@@ -102,7 +102,9 @@ describe("installHighlights", () => {
 
     installHighlights(root, [comment({ id: "blk12345", body: "block note" })], post);
 
-    expect(table.querySelector(".pmk-gutter-dot") ?? root.querySelector(".pmk-gutter-dot")).not.toBeNull();
+    expect(
+      table.querySelector(".pmk-gutter-dot") ?? root.querySelector(".pmk-gutter-dot"),
+    ).not.toBeNull();
     table.click();
     expect(document.querySelector(".pmk-popover")!.textContent).toContain("block note");
   });
@@ -143,5 +145,38 @@ describe("installHighlights", () => {
     expect(root.querySelectorAll(".pmk-gutter-dot").length).toBe(0);
     mark.click();
     expect(isPopoverOpen()).toBe(false);
+  });
+
+  it("does not open the popover when a highlight is clicked if it was resolved in a subsequent render", () => {
+    const mark = seedSpan(root, "abcdefgh");
+    installHighlights(root, [comment({ id: "abcdefgh" })], post);
+
+    // First render/click works
+    mark.click();
+    expect(isPopoverOpen()).toBe(true);
+    closeCommentPopover();
+
+    // Re-render with resolved comment (no comments in the array)
+    installHighlights(root, [], post);
+
+    // Clicking the same element again (even if morphdom hasn't removed it yet) does not open popover
+    mark.click();
+    expect(isPopoverOpen()).toBe(false);
+  });
+
+  it("applies pmk-hl-active when the popover is open, and removes it when closed", () => {
+    const mark = seedSpan(root, "abcdefgh");
+    const comm = comment({ id: "abcdefgh" });
+    installHighlights(root, [comm], post);
+
+    expect(mark.classList.contains("pmk-hl-active")).toBe(false);
+
+    mark.click();
+    expect(isPopoverOpen()).toBe(true);
+    expect(mark.classList.contains("pmk-hl-active")).toBe(true);
+
+    closeCommentPopover();
+    expect(isPopoverOpen()).toBe(false);
+    expect(mark.classList.contains("pmk-hl-active")).toBe(false);
   });
 });

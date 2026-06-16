@@ -96,16 +96,17 @@ describe("T12 — activation + lazy-activation budgets (design §8)", () => {
       assert.notStrictEqual(ev, "*", 'eager trigger forbidden: "*" activation event found');
     }
 
-    // Positive: the only triggers are the lazy command/panel events (design §8).
-    // openPreview + exportReview commands, plus the webview-panel deserializer.
+    // Positive: the only triggers are the lazy command/panel/custom-editor events (design §8).
+    // openPreview + exportReview commands, webview-panel deserializer, and custom editor.
     assert.deepStrictEqual(
       [...events].sort(),
       [
         "onCommand:penmark.openPreview",
         "onCommand:penmark.exportReview",
         "onWebviewPanel:penmark.preview",
+        "onCustomEditor:penmark.previewEditor",
       ].sort(),
-      "activationEvents must be exactly the three lazy onCommand/onWebviewPanel triggers",
+      "activationEvents must be exactly the four lazy triggers",
     );
   });
 
@@ -140,5 +141,27 @@ describe("T12 — activation + lazy-activation budgets (design §8)", () => {
 
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     await new Promise((r) => setTimeout(r, 200));
+  });
+
+  it("contributes custom editor penmark.previewEditor", () => {
+    const pkgPath = path.resolve(__dirname, "../../../package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
+      contributes?: {
+        customEditors?: Array<{
+          viewType: string;
+          priority: string;
+          selector: Array<{ filenamePattern: string }>;
+        }>;
+      };
+      activationEvents?: string[];
+    };
+    const customEditors = pkg.contributes?.customEditors ?? [];
+    const editor = customEditors.find((e) => e.viewType === "penmark.previewEditor");
+    assert.ok(editor, "penmark.previewEditor custom editor contribution is missing");
+    assert.strictEqual(editor.priority, "option");
+    assert.deepStrictEqual(editor.selector, [{ filenamePattern: "*.md" }]);
+    
+    const events = pkg.activationEvents ?? [];
+    assert.ok(events.includes("onCustomEditor:penmark.previewEditor"), "missing custom editor activation event");
   });
 });

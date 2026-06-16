@@ -62,9 +62,7 @@ export function renderDocument(
       }
       try {
         // Resolve relative paths against the document directory.
-        const absolutePath = nodePath.isAbsolute(src)
-          ? src
-          : nodePath.resolve(docDir, src);
+        const absolutePath = nodePath.isAbsolute(src) ? src : nodePath.resolve(docDir, src);
         const fileUri = vscode.Uri.file(absolutePath);
         return webview.asWebviewUri(fileUri).toString();
       } catch {

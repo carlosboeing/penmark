@@ -53,7 +53,11 @@ export function summarize(text: string): ReconcileSummary {
       flags: c.flags,
       anchorKind: c.anchor?.kind ?? null,
       extent: c.extent
-        ? { start: c.extent.start, end: c.extent.end, text: text.slice(c.extent.start, c.extent.end) }
+        ? {
+            start: c.extent.start,
+            end: c.extent.end,
+            text: text.slice(c.extent.start, c.extent.end),
+          }
         : null,
     })),
     needsAttention: result.needsAttention.map((c) => c.entry.id),

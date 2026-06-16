@@ -16,18 +16,23 @@
   box-sizing: border-box;
 }
 
-html,
-body {
+html {
   height: 100%;
+}
+
+body {
+  min-height: 100%;
   margin: 0;
   padding: 0;
 }
 
 body {
+  position: relative;
   background-color: var(--pmk-color-bg);
   color: var(--pmk-color-fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial,
-    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
   font-size: 16px;
   line-height: 1.5;
   word-wrap: break-word;
@@ -80,7 +85,9 @@ body {
   font-size: 11px;
   font-family: inherit;
   padding: 2px 8px;
-  transition: background-color 0.1s, border-color 0.1s;
+  transition:
+    background-color 0.1s,
+    border-color 0.1s;
 }
 
 .pmk-topbar-btn:hover {
@@ -163,9 +170,15 @@ body.pmk-content-full #penmark-root {
   padding-bottom: 0.3em;
 }
 
-#penmark-root h3 { font-size: 1.25em; }
-#penmark-root h4 { font-size: 1em; }
-#penmark-root h5 { font-size: 0.875em; }
+#penmark-root h3 {
+  font-size: 1.25em;
+}
+#penmark-root h4 {
+  font-size: 1em;
+}
+#penmark-root h5 {
+  font-size: 0.875em;
+}
 #penmark-root h6 {
   font-size: 0.85em;
   color: var(--pmk-color-fg-muted);
@@ -218,8 +231,8 @@ body.pmk-content-full #penmark-root {
 /* Code */
 
 #penmark-root code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
-    monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 85%;
   padding: 0.2em 0.4em;
   color: var(--pmk-color-code-fg);
@@ -259,7 +272,11 @@ body.pmk-content-full #penmark-root {
   background-color: var(--pmk-copy-btn-bg);
   color: var(--pmk-copy-btn-fg);
   opacity: 0;
-  transition: opacity 0.1s, background-color 0.1s, border-color 0.1s, color 0.1s;
+  transition:
+    opacity 0.1s,
+    background-color 0.1s,
+    border-color 0.1s,
+    color 0.1s;
 }
 
 #penmark-root pre:hover .pmk-copy-btn,
@@ -417,8 +434,15 @@ foreignObject p {
  * note/cluster/band backgrounds dark, so white text is legible on them. Light
  * mode is left to mermaid's own defaults.
  */
-:is(body.theme-dark, body[data-theme="dark"]) #penmark-root .pmk-mermaid svg :is(.nodeLabel, .edgeLabel, .cluster-label),
-:is(body.theme-dark, body[data-theme="dark"]) #pmk-mermaid-lightbox svg :is(.nodeLabel, .edgeLabel, .cluster-label) {
+:is(body.theme-dark, body[data-theme="dark"])
+  #penmark-root
+  .pmk-mermaid
+  svg
+  :is(.nodeLabel, .edgeLabel, .cluster-label),
+:is(body.theme-dark, body[data-theme="dark"])
+  #pmk-mermaid-lightbox
+  svg
+  :is(.nodeLabel, .edgeLabel, .cluster-label) {
   color: #fff;
 }
 
@@ -484,7 +508,11 @@ foreignObject p {
   background-color: var(--pmk-copy-btn-bg);
   color: var(--pmk-copy-btn-fg);
   opacity: 0;
-  transition: opacity 0.1s, background-color 0.1s, border-color 0.1s, color 0.1s;
+  transition:
+    opacity 0.1s,
+    background-color 0.1s,
+    border-color 0.1s,
+    color 0.1s;
 }
 
 #penmark-root .pmk-mermaid:hover .pmk-mermaid-expand,
@@ -604,14 +632,14 @@ foreignObject p {
    strips it); each child box is positioned over a selection client rect. The
    accent tint reads in both themes via color-mix over the theme accent token. */
 #penmark-selection-preview {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 5;
   pointer-events: none;
 }
 
 .pmk-hl-preview {
-  position: fixed;
+  position: absolute;
   background-color: color-mix(in srgb, var(--pmk-color-accent) 22%, transparent);
   border-radius: 2px;
   pointer-events: none;
@@ -641,13 +669,20 @@ body.pmk-hl-strong {
   border-bottom: 2px solid var(--pmk-comment-hl-border);
   border-radius: 2px;
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  padding: 0 2px;
+  transition: background-color 0.12s ease, background 0.12s ease;
 }
 #penmark-root .pmk-hl:hover {
-  background-color: rgba(
-    var(--pmk-comment-hl-rgb),
-    calc(var(--pmk-comment-hl-alpha, 0.28) + 0.12)
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.12));
+}
+#penmark-root .pmk-hl.pmk-hl-active {
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.18)),
+    rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.28))
   );
+  border-bottom: 2.5px solid var(--pmk-comment-hl-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* Block anchor: the whole block is outlined (a span would be wrong for, e.g., a
@@ -659,11 +694,13 @@ body.pmk-hl-strong {
   outline: 2px solid var(--pmk-comment-hl-border);
   outline-offset: 4px;
   border-radius: 2px;
-  background-color: rgba(
-    var(--pmk-comment-hl-rgb),
-    calc(var(--pmk-comment-hl-alpha, 0.28) * 0.4)
-  );
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.4));
   cursor: pointer;
+  transition: outline-width 0.12s ease, background-color 0.12s ease;
+}
+#penmark-root [data-pmk-block].pmk-hl-active {
+  outline-width: 3px;
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.75));
 }
 
 /* Range anchor: a run of blocks wrapped in a div — an even lighter wash so the
@@ -672,11 +709,13 @@ body.pmk-hl-strong {
   outline: 2px solid var(--pmk-comment-hl-border);
   outline-offset: 4px;
   border-radius: 2px;
-  background-color: rgba(
-    var(--pmk-comment-hl-rgb),
-    calc(var(--pmk-comment-hl-alpha, 0.28) * 0.3)
-  );
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.3));
   cursor: pointer;
+  transition: outline-width 0.12s ease, background-color 0.12s ease;
+}
+#penmark-root .pmk-hl-range.pmk-hl-active {
+  outline-width: 3px;
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.65));
 }
 
 /* Gutter dot: a small marker in the left margin of any commented block. The host
@@ -799,7 +838,7 @@ body.pmk-hl-strong {
    layer is pointer-events:none; this button re-enables pointer events so it is
    clickable. Positioned via the CSSOM in main.ts (fixed-coordinate rects). */
 .pmk-add-comment-btn {
-  position: fixed;
+  position: absolute;
   transform: translateY(6px);
   display: inline-flex;
   align-items: center;
@@ -928,7 +967,7 @@ body.pmk-hl-strong {
   flex: none;
 }
 
-/* The slide-in drawer panel — lives in <body>, overlays from the right edge. */
+/* The slide-in drawer panel — lives in <body>, slides in from the right edge. */
 .pmk-drawer {
   position: fixed;
   top: 0;
@@ -951,6 +990,16 @@ body.pmk-hl-strong {
 @media (prefers-reduced-motion: reduce) {
   .pmk-drawer {
     transition: none;
+  }
+}
+
+/* Shrink the preview on wide screens when the drawer is open (no overlay) */
+@media (min-width: 600px) {
+  body {
+    transition: padding-right 160ms ease;
+  }
+  body[data-pmk-drawer-open] {
+    padding-right: 320px;
   }
 }
 

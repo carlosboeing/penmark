@@ -9,6 +9,7 @@ import {
   offsetEditsToWorkspaceEdit,
   planAddComment,
   planResolveComment,
+  planEditComment,
   resolveAuthor,
 } from "./comments.js";
 import { buildReviewPrompt } from "../core/comments/exportPrompt.js";
@@ -50,7 +51,7 @@ export interface PanelEntry {
   /** Last setTheme message payload sent (from config change), for test assertions. */
   lastSetThemeMessage: Extract<HostToWebview, { type: "setTheme" }> | undefined;
   /** The source document currently being previewed in this panel. */
-  document: vscode.TextDocument;
+  document: vscode.TextDocument | undefined;
   /** Last `revealLine` message posted to this panel, for test assertions. */
   lastRevealLineMessage: Extract<HostToWebview, { type: "revealLine" }> | undefined;
   /**
@@ -80,7 +81,7 @@ export interface PanelEntry {
 }
 
 /** Active panels keyed by the ViewColumn they occupy. */
-const panels = new Map<vscode.ViewColumn, PanelEntry>();
+const panels = new Map<vscode.ViewColumn | string, PanelEntry>();
 
 /** Accumulated render count across all panels, reset by the test seam. */
 let _totalRenderCount = 0;
@@ -155,8 +156,9 @@ function configuredHighlightIntensity(): HighlightIntensity {
  * a no-op when the source editor is not currently visible.
  */
 function findEditorForEntry(entry: PanelEntry): vscode.TextEditor | undefined {
+  if (!entry.document) return undefined;
   return vscode.window.visibleTextEditors.find(
-    (e) => e.document.uri.toString() === entry.document.uri.toString(),
+    (e) => e.document.uri.toString() === entry.document!.uri.toString(),
   );
 }
 
@@ -194,7 +196,7 @@ export function maybePostRevealLine(entry: PanelEntry, line: number): void {
  */
 function attachVisibleRangeListener(entry: PanelEntry): vscode.Disposable {
   return vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-    if (e.textEditor.document.uri.toString() !== entry.document.uri.toString()) return;
+    if (!entry.document || e.textEditor.document.uri.toString() !== entry.document.uri.toString()) return;
     const first = e.visibleRanges[0];
     if (!first) return;
     maybePostRevealLine(entry, first.start.line);
@@ -280,6 +282,9 @@ export async function handleAddComment(
   }
   const edit = offsetEditsToWorkspaceEdit(document.uri, document, plan.edits);
   await vscode.workspace.applyEdit(edit);
+  if (typeof document.save === "function") {
+    await document.save();
+  }
 }
 
 /**
@@ -294,6 +299,27 @@ export async function handleResolveComment(
   if (edits.length === 0) return;
   const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
   await vscode.workspace.applyEdit(edit);
+  if (typeof document.save === "function") {
+    await document.save();
+  }
+}
+
+/**
+ * Edit/update the body of the comment `id` as one WorkspaceEdit (R7). A
+ * no-op when nothing matches.
+ */
+export async function handleEditComment(
+  document: vscode.TextDocument,
+  id: string,
+  newBody: string,
+): Promise<void> {
+  const edits = planEditComment(document.getText(), id, newBody);
+  if (!edits || edits.length === 0) return;
+  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
+  await vscode.workspace.applyEdit(edit);
+  if (typeof document.save === "function") {
+    await document.save();
+  }
 }
 
 /**
@@ -343,15 +369,14 @@ export async function handleExportReview(document: vscode.TextDocument): Promise
  * Exported for the host unit test (the mechanism is the integrity guarantee).
  */
 export function enqueueMutation(entry: PanelEntry, op: () => Promise<void>): void {
-  entry.mutationChain = (entry.mutationChain ?? Promise.resolve()).then(op).catch((err: unknown) => {
-    console.error("Penmark: comment mutation failed", err);
-  });
+  entry.mutationChain = (entry.mutationChain ?? Promise.resolve())
+    .then(op)
+    .catch((err: unknown) => {
+      console.error("Penmark: comment mutation failed", err);
+    });
 }
 
-async function postRender(
-  entry: PanelEntry,
-  document: vscode.TextDocument,
-): Promise<void> {
+async function postRender(entry: PanelEntry, document: vscode.TextDocument): Promise<void> {
   // Track which document this panel is currently previewing so we can re-post
   // it when the webview signals `ready` (race-free handshake, T5).
   entry.document = document;
@@ -391,38 +416,13 @@ async function postRender(
   void entry.panel.webview.postMessage(msg);
 }
 
-function openOrReveal(
+function setupPanelEntry(
   context: vscode.ExtensionContext,
-  document: vscode.TextDocument,
-): void {
-  const targetColumn = vscode.ViewColumn.Beside;
-
-  const existing = panels.get(targetColumn);
-  if (existing) {
-    // Reuse: reveal and re-render for the new document.
-    existing.panel.reveal(targetColumn, true /* preserveFocus */);
-    void postRender(existing, document);
-    return;
-  }
-
-  // Build localResourceRoots: dist/ folder + all workspace folders.
-  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
-  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
-  const localResourceRoots = [distUri, ...workspaceRoots];
-
-  const panel = vscode.window.createWebviewPanel(
-    "penmark.preview",
-    "Penmark Preview",
-    { viewColumn: targetColumn, preserveFocus: true },
-    {
-      enableScripts: true,
-      localResourceRoots,
-      // retainContextWhenHidden intentionally NOT set (defaults to false).
-    },
-  );
-
+  panel: vscode.WebviewPanel,
+  document: vscode.TextDocument | undefined,
+  key: vscode.ViewColumn | string,
+): PanelEntry {
   const nonce = generateNonce();
-
   const scriptUri = vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "main.js");
   const html = buildShellHtml(
     panel.webview,
@@ -436,7 +436,7 @@ function openOrReveal(
 
   const entry: PanelEntry = {
     panel,
-    column: targetColumn,
+    column: panel.viewColumn ?? vscode.ViewColumn.Beside,
     html,
     retainContext: false,
     renderCount: 0,
@@ -447,13 +447,14 @@ function openOrReveal(
     suppressVisibleRangeUntil: 0,
     lastRevealLinePostedAt: 0,
   };
-  panels.set(targetColumn, entry);
+  panels.set(key, entry);
 
-  // Send the initial render immediately (the webview may or may not be ready;
-  // the `ready` re-post below makes it race-free).
-  void postRender(entry, document);
+  // Initial render
+  if (document) {
+    void postRender(entry, document);
+  }
 
-  // Handle messages from the webview (T5).
+  // Handle messages from the webview
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     if (!msg || typeof msg !== "object") return;
     const message = msg as {
@@ -474,7 +475,9 @@ function openOrReveal(
         // Webview has attached its listener — re-post the current render so the
         // initial postRender (which may have been dropped before the listener
         // was attached) is guaranteed to arrive.
-        void postRender(entry, entry.document);
+        if (entry.document) {
+          void postRender(entry, entry.document);
+        }
         break;
 
       case "themeSelected": {
@@ -521,6 +524,8 @@ function openOrReveal(
         // Webview requested a new comment on a selection (R7). range is BODY-
         // relative char offsets (the offset-base seam — see comments.ts); the
         // host rebases to source coordinates inside planAddComment.
+        const doc = entry.document;
+        if (!doc) break;
         const { range, quote, body } = message;
         if (
           !range ||
@@ -532,14 +537,49 @@ function openOrReveal(
           break;
         }
         const r = { start: range.start, end: range.end };
-        enqueueMutation(entry, () => handleAddComment(entry.document, r, quote, body));
+        enqueueMutation(entry, () => handleAddComment(doc, r, quote, body));
         break;
       }
 
       case "resolveComment": {
+        const doc = entry.document;
+        if (!doc) break;
         const id = message.id;
         if (typeof id !== "string") break;
-        enqueueMutation(entry, () => handleResolveComment(entry.document, id));
+        enqueueMutation(entry, () => handleResolveComment(doc, id));
+        break;
+      }
+
+      case "editComment": {
+        const doc = entry.document;
+        if (!doc) break;
+        const id = message.id;
+        const body = message.body;
+        if (typeof id !== "string" || typeof body !== "string") break;
+        enqueueMutation(entry, () => handleEditComment(doc, id, body));
+        break;
+      }
+
+      case "jumpToSource": {
+        const doc = entry.document;
+        if (!doc) break;
+        const id = message.id;
+        if (typeof id !== "string") break;
+        const analysis = analyzeComments(doc.getText());
+        const rc = analysis.result.comments.find((c) => c.entry.id === id);
+        if (rc) {
+          const start = rc.extent ? rc.extent.start : rc.entry.rawStart;
+          const end = rc.extent ? rc.extent.end : rc.entry.rawEnd;
+          void vscode.window
+            .showTextDocument(doc, { preserveFocus: false })
+            .then((editor) => {
+              const startPos = doc.positionAt(start);
+              const endPos = doc.positionAt(end);
+              const range = new vscode.Range(startPos, endPos);
+              editor.selection = new vscode.Selection(startPos, endPos);
+              editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+            });
+        }
         break;
       }
 
@@ -553,10 +593,10 @@ function openOrReveal(
           } else {
             // Relative or local path — resolve against the document directory
             // and open inside VS Code.
-            const docDir = path.dirname(entry.document.uri.fsPath);
-            const absolutePath = path.isAbsolute(href)
-              ? href
-              : path.resolve(docDir, href);
+            const doc = entry.document;
+            if (!doc) break;
+            const docDir = path.dirname(doc.uri.fsPath);
+            const absolutePath = path.isAbsolute(href) ? href : path.resolve(docDir, href);
             const fileUri = vscode.Uri.file(absolutePath);
             void vscode.commands.executeCommand("vscode.open", fileUri);
           }
@@ -570,19 +610,66 @@ function openOrReveal(
 
   // Observe penmark.theme config changes and push setTheme to this panel.
   const configListener = attachConfigListener(entry);
-  context.subscriptions.push(configListener);
 
   // Observe editor scroll and push revealLine to this panel (T10, scroll sync).
   const visibleRangeListener = attachVisibleRangeListener(entry);
-  context.subscriptions.push(visibleRangeListener);
 
   // Clean up when the panel is closed: drop it from the map and dispose the
   // per-panel listeners so they never fire on a disposed webview.
   panel.onDidDispose(() => {
-    panels.delete(targetColumn);
+    panels.delete(key);
     configListener.dispose();
     visibleRangeListener.dispose();
   });
+
+  return entry;
+}
+
+function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDocument): void {
+  const targetColumn = vscode.ViewColumn.Beside;
+
+  const existing = panels.get(targetColumn);
+  if (existing) {
+    existing.panel.reveal(targetColumn, true /* preserveFocus */);
+    void postRender(existing, document);
+    return;
+  }
+
+  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
+  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
+  const localResourceRoots = [distUri, ...workspaceRoots];
+
+  const panel = vscode.window.createWebviewPanel(
+    "penmark.preview",
+    "Penmark Preview",
+    { viewColumn: targetColumn, preserveFocus: true },
+    {
+      enableScripts: true,
+      localResourceRoots,
+    },
+  );
+
+  setupPanelEntry(context, panel, document, targetColumn);
+}
+
+let customEditorSeq = 0;
+
+export async function registerCustomEditorPreview(
+  context: vscode.ExtensionContext,
+  document: vscode.TextDocument,
+  panel: vscode.WebviewPanel,
+): Promise<void> {
+  const key = `custom-${document.uri.toString()}-${customEditorSeq++}`;
+
+  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
+  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
+  
+  panel.webview.options = {
+    enableScripts: true,
+    localResourceRoots: [distUri, ...workspaceRoots],
+  };
+
+  setupPanelEntry(context, panel, document, key);
 }
 
 // ---------------------------------------------------------------------------
@@ -605,9 +692,10 @@ export function registerChangeListener(): vscode.Disposable {
 
     const timer = setTimeout(() => {
       debounceTimers.delete(key);
-      // Find the panel for the active markdown editor's column.
       panels.forEach((entry) => {
-        void postRender(entry, document);
+        if (entry.document && entry.document.uri.toString() === document.uri.toString()) {
+          void postRender(entry, document);
+        }
       });
     }, DEBOUNCE_MS);
 
@@ -622,25 +710,9 @@ export function registerChangeListener(): vscode.Disposable {
 export class PreviewPanelSerializer implements vscode.WebviewPanelSerializer {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
-  async deserializeWebviewPanel(
-    panel: vscode.WebviewPanel,
-    savedState: unknown,
-  ): Promise<void> {
+  async deserializeWebviewPanel(panel: vscode.WebviewPanel, savedState: unknown): Promise<void> {
     void savedState;
     const column = panel.viewColumn ?? vscode.ViewColumn.Beside;
-
-    const nonce = generateNonce();
-
-    const scriptUri = vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "main.js");
-    const html = buildShellHtml(
-      panel.webview,
-      nonce,
-      scriptUri,
-      this.context.extensionUri,
-      configuredContentWidth(),
-      configuredHighlightIntensity(),
-    );
-    panel.webview.html = html;
 
     const activeEditor = vscode.window.activeTextEditor;
     const activeDoc =
@@ -648,41 +720,7 @@ export class PreviewPanelSerializer implements vscode.WebviewPanelSerializer {
         ? activeEditor.document
         : undefined;
 
-    const entry: PanelEntry = {
-      panel,
-      column,
-      html,
-      retainContext: false,
-      renderCount: 0,
-      lastRenderMessage: undefined,
-      lastSetThemeMessage: undefined,
-      // Will be set when postRender is called below; cast is safe because
-      // postRender is called unconditionally when activeDoc is available.
-      document: activeDoc!,
-      lastRevealLineMessage: undefined,
-      suppressVisibleRangeUntil: 0,
-      lastRevealLinePostedAt: 0,
-    };
-    panels.set(column, entry);
-
-    // Restored panels must also follow live penmark.theme changes.
-    const configListener = attachConfigListener(entry);
-    this.context.subscriptions.push(configListener);
-
-    // Restored panels also participate in scroll sync (T10).
-    const visibleRangeListener = attachVisibleRangeListener(entry);
-    this.context.subscriptions.push(visibleRangeListener);
-
-    panel.onDidDispose(() => {
-      panels.delete(column);
-      configListener.dispose();
-      visibleRangeListener.dispose();
-    });
-
-    // Re-render with the current active markdown editor if available.
-    if (activeDoc) {
-      void postRender(entry, activeDoc);
-    }
+    setupPanelEntry(this.context, panel, activeDoc, column);
   }
 }
 

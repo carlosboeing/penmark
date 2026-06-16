@@ -3,6 +3,7 @@ import {
   buildAddCommentEdits,
   buildResolveCommentEdits,
   buildQuoteRefreshEdit,
+  buildEditCommentEdits,
   type NewComment,
   type TextEdit,
 } from "./serializer.js";
@@ -271,7 +272,10 @@ describe("buildResolveCommentEdits", () => {
       body: "note",
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
-    const out = applyEdits(withComment, buildResolveCommentEdits(withComment, parseDoc(withComment), "ffffffff"));
+    const out = applyEdits(
+      withComment,
+      buildResolveCommentEdits(withComment, parseDoc(withComment), "ffffffff"),
+    );
     expect(out).toBe(text);
     expect(parseDoc(out).anchors.has("ffffffff")).toBe(false);
   });
@@ -287,7 +291,10 @@ describe("buildResolveCommentEdits", () => {
       body: "note",
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
-    const out = applyEdits(withComment, buildResolveCommentEdits(withComment, parseDoc(withComment), "gggggggg"));
+    const out = applyEdits(
+      withComment,
+      buildResolveCommentEdits(withComment, parseDoc(withComment), "gggggggg"),
+    );
     expect(out).toBe(text);
     expect(parseDoc(out).anchors.has("gggggggg")).toBe(false);
   });
@@ -310,7 +317,12 @@ describe("buildQuoteRefreshEdit (§7.6 tooling-only)", () => {
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
 
-    const edit = buildQuoteRefreshEdit(withComment, parseDoc(withComment), "aaaaaaaa", "new -- quote");
+    const edit = buildQuoteRefreshEdit(
+      withComment,
+      parseDoc(withComment),
+      "aaaaaaaa",
+      "new -- quote",
+    );
     expect(edit).not.toBeNull();
     const out = applyEdits(withComment, [edit!]);
 
@@ -344,7 +356,12 @@ describe("buildQuoteRefreshEdit (§7.6 tooling-only)", () => {
       body: "note",
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
-    const edit = buildQuoteRefreshEdit(withComment, parseDoc(withComment), "aaaaaaaa", "line one\nline two");
+    const edit = buildQuoteRefreshEdit(
+      withComment,
+      parseDoc(withComment),
+      "aaaaaaaa",
+      "line one\nline two",
+    );
     const out = applyEdits(withComment, [edit!]);
     const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
     expect(entry?.quote).toBe("line one\nline two");
@@ -360,7 +377,12 @@ describe("buildQuoteRefreshEdit (§7.6 tooling-only)", () => {
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
     expect(parseDoc(withComment).entries[0]?.quote).toBe("");
-    const edit = buildQuoteRefreshEdit(withComment, parseDoc(withComment), "aaaaaaaa", "now has a quote");
+    const edit = buildQuoteRefreshEdit(
+      withComment,
+      parseDoc(withComment),
+      "aaaaaaaa",
+      "now has a quote",
+    );
     const out = applyEdits(withComment, [edit!]);
     const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
     expect(entry?.quote).toBe("now has a quote");
@@ -382,5 +404,33 @@ describe("writer invariants (§7)", () => {
     const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
     expect(entry?.quote).toBe("");
     expect(entry?.body).toBe("body only");
+  });
+});
+
+describe("buildEditCommentEdits", () => {
+  it("edits the comment body and preserves metadata and quote", () => {
+    const text = "Hello world.\n";
+    const c = newComment({
+      placement: spanPlacement(6, 11),
+      id: "aaaaaaaa",
+      quote: "world",
+      body: "original note",
+    });
+    const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
+    
+    const edits = buildEditCommentEdits(withComment, parseDoc(withComment), "aaaaaaaa", "updated note");
+    expect(edits).not.toBeNull();
+    const out = applyEdits(withComment, edits!);
+    
+    const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
+    expect(entry?.body).toBe("updated note");
+    expect(entry?.quote).toBe("world");
+    expect(entry?.author).toBe(c.author);
+  });
+
+  it("returns null if the comment id is not found", () => {
+    const text = "Hello world.\n";
+    const edits = buildEditCommentEdits(text, parseDoc(text), "zzzzzzzz", "note");
+    expect(edits).toBeNull();
   });
 });

@@ -84,8 +84,22 @@ describe("freshId (spec §3 — collision avoidance)", () => {
     const taken = new Set<string>(["aaaaaaaa"]);
     // First 8 draws -> "aaaaaaaa" (taken), next 8 -> "bbbbbbbb" (free).
     const rng = seqRng([
-      0, 0, 0, 0, 0, 0, 0, 0,
-      1 / 32, 1 / 32, 1 / 32, 1 / 32, 1 / 32, 1 / 32, 1 / 32, 1 / 32,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1 / 32,
+      1 / 32,
+      1 / 32,
+      1 / 32,
+      1 / 32,
+      1 / 32,
+      1 / 32,
+      1 / 32,
     ]);
     expect(freshId(taken, rng)).toBe("bbbbbbbb");
   });

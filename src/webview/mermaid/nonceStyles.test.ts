@@ -7,15 +7,14 @@ import {
 
 describe("injectNonceIntoSvgStyles", () => {
   it("adds nonce to a bare <style> tag", () => {
-    const svg = '<svg><style>.node{fill:#fff}</style></svg>';
+    const svg = "<svg><style>.node{fill:#fff}</style></svg>";
     expect(injectNonceIntoSvgStyles(svg, "abc123")).toBe(
       '<svg><style nonce="abc123">.node{fill:#fff}</style></svg>',
     );
   });
 
   it("adds nonce to every <style> tag in the SVG", () => {
-    const svg =
-      '<svg><style type="text/css">.a{}</style><g/><style>.b{}</style></svg>';
+    const svg = '<svg><style type="text/css">.a{}</style><g/><style>.b{}</style></svg>';
     const out = injectNonceIntoSvgStyles(svg, "n1");
     expect(out).toBe(
       '<svg><style nonce="n1" type="text/css">.a{}</style><g/><style nonce="n1">.b{}</style></svg>',
@@ -24,9 +23,7 @@ describe("injectNonceIntoSvgStyles", () => {
 
   it("replaces an existing nonce attribute", () => {
     const svg = '<svg><style nonce="old">.x{}</style></svg>';
-    expect(injectNonceIntoSvgStyles(svg, "new")).toBe(
-      '<svg><style nonce="new">.x{}</style></svg>',
-    );
+    expect(injectNonceIntoSvgStyles(svg, "new")).toBe('<svg><style nonce="new">.x{}</style></svg>');
   });
 
   it("is case-insensitive on the tag name", () => {
@@ -68,8 +65,7 @@ describe("getScriptNonce", () => {
 
 describe("prepareMermaidSvgForCsp", () => {
   it("injects nonce and sets foreignObject overflow", () => {
-    const svg =
-      '<svg><style>.x{}</style><foreignObject width="10"><div/></foreignObject></svg>';
+    const svg = '<svg><style>.x{}</style><foreignObject width="10"><div/></foreignObject></svg>';
     const out = prepareMermaidSvgForCsp(svg, "n");
     expect(out).toContain('<style nonce="n">');
     expect(out).toContain('<foreignObject overflow="visible" width="10">');

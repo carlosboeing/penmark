@@ -80,5 +80,6 @@ export type WebviewToHost =
       body: string;
     }
   | { v: 1; type: "resolveComment"; id: string }
+  | { v: 1; type: "editComment"; id: string; body: string }
   | { v: 1; type: "jumpToSource"; id: string }
   | { v: 1; type: "exportReview" };

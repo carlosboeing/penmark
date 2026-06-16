@@ -43,12 +43,12 @@ describe("parseDoc — span extents", () => {
     const text =
       "<!--pmk:s aaaaaaaa-->one<!--/pmk:s aaaaaaaa--> <!--pmk:s bbbbbbbb-->two<!--/pmk:s bbbbbbbb-->";
     const doc = parseDoc(text);
-    expect(text.slice(doc.anchors.get("aaaaaaaa")?.extentStart, doc.anchors.get("aaaaaaaa")?.extentEnd)).toBe(
-      "one",
-    );
-    expect(text.slice(doc.anchors.get("bbbbbbbb")?.extentStart, doc.anchors.get("bbbbbbbb")?.extentEnd)).toBe(
-      "two",
-    );
+    expect(
+      text.slice(doc.anchors.get("aaaaaaaa")?.extentStart, doc.anchors.get("aaaaaaaa")?.extentEnd),
+    ).toBe("one");
+    expect(
+      text.slice(doc.anchors.get("bbbbbbbb")?.extentStart, doc.anchors.get("bbbbbbbb")?.extentEnd),
+    ).toBe("two");
   });
 });
 
@@ -140,45 +140,52 @@ describe("parseDoc — entries (§5.2)", () => {
   });
 
   it("parses a timestamp with seconds", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02:33 +10:00\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02:33 +10:00\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);
     expect(doc.entries[0]?.timestamp).toBe("2026-06-12 09:02:33 +10:00");
   });
 
   it("parses an entry with zero quote lines", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n\nbody only\n-->\n<!-- /pmk:review -->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n\nbody only\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);
     expect(doc.entries[0]?.quote).toBe("");
     expect(doc.entries[0]?.body).toBe("body only");
   });
 
   it("parses a multi-line body", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nline one\nline two\n-->\n<!-- /pmk:review -->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nline one\nline two\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);
     expect(doc.entries[0]?.body).toBe("line one\nline two");
   });
 
   it("parses-but-ignores a v2 ` re <parent>` reply tag (§5.3)", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c bbbbbbbb re aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nreply body\n-->\n<!-- /pmk:review -->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c bbbbbbbb re aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nreply body\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);
     expect(doc.entries[0]?.id).toBe("bbbbbbbb");
     expect(doc.entries[0]?.parentId).toBe("aaaaaaaa");
   });
 
   it("skips a malformed entry (bad meta line) without throwing", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nno provenance tag here\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nno provenance tag here\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);
     expect(doc.entries).toHaveLength(0);
   });
 
   it("skips an entry with a malformed line 1", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c BADID\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c BADID\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);
     expect(doc.entries).toHaveLength(0);
   });
 
   it("skips an entry missing the blank separator line", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\nbody-with-no-blank\n-->\n<!-- /pmk:review -->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\nbody-with-no-blank\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);
     expect(doc.entries).toHaveLength(0);
   });
@@ -198,13 +205,15 @@ describe("parseDoc — review block detection (§5.1)", () => {
   });
 
   it("sets atEof false when meaningful content follows the closer", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n\ntrailing content here\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nbody\n-->\n<!-- /pmk:review -->\n\ntrailing content here\n";
     const doc = parseDoc(text);
     expect(doc.review?.atEof).toBe(false);
   });
 
   it("sets atEof false when the closing delimiter is missing", () => {
-    const text = "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nbody\n-->\n";
+    const text =
+      "<!-- pmk:review v1 -->\n<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nbody\n-->\n";
     const doc = parseDoc(text);
     expect(doc.review).not.toBeNull();
     expect(doc.review?.atEof).toBe(false);

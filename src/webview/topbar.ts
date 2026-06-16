@@ -57,10 +57,7 @@ export function installTopbar(
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "pmk-topbar-chip";
-    chip.setAttribute(
-      "title",
-      `${comments.attention} comment(s) could not be re-anchored`,
-    );
+    chip.setAttribute("title", `${comments.attention} comment(s) could not be re-anchored`);
     const dot = document.createElement("span");
     dot.className = "pmk-topbar-chip-dot";
     dot.setAttribute("aria-hidden", "true");

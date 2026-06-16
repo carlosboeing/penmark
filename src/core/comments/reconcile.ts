@@ -34,7 +34,11 @@ import type { SourceRange } from "./placement.js";
 import type { CommentState, ParsedAnchor, ParsedDoc, ParsedEntry } from "./types.js";
 
 /** A reconcile flag: a non-fatal signal attached to a classified comment. */
-export type ReconcileFlag = "stray-closer" | "closer-destroyed" | "half-pair" | "marker-not-own-line";
+export type ReconcileFlag =
+  | "stray-closer"
+  | "closer-destroyed"
+  | "half-pair"
+  | "marker-not-own-line";
 
 /** One entry classified against the current document (spec §8). */
 export interface ReconciledComment {
@@ -270,7 +274,13 @@ function classifyLiveSpan(
   // Opener present, closer destroyed → §8.2 advisory-quote fallback.
   const recovered = recoverByQuote(text, entry.quote, anchor.openerStart, bodyEnd);
   if (recovered !== null) {
-    return { entry, anchor, state: "degraded-recovered", extent: recovered, flags: ["closer-destroyed"] };
+    return {
+      entry,
+      anchor,
+      state: "degraded-recovered",
+      extent: recovered,
+      flags: ["closer-destroyed"],
+    };
   }
   return { entry, anchor, state: "orphan", flags: ["closer-destroyed"] };
 }

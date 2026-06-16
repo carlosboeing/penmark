@@ -36,7 +36,7 @@ function getManager(): ExtensionApi["previewManager"] {
 
 /** Open a markdown document in VS Code and return the text editor. */
 async function openMarkdownEditor(content: string): Promise<vscode.TextEditor> {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "penmark-t4-"));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "penmark-t4-")));
   const filePath = path.join(dir, "test.md");
   fs.writeFileSync(filePath, content, "utf8");
   const uri = vscode.Uri.file(filePath);
@@ -134,29 +134,13 @@ describe("T4 — webview preview panel", () => {
     assert.ok(html, "lastHtml() should return the shell HTML");
 
     // Must contain a CSP meta tag with a nonce.
-    assert.match(
-      html,
-      /Content-Security-Policy/i,
-      "shell HTML must contain a CSP meta tag",
-    );
-    assert.match(
-      html,
-      /nonce-[a-zA-Z0-9+/=]{16,}/,
-      "CSP must contain a nonce attribute",
-    );
-    assert.match(
-      html,
-      /<meta[^>]+Content-Security-Policy/i,
-      "CSP must be in a <meta> tag",
-    );
+    assert.match(html, /Content-Security-Policy/i, "shell HTML must contain a CSP meta tag");
+    assert.match(html, /nonce-[a-zA-Z0-9+/=]{16,}/, "CSP must contain a nonce attribute");
+    assert.match(html, /<meta[^>]+Content-Security-Policy/i, "CSP must be in a <meta> tag");
 
     // retainContextWhenHidden must NOT be set (not enabled).
     const retainContext = manager.lastRetainContext();
-    assert.strictEqual(
-      retainContext,
-      false,
-      "retainContextWhenHidden must not be enabled",
-    );
+    assert.strictEqual(retainContext, false, "retainContextWhenHidden must not be enabled");
 
     await closeAll();
   });
@@ -347,10 +331,7 @@ describe("T4 — webview preview panel", () => {
       // harness, so if it does not arrive we fall back to the maybePostRevealLine
       // seam — which checks the exact setting + suppression gating the listener
       // uses — to prove "revealLine posted only when setting on".
-      editor.revealRange(
-        new vscode.Range(120, 0, 120, 0),
-        vscode.TextEditorRevealType.AtTop,
-      );
+      editor.revealRange(new vscode.Range(120, 0, 120, 0), vscode.TextEditorRevealType.AtTop);
 
       let onMsg: ReturnType<typeof manager.lastRevealLineMessage>;
       for (let i = 0; i < 20; i++) {
@@ -399,8 +380,13 @@ describe("T4 — webview preview panel", () => {
       // Add a comment on the word "renderer" (body-relative offsets == source
       // offsets here — no frontmatter).
       const start = original.indexOf("renderer");
-      await handleAddComment(doc, { start, end: start + "renderer".length }, "renderer", "which one?");
-      await new Promise((r) => setTimeout(r, 150));
+      await handleAddComment(
+        doc,
+        { start, end: start + "renderer".length },
+        "renderer",
+        "which one?",
+      );
+      await new Promise((r) => setTimeout(r, 500));
 
       const afterAdd = doc.getText();
       assert.ok(afterAdd.includes("<!--pmk:s "), "span opener marker must be inserted");
@@ -409,16 +395,16 @@ describe("T4 — webview preview panel", () => {
 
       // The add must be ONE undo step (§7.1): a single undo restores the original.
       await vscode.commands.executeCommand("undo");
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 500));
       assert.strictEqual(doc.getText(), original, "one undo must revert the entire add");
 
       // Redo, then resolve, then assert the markers + entry are gone.
       await vscode.commands.executeCommand("redo");
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 500));
       const id = /<!--pmk:c ([a-z2-7]{8})/.exec(doc.getText())?.[1];
       assert.ok(id, "the added entry must expose a parseable id");
       await handleResolveComment(doc, id!);
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 500));
 
       const afterResolve = doc.getText();
       assert.ok(!afterResolve.includes("pmk:"), "resolve must strip all pmk markers and the entry");
@@ -426,5 +412,22 @@ describe("T4 — webview preview panel", () => {
     } finally {
       await closeAll();
     }
+  });
+
+  it("can open a document using the custom editor", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "penmark-custom-")));
+    const filePath = path.join(dir, "custom-test.md");
+    fs.writeFileSync(filePath, "# Custom Editor Test\n", "utf8");
+    const uri = vscode.Uri.file(filePath);
+
+    // Open using Penmark Custom Editor
+    await vscode.commands.executeCommand("vscode.openWith", uri, "penmark.previewEditor");
+    await new Promise((r) => setTimeout(r, 600));
+
+    const manager = getManager();
+    assert.ok(manager.panelCount() > 0, "custom editor panel should be registered in previewManager");
+    
+    // Cleanup
+    await closeAll();
   });
 });

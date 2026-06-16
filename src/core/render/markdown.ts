@@ -51,9 +51,7 @@ export function createRenderer(opts: RendererOptions): MarkdownIt {
   const md = new MarkdownIt({
     html: true,
     linkify: true,
-    highlight: opts.highlight
-      ? (code, lang) => opts.highlight!(code, lang) ?? ""
-      : undefined,
+    highlight: opts.highlight ? (code, lang) => opts.highlight!(code, lang) ?? "" : undefined,
   });
 
   // Task lists: [ ] / [x] syntax
@@ -181,8 +179,7 @@ export function tokenizeBlockOffsets(source: string): BlockOffset[] {
     if (
       t.level === 0 &&
       t.map &&
-      (t.type.endsWith("_open") ||
-        ["fence", "code_block", "html_block", "hr"].includes(t.type))
+      (t.type.endsWith("_open") || ["fence", "code_block", "html_block", "hr"].includes(t.type))
     ) {
       out.push({ line0: t.map[0], line1: t.map[1], type: normalizeBlockType(t.type) });
     }

@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PROTOCOL_VERSION } from "./messages.js";
-import type {
-  HostToWebview,
-  WebviewToHost,
-  WireComment,
-  WireExtent,
-} from "./messages.js";
+import type { HostToWebview, WebviewToHost, WireComment, WireExtent } from "./messages.js";
 
 describe("protocol/messages", () => {
   it("PROTOCOL_VERSION is 1", () => {
@@ -116,9 +111,7 @@ describe("protocol/messages", () => {
           return assertNever(msg);
       }
     };
-    expect(handle({ v: 1, type: "comments", comments: [], attention: 0 })).toBe(
-      "comments",
-    );
+    expect(handle({ v: 1, type: "comments", comments: [], attention: 0 })).toBe("comments");
   });
 
   it("exhaustively narrows every WebviewToHost variant", () => {
@@ -140,6 +133,8 @@ describe("protocol/messages", () => {
         case "addComment":
           return msg.type;
         case "resolveComment":
+          return msg.type;
+        case "editComment":
           return msg.type;
         case "jumpToSource":
           return msg.type;

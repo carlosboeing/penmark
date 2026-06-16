@@ -75,10 +75,7 @@ export function createSanitizer(win: WindowLike): DOMPurifyInstance {
   const sourceStash = new WeakMap<Node, string>();
   dp.addHook("uponSanitizeElement", (node) => {
     const el = node as Partial<Element> & Node;
-    if (
-      typeof el.getAttribute === "function" &&
-      el.classList?.contains("pmk-mermaid")
-    ) {
+    if (typeof el.getAttribute === "function" && el.classList?.contains("pmk-mermaid")) {
       const src = el.getAttribute("data-pmk-source");
       if (src !== null && src !== undefined) {
         sourceStash.set(node, src);
@@ -106,14 +103,11 @@ function getInstance(): DOMPurifyInstance {
   // In browser: window is the native global.
   // In vitest/jsdom: global window is set by the jsdom environment.
   // In vitest/node: tests must call initSanitizer() first.
-  const win =
-    typeof window !== "undefined"
-      ? (window as unknown as WindowLike)
-      : undefined;
+  const win = typeof window !== "undefined" ? (window as unknown as WindowLike) : undefined;
 
   if (!win) {
     throw new Error(
-      "sanitize(): no window available. Call initSanitizer(window) before use in non-browser environments."
+      "sanitize(): no window available. Call initSanitizer(window) before use in non-browser environments.",
     );
   }
 
