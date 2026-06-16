@@ -301,11 +301,23 @@ function cleanMarkdown(
     mapping.splice(start, end - start);
   };
 
+  // Remove HTML comments (including Penmark markers) first, since they are never rendered as text
+  const commentRe = /<!--[\s\S]*?-->/g;
+  const comments: Array<{ start: number; end: number }> = [];
+  let cm: RegExpExecArray | null;
+  while ((cm = commentRe.exec(cleanText)) !== null) {
+    comments.push({ start: cm.index, end: cm.index + cm[0].length });
+  }
+  for (let i = comments.length - 1; i >= 0; i--) {
+    const { start, end } = comments[i]!;
+    removeRange(start, end);
+  }
+
   if (blockType === "table") {
     // For tables, remove alignment/separator row, newlines, cell delimiters (|),
     // and leading/trailing padding spaces within cells so that cleanText matches
     // the concatenated text of the rendered table cells.
-    const lines = blockText.split("\n");
+    const lines = cleanText.split("\n");
     let currentOffset = 0;
     const rangesToRemove: Array<{ start: number; end: number }> = [];
 
@@ -383,7 +395,7 @@ function cleanMarkdown(
     }
 
     for (const r of mergedRanges) {
-      if (r.start < r.end && r.start >= 0 && r.end <= blockText.length) {
+      if (r.start < r.end && r.start >= 0 && r.end <= cleanText.length) {
         removeRange(r.start, r.end);
       }
     }
@@ -393,7 +405,7 @@ function cleanMarkdown(
   const linkRe = /\[([^\]]*)\]\(([^)]*)\)/g;
   const links: Array<{ start: number; textEnd: number; end: number }> = [];
   let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(blockText)) !== null) {
+  while ((m = linkRe.exec(cleanText)) !== null) {
     const start = m.index;
     const textLen = m[1]?.length ?? 0;
     const textEnd = start + 1 + textLen;

@@ -348,6 +348,23 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
       range: rangeOf(text, "roll-out"),
     });
   });
+
+  it("reproduces Bug: selection of hyphen from 'counter-offer' next to an existing comment tag snaps to hyphen in 'counter-offer', not in comment tag", () => {
+    const text = "<!--pmk:s zguugu44-->Ian's<!--/pmk:s zguugu44--> counter-offer\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+
+    // In the webview, the visible text is "Ian's counter-offer".
+    // Selection of "-" in "counter-offer" has offset relative to the visible text.
+    // Visible text: "Ian's counter-offer"
+    // "-" is at index 13 (Ian's: 5, space: 1, counter: 7).
+    // Webview sends start: 13, end: 14, quote: "-".
+    const r = planAnchor(text, { start: 13, end: 14 }, map, "-");
+
+    expect(r).toEqual({
+      kind: "span",
+      range: rangeOf(text, "counter-offer"),
+    });
+  });
 });
 
 describe("planAnchor — block (§4.2)", () => {
