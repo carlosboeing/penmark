@@ -40,6 +40,8 @@ type DOMPurifyInstance = ReturnType<typeof createDOMPurify>;
 const PMK_KEEP_ATTRS: ReadonlySet<string> = new Set([
   "data-pmk-offset",
   "data-pmk-coff",
+  "data-pmk-soff",
+  "data-pmk-line",
   "data-pmk-id",
   "data-pmk-state",
   "data-pmk-block",

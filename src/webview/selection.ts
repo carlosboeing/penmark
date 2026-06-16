@@ -57,6 +57,44 @@ function charOffsetWithin(block: HTMLElement, container: Node, offset: number): 
   return r.toString().length;
 }
 
+/** Nearest ancestor (or self) carrying `data-pmk-soff`, when present. */
+function soffOf(node: Node, root: HTMLElement): number | null {
+  let el: Node | null = node;
+  while (el && root.contains(el)) {
+    if (el.nodeType === Node.ELEMENT_NODE) {
+      const raw = (el as HTMLElement).getAttribute("data-pmk-soff");
+      if (raw !== null) {
+        const n = Number.parseInt(raw, 10);
+        if (!Number.isNaN(n)) return n;
+      }
+    }
+    el = el.parentNode;
+  }
+  return null;
+}
+
+/** Map a selection endpoint to an absolute source char offset. */
+function endpointOffset(
+  container: Node,
+  offset: number,
+  block: HTMLElement,
+  root: HTMLElement,
+): number | null {
+  const soff = soffOf(container, root);
+  if (soff !== null) {
+    if (container.nodeType === Node.TEXT_NODE) {
+      return soff + offset;
+    }
+    if (container.nodeType === Node.ELEMENT_NODE && (container as HTMLElement).hasAttribute("data-pmk-soff")) {
+      return soff + charOffsetWithin(container as HTMLElement, container, offset);
+    }
+    return soff;
+  }
+  const coff = coffOf(block);
+  if (coff === null) return null;
+  return coff + charOffsetWithin(block, container, offset);
+}
+
 /**
  * Map `sel` to an absolute source char range `{ start, end }` (body coordinates),
  * or `null` when the selection is empty, collapsed, or not anchored in rendered
@@ -80,8 +118,12 @@ export function selectionToSourceRange(
   const endCoff = coffOf(endBlock);
   if (startCoff === null || endCoff === null) return null;
 
-  const start = startCoff + charOffsetWithin(startBlock, range.startContainer, range.startOffset);
-  const end = endCoff + charOffsetWithin(endBlock, range.endContainer, range.endOffset);
+  const start =
+    endpointOffset(range.startContainer, range.startOffset, startBlock, root) ??
+    startCoff + charOffsetWithin(startBlock, range.startContainer, range.startOffset);
+  const end =
+    endpointOffset(range.endContainer, range.endOffset, endBlock, root) ??
+    endCoff + charOffsetWithin(endBlock, range.endContainer, range.endOffset);
   if (end <= start) return null;
 
   return { start, end };

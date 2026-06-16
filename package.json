@@ -88,6 +88,47 @@
           ],
           "default": "medium",
           "description": "How strongly commented spans are tinted in the preview. Comments are always highlighted; this only sets the intensity. Applied when the preview is (re)opened."
+        },
+        "penmark.preset": {
+          "type": "string",
+          "enum": [
+            "github",
+            "reading",
+            "compact",
+            "focus",
+            "print",
+            "custom"
+          ],
+          "default": "github",
+          "description": "Typography preset bundling font, size, line height, and content width. Overrides flip the preset to custom."
+        },
+        "penmark.textSize": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large",
+            "x-large"
+          ],
+          "default": "medium",
+          "description": "Body text size; heading sizes scale proportionally."
+        },
+        "penmark.fontFamily": {
+          "type": "string",
+          "default": "",
+          "description": "CSS font-family for body text. Empty uses the preset default."
+        },
+        "penmark.headingFontFamily": {
+          "type": "string",
+          "default": "",
+          "description": "CSS font-family for headings. Empty uses the preset default."
+        },
+        "penmark.lineHeight": {
+          "type": "number",
+          "default": 0,
+          "minimum": 1,
+          "maximum": 2.5,
+          "description": "Line height multiplier (e.g. 1.5). Zero uses the preset default."
         }
       }
     },

@@ -3,6 +3,7 @@ import taskLists from "markdown-it-task-lists";
 import footnote from "markdown-it-footnote";
 import anchor from "markdown-it-anchor";
 import GithubSlugger from "github-slugger";
+import { registerInlineSoff } from "./inlineSoff.js";
 import { registerOffsets } from "./offsets.js";
 
 /**
@@ -76,6 +77,21 @@ export function createRenderer(opts: RendererOptions): MarkdownIt {
 
   // Source-position stamps (ADR 0005).
   registerOffsets(md);
+  // Per-text-node source offsets (v1.0 polish).
+  registerInlineSoff(md);
+
+  // Task-list items: stamp source line for checkbox toggling (v1.0 polish).
+  const defaultListItemOpen = md.renderer.rules.list_item_open;
+  md.renderer.rules.list_item_open = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    if (token?.map) {
+      token.attrSet("data-pmk-line", String(token.map[0]));
+    }
+    if (defaultListItemOpen) {
+      return defaultListItemOpen(tokens, idx, options, env, self);
+    }
+    return self.renderToken(tokens, idx, options);
+  };
 
   // Mermaid fence rule (T9). A ```mermaid fence becomes a container div the
   // webview renders lazily; every other fence (and the disabled case) delegates

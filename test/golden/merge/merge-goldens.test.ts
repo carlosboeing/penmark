@@ -115,8 +115,8 @@ describe("merge goldens — concurrent comment creation conflicts, both resoluti
   // the extra block's entries, this test flips to passing and must be promoted.
   // Fixing it touches src/core (parser + reconcile), outside R16's test-only
   // scope; tracked as a post-v0.5 ROADMAP follow-up.
-  it.fails(
-    "§8.5 (tracked): the extra block's entries are NOT yet surfaced in needs-attention",
+  it(
+    "§8.5: the extra block's entries are surfaced in needs-attention",
     () => {
       const s = summarize(fixtureIn(SCN, "resolved-two-blocks.md"));
       expect(s.needsAttention).toContain("eeee3333");

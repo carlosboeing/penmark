@@ -11,6 +11,11 @@ Penmark is configured through standard editor settings (the Settings UI, or `set
 | `penmark.mermaid.enabled` | boolean | `true` | Render Mermaid diagrams in the preview. |
 | `penmark.contentWidth` | `comfortable` \| `wide` \| `full` | `full` | How wide the content column may grow. All options stay responsive and shrink to fit a narrow pane; this only caps the maximum width. |
 | `penmark.comments.highlightIntensity` | `subtle` \| `medium` \| `strong` | `medium` | How strongly commented spans are tinted. Highlights are always shown when comments exist; this only sets the intensity. Applied when the preview is (re)opened. |
+| `penmark.preset` | `github` \| `reading` \| `compact` \| `focus` \| `print` \| `custom` | `github` | Typography preset bundling font, size, line height, and content width. |
+| `penmark.textSize` | `small` \| `medium` \| `large` \| `x-large` | `medium` | Body text size; heading sizes scale proportionally. |
+| `penmark.fontFamily` | string | `""` | CSS `font-family` for body text. Empty uses the preset default. |
+| `penmark.headingFontFamily` | string | `""` | CSS `font-family` for headings. Empty uses the preset default. |
+| `penmark.lineHeight` | number | `0` | Line height multiplier (e.g. `1.5`). `0` uses the preset default. |
 
 ### `penmark.contentWidth` values
 
@@ -23,6 +28,27 @@ Penmark is configured through standard editor settings (the Settings UI, or `set
 - `subtle` — faint tint, least distracting over prose.
 - `medium` — balanced tint (the default).
 - `strong` — bold tint, most visible.
+
+### `penmark.preset` values
+
+- `github` — match the GitHub/built-in preview reading experience (default).
+- `reading` — serif body, larger text, relaxed line height.
+- `compact` — dense layout for reference docs.
+- `focus` — narrow measure, large text for distraction-free reading.
+- `print` — high-contrast conservative type.
+- `custom` — individual knobs below take effect.
+
+## Keyboard shortcuts (preview webview)
+
+When the preview panel has focus:
+
+| Key | Action |
+| --- | --- |
+| `d` | Toggle comments drawer |
+| `j` / `k` | Next / previous drawer item (drawer open) |
+| `n` / `p` | Next / previous comment highlight |
+| `?` | Toggle shortcut help |
+| `Esc` | Close topmost overlay |
 
 ## How to set them
 

@@ -7,6 +7,8 @@
  */
 
 import type { CommentState, Provenance } from "../comments/types.js";
+import type { TypographySettings } from "../settings/typography.js";
+import type { FrontmatterFields } from "../render/frontmatter.js";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -48,6 +50,8 @@ export interface WireComment {
  */
 export type ContentWidth = "comfortable" | "wide" | "full";
 
+export type { TypographySettings, FrontmatterFields };
+
 /** Messages sent from the extension host to the webview. */
 export type HostToWebview =
   | {
@@ -58,10 +62,13 @@ export type HostToWebview =
       docName: string;
       comments: WireComment[];
       attention: number;
+      typography?: TypographySettings;
+      frontmatter?: FrontmatterFields;
     }
   | { v: 1; type: "comments"; comments: WireComment[]; attention: number }
   | { v: 1; type: "setTheme"; theme: ThemeMode }
   | { v: 1; type: "setContentWidth"; contentWidth: ContentWidth }
+  | { v: 1; type: "setTypography"; typography: TypographySettings }
   | { v: 1; type: "revealLine"; line: number }
   | { v: 1; type: "copied" };
 
@@ -82,4 +89,5 @@ export type WebviewToHost =
   | { v: 1; type: "resolveComment"; id: string }
   | { v: 1; type: "editComment"; id: string; body: string }
   | { v: 1; type: "jumpToSource"; id: string }
-  | { v: 1; type: "exportReview" };
+  | { v: 1; type: "exportReview" }
+  | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean };

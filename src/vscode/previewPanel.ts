@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import type { ContentWidth, HostToWebview, ThemeMode } from "../core/protocol/messages.js";
+import { resolveTypography, type TypographySettings } from "../core/settings/typography.js";
 import { buildShellHtml, generateNonce, type HighlightIntensity } from "./html.js";
 import { loadHighlighterIfNeeded } from "./hljsLoader.js";
 import {
@@ -151,6 +152,20 @@ function configuredHighlightIntensity(): HighlightIntensity {
     .get<HighlightIntensity>("comments.highlightIntensity", "medium");
 }
 
+/** Resolved typography from penmark.* settings (v1.0 polish). */
+function configuredTypography(): TypographySettings {
+  const cfg = vscode.workspace.getConfiguration("penmark");
+  const lineHeight = cfg.get<number>("lineHeight", 0);
+  return resolveTypography({
+    preset: cfg.get<string>("preset"),
+    textSize: cfg.get<string>("textSize"),
+    fontFamily: cfg.get<string>("fontFamily"),
+    headingFontFamily: cfg.get<string>("headingFontFamily"),
+    lineHeight: lineHeight > 0 ? lineHeight : undefined,
+    contentWidth: cfg.get<ContentWidth>("contentWidth"),
+  });
+}
+
 /**
  * Find the visible text editor showing `entry.document`, if any. Scroll sync is
  * a no-op when the source editor is not currently visible.
@@ -228,6 +243,20 @@ function attachConfigListener(entry: PanelEntry): vscode.Disposable {
       };
       void entry.panel.webview.postMessage(msg);
     }
+    if (
+      e.affectsConfiguration("penmark.preset") ||
+      e.affectsConfiguration("penmark.textSize") ||
+      e.affectsConfiguration("penmark.fontFamily") ||
+      e.affectsConfiguration("penmark.headingFontFamily") ||
+      e.affectsConfiguration("penmark.lineHeight")
+    ) {
+      const msg: Extract<HostToWebview, { type: "setTypography" }> = {
+        v: 1,
+        type: "setTypography",
+        typography: configuredTypography(),
+      };
+      void entry.panel.webview.postMessage(msg);
+    }
   });
 }
 
@@ -245,6 +274,23 @@ function docName(document: vscode.TextDocument): string {
  */
 export async function handleCopyCode(text: string): Promise<void> {
   await vscode.env.clipboard.writeText(text);
+}
+
+/** Toggle a task-list checkbox on `line` via a single WorkspaceEdit (v1.0 polish). */
+export async function handleToggleTaskCheckbox(
+  document: vscode.TextDocument,
+  line: number,
+  checked: boolean,
+): Promise<void> {
+  const lineText = document.lineAt(line).text;
+  const next = checked
+    ? lineText.replace(/^(\s*[-*+]\s+)\[ \]/, "$1[x]")
+    : lineText.replace(/^(\s*[-*+]\s+)\[[xX]\]/, "$1[ ]");
+  if (next === lineText) return;
+  const edit = new vscode.WorkspaceEdit();
+  const range = document.lineAt(line).range;
+  edit.replace(document.uri, range, next);
+  await vscode.workspace.applyEdit(edit);
 }
 
 /**
@@ -409,6 +455,7 @@ async function postRender(entry: PanelEntry, document: vscode.TextDocument): Pro
     highlight,
     configuredMermaidEnabled(),
     analysis,
+    configuredTypography(),
   );
   entry.lastRenderMessage = msg;
   entry.renderCount++;
@@ -467,6 +514,8 @@ function setupPanelEntry(
       quote?: string;
       body?: string;
       id?: string;
+      line?: number;
+      checked?: boolean;
     };
     if (message.v !== 1) return;
 
@@ -603,6 +652,16 @@ function setupPanelEntry(
         } catch {
           // Malformed href — swallow silently; we must not crash the host.
         }
+        break;
+      }
+
+      case "toggleTaskCheckbox": {
+        const doc = entry.document;
+        if (!doc) break;
+        const line = message.line;
+        const checked = message.checked;
+        if (typeof line !== "number" || typeof checked !== "boolean") break;
+        enqueueMutation(entry, () => handleToggleTaskCheckbox(doc, line, checked));
         break;
       }
     }
