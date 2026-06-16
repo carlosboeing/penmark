@@ -2,6 +2,17 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-06-17
+
+### CustomTextEditor support and right-click context menu integration
+
+Penmark now registers as a Custom Editor (`CustomTextEditor`) in VS Code, allowing users to open Markdown documents directly in a full-tab distraction-free preview/comment window (via double-click or "Open With..."). We also added direct right-click context menu items for seamless access.
+
+- **CustomTextEditor Resolution (`penmark.previewEditor`)** — Implemented `PenmarkCustomEditorProvider` and registered it with support for multiple editors per document. Refactored webview initialization, config listeners, scroll sync, and comments storage into a reusable `setupPanelEntry` helper shared between the standard side preview and custom editor panels.
+- **Serializer interactivity fix** — Reused `setupPanelEntry` in the `PreviewPanelSerializer` which resolves a pre-existing bug where restored tabs on window reload were non-interactive.
+- **Direct context menu command ("Open with Penmark")** — Registered `penmark.openCustomEditor` command and contributed it directly to the File Explorer right-click context menu (`explorer/context`), Editor right-click context menu (`editor/context`), and Editor Tab right-click context menu (`editor/title/context`) for fast, top-level access.
+- **Visual golden and platform test coverage** — Added integration tests verifying activation contributions, lazy activation triggers, and the new command-based editor resolution.
+
 ## 2026-06-16
 
 ### Table cell inline comments, right-sided drawer layout, and jump-to-comment scroll fixes
