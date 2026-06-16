@@ -303,6 +303,51 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
       range: { start: 0, end: 8 }, // Full word "Overflow"
     });
   });
+
+  it("automatically expands selections on special characters to the full compound word", () => {
+    const text = "Victor Augusto cc'd for roll-out and/or R&D support.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+
+    // 1. Selecting '-' in "roll-out" (source index 28)
+    const hyphenIdx = text.indexOf("-");
+    const r1 = planAnchor(text, { start: hyphenIdx, end: hyphenIdx + 1 }, map, "-");
+    expect(r1).toEqual({
+      kind: "span",
+      range: rangeOf(text, "roll-out"),
+    });
+
+    // 2. Selecting '/' in "and/or" (source index 36)
+    const slashIdx = text.indexOf("/");
+    const r2 = planAnchor(text, { start: slashIdx, end: slashIdx + 1 }, map, "/");
+    expect(r2).toEqual({
+      kind: "span",
+      range: rangeOf(text, "and/or"),
+    });
+
+    // 3. Selecting '&' in "R&D" (source index 41)
+    const ampIdx = text.indexOf("&");
+    const r3 = planAnchor(text, { start: ampIdx, end: ampIdx + 1 }, map, "&");
+    expect(r3).toEqual({
+      kind: "span",
+      range: rangeOf(text, "R&D"),
+    });
+
+    // 4. Selecting "'" in "cc'd" (source index 17)
+    const apoIdx = text.indexOf("'");
+    const r4 = planAnchor(text, { start: apoIdx, end: apoIdx + 1 }, map, "'");
+    expect(r4).toEqual({
+      kind: "span",
+      range: rangeOf(text, "cc'd"),
+    });
+
+    // 5. Selecting partial word "roll" of "roll-out"
+    const rollIdx = text.indexOf("roll");
+    const r5 = planAnchor(text, { start: rollIdx, end: rollIdx + 4 }, map, "roll");
+    expect(r5).toEqual({
+      kind: "span",
+      range: rangeOf(text, "roll-out"),
+    });
+  });
 });
 
 describe("planAnchor — block (§4.2)", () => {

@@ -521,7 +521,7 @@ function snapSpan(
   while (e > s && /\s/.test(text.charAt(e - 1))) e--;
 
   // Expand to word boundaries if selecting a partial word
-  const isWordChar = (char: string): boolean => /[\p{L}\p{N}']/u.test(char);
+  const isWordChar = (char: string): boolean => /[\p{L}\p{N}'\-&/]/u.test(char);
   if (s < e) {
     if (
       s > block.startOffset + prefixLen &&
