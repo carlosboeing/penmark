@@ -47,6 +47,11 @@ export function closeCommentBox(): void {
   document.removeEventListener("keydown", _open.onKeydown, true);
   _open.el.remove();
   _open = null;
+
+  const overlay = document.getElementById("penmark-selection-preview");
+  if (overlay) {
+    overlay.replaceChildren();
+  }
 }
 
 /**
