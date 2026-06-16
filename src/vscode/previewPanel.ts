@@ -51,7 +51,7 @@ export interface PanelEntry {
   /** Last setTheme message payload sent (from config change), for test assertions. */
   lastSetThemeMessage: Extract<HostToWebview, { type: "setTheme" }> | undefined;
   /** The source document currently being previewed in this panel. */
-  document: vscode.TextDocument;
+  document: vscode.TextDocument | undefined;
   /** Last `revealLine` message posted to this panel, for test assertions. */
   lastRevealLineMessage: Extract<HostToWebview, { type: "revealLine" }> | undefined;
   /**
@@ -156,8 +156,9 @@ function configuredHighlightIntensity(): HighlightIntensity {
  * a no-op when the source editor is not currently visible.
  */
 function findEditorForEntry(entry: PanelEntry): vscode.TextEditor | undefined {
+  if (!entry.document) return undefined;
   return vscode.window.visibleTextEditors.find(
-    (e) => e.document.uri.toString() === entry.document.uri.toString(),
+    (e) => e.document.uri.toString() === entry.document!.uri.toString(),
   );
 }
 
@@ -195,7 +196,7 @@ export function maybePostRevealLine(entry: PanelEntry, line: number): void {
  */
 function attachVisibleRangeListener(entry: PanelEntry): vscode.Disposable {
   return vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-    if (e.textEditor.document.uri.toString() !== entry.document.uri.toString()) return;
+    if (!entry.document || e.textEditor.document.uri.toString() !== entry.document.uri.toString()) return;
     const first = e.visibleRanges[0];
     if (!first) return;
     maybePostRevealLine(entry, first.start.line);
@@ -418,7 +419,7 @@ async function postRender(entry: PanelEntry, document: vscode.TextDocument): Pro
 function setupPanelEntry(
   context: vscode.ExtensionContext,
   panel: vscode.WebviewPanel,
-  document: vscode.TextDocument,
+  document: vscode.TextDocument | undefined,
   key: vscode.ViewColumn | string,
 ): PanelEntry {
   const nonce = generateNonce();
@@ -449,7 +450,9 @@ function setupPanelEntry(
   panels.set(key, entry);
 
   // Initial render
-  void postRender(entry, document);
+  if (document) {
+    void postRender(entry, document);
+  }
 
   // Handle messages from the webview
   panel.webview.onDidReceiveMessage((msg: unknown) => {
@@ -472,7 +475,9 @@ function setupPanelEntry(
         // Webview has attached its listener — re-post the current render so the
         // initial postRender (which may have been dropped before the listener
         // was attached) is guaranteed to arrive.
-        void postRender(entry, entry.document);
+        if (entry.document) {
+          void postRender(entry, entry.document);
+        }
         break;
 
       case "themeSelected": {
@@ -519,6 +524,8 @@ function setupPanelEntry(
         // Webview requested a new comment on a selection (R7). range is BODY-
         // relative char offsets (the offset-base seam — see comments.ts); the
         // host rebases to source coordinates inside planAddComment.
+        const doc = entry.document;
+        if (!doc) break;
         const { range, quote, body } = message;
         if (
           !range ||
@@ -530,38 +537,44 @@ function setupPanelEntry(
           break;
         }
         const r = { start: range.start, end: range.end };
-        enqueueMutation(entry, () => handleAddComment(entry.document, r, quote, body));
+        enqueueMutation(entry, () => handleAddComment(doc, r, quote, body));
         break;
       }
 
       case "resolveComment": {
+        const doc = entry.document;
+        if (!doc) break;
         const id = message.id;
         if (typeof id !== "string") break;
-        enqueueMutation(entry, () => handleResolveComment(entry.document, id));
+        enqueueMutation(entry, () => handleResolveComment(doc, id));
         break;
       }
 
       case "editComment": {
+        const doc = entry.document;
+        if (!doc) break;
         const id = message.id;
         const body = message.body;
         if (typeof id !== "string" || typeof body !== "string") break;
-        enqueueMutation(entry, () => handleEditComment(entry.document, id, body));
+        enqueueMutation(entry, () => handleEditComment(doc, id, body));
         break;
       }
 
       case "jumpToSource": {
+        const doc = entry.document;
+        if (!doc) break;
         const id = message.id;
         if (typeof id !== "string") break;
-        const analysis = analyzeComments(entry.document.getText());
+        const analysis = analyzeComments(doc.getText());
         const rc = analysis.result.comments.find((c) => c.entry.id === id);
         if (rc) {
           const start = rc.extent ? rc.extent.start : rc.entry.rawStart;
           const end = rc.extent ? rc.extent.end : rc.entry.rawEnd;
           void vscode.window
-            .showTextDocument(entry.document, { preserveFocus: false })
+            .showTextDocument(doc, { preserveFocus: false })
             .then((editor) => {
-              const startPos = entry.document.positionAt(start);
-              const endPos = entry.document.positionAt(end);
+              const startPos = doc.positionAt(start);
+              const endPos = doc.positionAt(end);
               const range = new vscode.Range(startPos, endPos);
               editor.selection = new vscode.Selection(startPos, endPos);
               editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
@@ -580,7 +593,9 @@ function setupPanelEntry(
           } else {
             // Relative or local path — resolve against the document directory
             // and open inside VS Code.
-            const docDir = path.dirname(entry.document.uri.fsPath);
+            const doc = entry.document;
+            if (!doc) break;
+            const docDir = path.dirname(doc.uri.fsPath);
             const absolutePath = path.isAbsolute(href) ? href : path.resolve(docDir, href);
             const fileUri = vscode.Uri.file(absolutePath);
             void vscode.commands.executeCommand("vscode.open", fileUri);
@@ -680,7 +695,7 @@ export function registerChangeListener(): vscode.Disposable {
     const timer = setTimeout(() => {
       debounceTimers.delete(key);
       panels.forEach((entry) => {
-        if (entry.document.uri.toString() === document.uri.toString()) {
+        if (entry.document && entry.document.uri.toString() === document.uri.toString()) {
           void postRender(entry, document);
         }
       });
@@ -701,60 +716,13 @@ export class PreviewPanelSerializer implements vscode.WebviewPanelSerializer {
     void savedState;
     const column = panel.viewColumn ?? vscode.ViewColumn.Beside;
 
-    const nonce = generateNonce();
-
-    const scriptUri = vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "main.js");
-    const html = buildShellHtml(
-      panel.webview,
-      nonce,
-      scriptUri,
-      this.context.extensionUri,
-      configuredContentWidth(),
-      configuredHighlightIntensity(),
-    );
-    panel.webview.html = html;
-
     const activeEditor = vscode.window.activeTextEditor;
     const activeDoc =
       activeEditor && activeEditor.document.languageId === "markdown"
         ? activeEditor.document
         : undefined;
 
-    const entry: PanelEntry = {
-      panel,
-      column,
-      html,
-      retainContext: false,
-      renderCount: 0,
-      lastRenderMessage: undefined,
-      lastSetThemeMessage: undefined,
-      // Will be set when postRender is called below; cast is safe because
-      // postRender is called unconditionally when activeDoc is available.
-      document: activeDoc!,
-      lastRevealLineMessage: undefined,
-      suppressVisibleRangeUntil: 0,
-      lastRevealLinePostedAt: 0,
-    };
-    panels.set(column, entry);
-
-    // Restored panels must also follow live penmark.theme changes.
-    const configListener = attachConfigListener(entry);
-    this.context.subscriptions.push(configListener);
-
-    // Restored panels also participate in scroll sync (T10).
-    const visibleRangeListener = attachVisibleRangeListener(entry);
-    this.context.subscriptions.push(visibleRangeListener);
-
-    panel.onDidDispose(() => {
-      panels.delete(column);
-      configListener.dispose();
-      visibleRangeListener.dispose();
-    });
-
-    // Re-render with the current active markdown editor if available.
-    if (activeDoc) {
-      void postRender(entry, activeDoc);
-    }
+    setupPanelEntry(this.context, panel, activeDoc, column);
   }
 }
 
