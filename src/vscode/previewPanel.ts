@@ -8,7 +8,7 @@ import type {
   ThemeMode,
 } from "../core/protocol/messages.js";
 import { resolveTypography, type TypographySettings } from "../core/settings/typography.js";
-import { buildShellHtml, generateNonce, type HighlightIntensity } from "./html.js";
+import { buildShellHtml, generateNonce } from "./html.js";
 import { loadHighlighterIfNeeded } from "./hljsLoader.js";
 import {
   analyzeComments,
