@@ -19,6 +19,7 @@
   "activationEvents": [
     "onCommand:penmark.openPreview",
     "onCommand:penmark.exportReview",
+    "onCommand:penmark.openCustomEditor",
     "onWebviewPanel:penmark.preview",
     "onCustomEditor:penmark.previewEditor"
   ],
@@ -100,6 +101,10 @@
         "command": "penmark.exportReview",
         "title": "Penmark: Export Review as Prompt",
         "icon": "$(export)"
+      },
+      {
+        "command": "penmark.openCustomEditor",
+        "title": "Open with Penmark"
       }
     ],
     "menus": {
@@ -115,6 +120,13 @@
           "group": "1_penmark"
         }
       ],
+      "editor/title/context": [
+        {
+          "command": "penmark.openCustomEditor",
+          "when": "resourceLangId == markdown",
+          "group": "1_modification"
+        }
+      ],
       "editor/context": [
         {
           "command": "penmark.openPreview",
@@ -122,9 +134,21 @@
           "group": "navigation"
         },
         {
+          "command": "penmark.openCustomEditor",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        },
+        {
           "command": "penmark.exportReview",
           "when": "resourceLangId == markdown",
           "group": "1_penmark"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "penmark.openCustomEditor",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
         }
       ]
     }

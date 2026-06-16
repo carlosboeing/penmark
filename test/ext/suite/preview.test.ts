@@ -72,11 +72,15 @@ describe("T4 — webview preview panel", () => {
   // -------------------------------------------------------------------------
   // (a) Command registration
   // -------------------------------------------------------------------------
-  it("(a) penmark.openPreview command is registered", async () => {
+  it("(a) penmark.openPreview and penmark.openCustomEditor commands are registered", async () => {
     const all = await vscode.commands.getCommands(true);
     assert.ok(
       all.includes("penmark.openPreview"),
       "penmark.openPreview must appear in the registered command list",
+    );
+    assert.ok(
+      all.includes("penmark.openCustomEditor"),
+      "penmark.openCustomEditor must appear in the registered command list",
     );
   });
 
@@ -426,6 +430,23 @@ describe("T4 — webview preview panel", () => {
 
     const manager = getManager();
     assert.ok(manager.panelCount() > 0, "custom editor panel should be registered in previewManager");
+    
+    // Cleanup
+    await closeAll();
+  });
+
+  it("can open a document using the openCustomEditor command", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "penmark-custom-cmd-")));
+    const filePath = path.join(dir, "custom-cmd-test.md");
+    fs.writeFileSync(filePath, "# Custom Editor Command Test\n", "utf8");
+    const uri = vscode.Uri.file(filePath);
+
+    // Open using the penmark.openCustomEditor command
+    await vscode.commands.executeCommand("penmark.openCustomEditor", uri);
+    await new Promise((r) => setTimeout(r, 600));
+
+    const manager = getManager();
+    assert.ok(manager.panelCount() > 0, "custom editor panel should be registered in previewManager via command");
     
     // Cleanup
     await closeAll();

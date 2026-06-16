@@ -21,6 +21,20 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     }),
   );
 
+  // Register the openCustomEditor command to open via vscode.openWith
+  context.subscriptions.push(
+    vscode.commands.registerCommand("penmark.openCustomEditor", async (uri?: vscode.Uri) => {
+      const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (!targetUri) {
+        void vscode.window.showInformationMessage(
+          "Penmark: Please focus or select a Markdown file to open.",
+        );
+        return;
+      }
+      await vscode.commands.executeCommand("vscode.openWith", targetUri, "penmark.previewEditor");
+    }),
+  );
+
   // Register the export-review command (R9). Targets the active Markdown editor.
   context.subscriptions.push(
     vscode.commands.registerCommand("penmark.exportReview", () => {
