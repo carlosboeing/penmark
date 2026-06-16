@@ -145,9 +145,18 @@ describe("T12 — activation + lazy-activation budgets (design §8)", () => {
 
   it("contributes custom editor penmark.previewEditor", () => {
     const pkgPath = path.resolve(__dirname, "../../../package.json");
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as any;
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
+      contributes?: {
+        customEditors?: Array<{
+          viewType: string;
+          priority: string;
+          selector: Array<{ filenamePattern: string }>;
+        }>;
+      };
+      activationEvents?: string[];
+    };
     const customEditors = pkg.contributes?.customEditors ?? [];
-    const editor = customEditors.find((e: any) => e.viewType === "penmark.previewEditor");
+    const editor = customEditors.find((e) => e.viewType === "penmark.previewEditor");
     assert.ok(editor, "penmark.previewEditor custom editor contribution is missing");
     assert.strictEqual(editor.priority, "option");
     assert.deepStrictEqual(editor.selector, [{ filenamePattern: "*.md" }]);

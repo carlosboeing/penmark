@@ -74,7 +74,6 @@ class PenmarkCustomEditorProvider implements vscode.CustomTextEditorProvider {
   public async resolveCustomTextEditor(
     document: vscode.TextDocument,
     webviewPanel: vscode.WebviewPanel,
-    _token: vscode.CancellationToken,
   ): Promise<void> {
     await registerCustomEditorPreview(this.context, document, webviewPanel);
   }
