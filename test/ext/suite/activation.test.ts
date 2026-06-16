@@ -103,10 +103,11 @@ describe("T12 — activation + lazy-activation budgets (design §8)", () => {
       [
         "onCommand:penmark.openPreview",
         "onCommand:penmark.exportReview",
+        "onCommand:penmark.openCustomEditor",
         "onWebviewPanel:penmark.preview",
         "onCustomEditor:penmark.previewEditor",
       ].sort(),
-      "activationEvents must be exactly the four lazy triggers",
+      "activationEvents must be exactly the five lazy triggers",
     );
   });
 
