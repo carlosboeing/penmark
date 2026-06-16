@@ -310,15 +310,38 @@ describe("planAnchor — block (§4.2)", () => {
     expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
   });
 
-  it("selection inside table internals (one cell) → block", () => {
+  it("selection inside table internals (one cell) → span", () => {
+    const text = "before\n\n| a | b |\n|---|---|\n| 1 | 2 |\n";
+    const map = mapFrom(text, [
+      { line0: 0, line1: 1, type: "paragraph" },
+      { line0: 2, line1: 5, type: "table" },
+    ]);
+    const sel = rangeOf(text, "1"); // a cell value
+    const r = planAnchor(text, sel, map, "1");
+    expect(r).toEqual({ kind: "span", range: sel });
+  });
+
+  it("selection inside table crossing cell separator → block", () => {
     const text = "before\n\n| a | b |\n|---|---|\n| 1 | 2 |\n";
     const map = mapFrom(text, [
       { line0: 0, line1: 1, type: "paragraph" },
       { line0: 2, line1: 5, type: "table" },
     ]);
     const tableStart = offsetOf(text, "| a | b |");
-    const sel = rangeOf(text, "1"); // a cell value
-    const r = planAnchor(text, sel, map);
+    const sel = rangeOf(text, "1 | 2"); // spans cell separator |
+    const r = planAnchor(text, sel, map, "1 | 2");
+    expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
+  });
+
+  it("selection inside table crossing row boundary → block", () => {
+    const text = "before\n\n| a | b |\n|---|---|\n| 1 | 2 |\n";
+    const map = mapFrom(text, [
+      { line0: 0, line1: 1, type: "paragraph" },
+      { line0: 2, line1: 5, type: "table" },
+    ]);
+    const tableStart = offsetOf(text, "| a | b |");
+    const sel = rangeOf(text, "b |\n|---|---|\n| 1"); // spans row boundary \n
+    const r = planAnchor(text, sel, map, "b | | 1");
     expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
   });
 

@@ -83,12 +83,7 @@ const KNOWN_BLOCK_TYPES: ReadonlySet<string> = new Set<string>([
  * gets a block anchor"). Images and raw HTML blocks have no inline text model
  * we can safely wrap either, so they get a block anchor too.
  */
-const SPAN_HOSTILE_BLOCKS: ReadonlySet<BlockType> = new Set<BlockType>([
-  "table",
-  "fence",
-  "image",
-  "html",
-]);
+const SPAN_HOSTILE_BLOCKS: ReadonlySet<BlockType> = new Set<BlockType>(["fence", "image", "html"]);
 
 /** Map a markdown-it token type to one of our {@link BlockType}s. */
 function toBlockType(raw: string): BlockType {
@@ -432,6 +427,15 @@ function snapSpan(
   if (s >= e) return null;
   // A snap that swallowed the whole block content is really a block selection.
   if (coversWholeBlock(text, block, s, e)) return null;
+
+  // For tables, prevent span comments from crossing cell delimiters (|) or row boundaries (\n)
+  if (block.type === "table") {
+    const selectedSourceText = text.slice(s, e);
+    if (selectedSourceText.includes("|") || selectedSourceText.includes("\n")) {
+      return null;
+    }
+  }
+
   return { start: s, end: e };
 }
 

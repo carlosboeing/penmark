@@ -2,6 +2,15 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-06-16
+
+### Table cell inline comments supported
+
+Span comments (open/close tags) are now supported on individual words or text selections inside table cells, falling back to block comments only if the selection spans cell delimiters (`|`) or row boundaries (`\n`).
+
+- **Comment placement logic updated** — Excluded `table` from `SPAN_HOSTILE_BLOCKS` and added structural boundary validation inside `snapSpan` to enforce cell/row isolation.
+- **Unit tests added** — Verifies table cell span comments, boundary crossing block fallback, and row crossing block fallback in `placement.test.ts`.
+
 ## 2026-06-15
 
 ### Documentation split by audience
