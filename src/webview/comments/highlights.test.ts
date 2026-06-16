@@ -163,4 +163,20 @@ describe("installHighlights", () => {
     mark.click();
     expect(isPopoverOpen()).toBe(false);
   });
+
+  it("applies pmk-hl-active when the popover is open, and removes it when closed", () => {
+    const mark = seedSpan(root, "abcdefgh");
+    const comm = comment({ id: "abcdefgh" });
+    installHighlights(root, [comm], post);
+
+    expect(mark.classList.contains("pmk-hl-active")).toBe(false);
+
+    mark.click();
+    expect(isPopoverOpen()).toBe(true);
+    expect(mark.classList.contains("pmk-hl-active")).toBe(true);
+
+    closeCommentPopover();
+    expect(isPopoverOpen()).toBe(false);
+    expect(mark.classList.contains("pmk-hl-active")).toBe(false);
+  });
 });

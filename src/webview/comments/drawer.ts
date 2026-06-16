@@ -21,6 +21,7 @@
  */
 
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
+import { openCommentPopover } from "./popover.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -241,9 +242,12 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   } else {
     actions.append(
       actionButton("Jump to comment", "jump", () => {
-        const target = document.querySelector(`#penmark-root [data-pmk-id="${c.id}"]`);
+        const target = document.querySelector(
+          `#penmark-root [data-pmk-id="${c.id}"]`,
+        ) as HTMLElement;
         if (target) {
           target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+          openCommentPopover(target, c, cfg.post);
         }
       }),
       actionButton("✓ Resolve", "resolve", () =>

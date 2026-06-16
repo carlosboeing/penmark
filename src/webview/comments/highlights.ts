@@ -20,7 +20,7 @@
  */
 
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
-import { openCommentPopover } from "./popover.js";
+import { openCommentPopover, getActiveCommentId } from "./popover.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -55,6 +55,8 @@ export function installHighlights(
   const byId = new Map<string, WireComment>();
   for (const c of comments) byId.set(c.id, c);
 
+  const activeId = getActiveCommentId();
+
   for (const el of root.querySelectorAll<HTMLElement>("[data-pmk-id]")) {
     const id = el.getAttribute("data-pmk-id");
     if (!id) continue;
@@ -62,6 +64,12 @@ export function installHighlights(
     if (!comment) continue;
 
     addGutterDot(blockHostOf(el, root));
+
+    if (activeId === id) {
+      el.classList.add("pmk-hl-active");
+    } else {
+      el.classList.remove("pmk-hl-active");
+    }
   }
 
   if (!_delegatedRoots.has(root)) {

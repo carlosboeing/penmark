@@ -18,6 +18,7 @@ import {
   bucketComments,
   type DrawerStateStore,
 } from "./drawer.js";
+import { closeCommentPopover } from "./popover.js";
 
 function comment(over: Partial<WireComment>): WireComment {
   return {
@@ -136,9 +137,15 @@ describe("drawer", () => {
     root.appendChild(mockHl);
     document.body.appendChild(root);
 
+    expect(mockHl.classList.contains("pmk-hl-active")).toBe(false);
+
     (openCards()[0]!.querySelector(".pmk-drawer-action.jump") as HTMLButtonElement).click();
     expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
 
+    expect(mockHl.classList.contains("pmk-hl-active")).toBe(true);
+    expect(document.querySelector(".pmk-popover")).not.toBeNull();
+
+    closeCommentPopover();
     root.remove();
   });
 

@@ -666,10 +666,20 @@ body.pmk-hl-strong {
   border-bottom: 2px solid var(--pmk-comment-hl-border);
   border-radius: 2px;
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  padding: 0 3px;
+  transition: background-color 0.12s ease, background 0.12s ease;
 }
 #penmark-root .pmk-hl:hover {
   background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.12));
+}
+#penmark-root .pmk-hl.pmk-hl-active {
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.18)),
+    rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.28))
+  );
+  border-bottom: 2.5px solid var(--pmk-comment-hl-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* Block anchor: the whole block is outlined (a span would be wrong for, e.g., a
@@ -683,6 +693,11 @@ body.pmk-hl-strong {
   border-radius: 2px;
   background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.4));
   cursor: pointer;
+  transition: outline-width 0.12s ease, background-color 0.12s ease;
+}
+#penmark-root [data-pmk-block].pmk-hl-active {
+  outline-width: 3px;
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.75));
 }
 
 /* Range anchor: a run of blocks wrapped in a div — an even lighter wash so the
@@ -693,6 +708,11 @@ body.pmk-hl-strong {
   border-radius: 2px;
   background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.3));
   cursor: pointer;
+  transition: outline-width 0.12s ease, background-color 0.12s ease;
+}
+#penmark-root .pmk-hl-range.pmk-hl-active {
+  outline-width: 3px;
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.65));
 }
 
 /* Gutter dot: a small marker in the left margin of any commented block. The host

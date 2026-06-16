@@ -25,6 +25,7 @@ type PostMessage = (msg: WebviewToHost) => void;
 
 interface OpenPopover {
   el: HTMLElement;
+  commentId: string;
   onKeydown: (e: KeyboardEvent) => void;
   onMousedown: (e: MouseEvent) => void;
 }
@@ -36,6 +37,11 @@ export function isPopoverOpen(): boolean {
   return _open !== null;
 }
 
+/** Retrieve the ID of the comment whose popover is currently open. */
+export function getActiveCommentId(): string | null {
+  return _open ? _open.commentId : null;
+}
+
 /** Close the open popover (if any) and detach its document listeners. */
 export function closeCommentPopover(): void {
   if (!_open) return;
@@ -43,6 +49,11 @@ export function closeCommentPopover(): void {
   document.removeEventListener("mousedown", _open.onMousedown, true);
   _open.el.remove();
   _open = null;
+
+  // Clear active styling from highlights
+  document
+    .querySelectorAll("#penmark-root [data-pmk-id]")
+    .forEach((x) => x.classList.remove("pmk-hl-active"));
 }
 
 /** First character of `author`, upper-cased, for the avatar (fallback "?"). */
@@ -119,6 +130,11 @@ export function openCommentPopover(
   document.body.appendChild(el);
   positionOver(el, anchor);
 
+  // Apply active styling to the new active highlights
+  document
+    .querySelectorAll(`#penmark-root [data-pmk-id="${comment.id}"]`)
+    .forEach((x) => x.classList.add("pmk-hl-active"));
+
   // Esc closes.
   const onKeydown = (e: KeyboardEvent): void => {
     if (e.key === "Escape") closeCommentPopover();
@@ -130,7 +146,7 @@ export function openCommentPopover(
   document.addEventListener("keydown", onKeydown);
   document.addEventListener("mousedown", onMousedown, true);
 
-  _open = { el, onKeydown, onMousedown };
+  _open = { el, commentId: comment.id, onKeydown, onMousedown };
 }
 
 /** Position `el` just below the anchor's left edge, kept within the viewport. */
