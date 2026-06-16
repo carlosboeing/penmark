@@ -3,6 +3,7 @@ import {
   buildAddCommentEdits,
   buildResolveCommentEdits,
   buildQuoteRefreshEdit,
+  buildEditCommentEdits,
   type NewComment,
   type TextEdit,
 } from "./serializer.js";
@@ -403,5 +404,33 @@ describe("writer invariants (§7)", () => {
     const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
     expect(entry?.quote).toBe("");
     expect(entry?.body).toBe("body only");
+  });
+});
+
+describe("buildEditCommentEdits", () => {
+  it("edits the comment body and preserves metadata and quote", () => {
+    const text = "Hello world.\n";
+    const c = newComment({
+      placement: spanPlacement(6, 11),
+      id: "aaaaaaaa",
+      quote: "world",
+      body: "original note",
+    });
+    const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
+    
+    const edits = buildEditCommentEdits(withComment, parseDoc(withComment), "aaaaaaaa", "updated note");
+    expect(edits).not.toBeNull();
+    const out = applyEdits(withComment, edits!);
+    
+    const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
+    expect(entry?.body).toBe("updated note");
+    expect(entry?.quote).toBe("world");
+    expect(entry?.author).toBe(c.author);
+  });
+
+  it("returns null if the comment id is not found", () => {
+    const text = "Hello world.\n";
+    const edits = buildEditCommentEdits(text, parseDoc(text), "zzzzzzzz", "note");
+    expect(edits).toBeNull();
   });
 });

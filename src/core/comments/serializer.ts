@@ -279,3 +279,37 @@ function nextLineEnd(text: string, from: number, limit: number): number {
   while (i < limit && text.charAt(i) !== "\n") i++;
   return i;
 }
+
+/**
+ * Build the edits to edit/update the body of the comment with `id`.
+ * Returns `null` if the entry is not found.
+ */
+export function buildEditCommentEdits(
+  text: string,
+  doc: ParsedDoc,
+  id: string,
+  newBody: string,
+): TextEdit[] | null {
+  const entry = doc.entries.find((e) => e.id === id);
+  if (entry === undefined) return null;
+
+  const qRegion = quoteRegion(text, entry);
+  let start = qRegion.end;
+  // Skip the blank line (which is just \r?\n).
+  let eol = "\n";
+  if (start < entry.rawEnd && text.charAt(start) === "\r") {
+    start++;
+    eol = "\r\n";
+  }
+  if (start < entry.rawEnd && text.charAt(start) === "\n") {
+    start++;
+  }
+
+  const end = entry.rawEnd - "-->".length;
+
+  // We replace the body region with the encoded new body plus the appropriate EOL.
+  const encodedBody = encodeEntryText(newBody);
+  const newText = `${encodedBody}${eol}`;
+
+  return [{ start, end, newText }];
+}

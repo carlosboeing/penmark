@@ -126,4 +126,84 @@ describe("openCommentPopover", () => {
     expect(pops.length).toBe(1);
     expect(pops[0]!.textContent).toContain("second");
   });
+
+  it("clicks Edit to switch to edit mode, Cancel to return to view mode", () => {
+    openCommentPopover(anchorEl(), comment({ body: "original text" }), post);
+    const pop = document.querySelector(".pmk-popover")!;
+    
+    // Check it starts in view mode
+    expect(pop.querySelector("textarea")).toBeNull();
+    
+    // Click Edit
+    const editBtn = Array.from(pop.querySelectorAll("button")).find(
+      (b) => b.textContent === "Edit"
+    ) as HTMLButtonElement;
+    expect(editBtn).not.toBeUndefined();
+    editBtn.click();
+    
+    // Now in edit mode
+    const ta = pop.querySelector("textarea") as HTMLTextAreaElement;
+    expect(ta).not.toBeNull();
+    expect(ta.value).toBe("original text");
+    
+    // Click Cancel
+    const cancelBtn = Array.from(pop.querySelectorAll("button")).find(
+      (b) => b.textContent === "Cancel"
+    ) as HTMLButtonElement;
+    expect(cancelBtn).not.toBeUndefined();
+    cancelBtn.click();
+    
+    // Back in view mode
+    expect(pop.querySelector("textarea")).toBeNull();
+    expect(pop.textContent).toContain("original text");
+  });
+
+  it("clicks Save to post editComment message to host and close popover", () => {
+    openCommentPopover(anchorEl(), comment({ id: "aaaa2345", body: "original text" }), post);
+    const pop = document.querySelector(".pmk-popover")!;
+    
+    // Click Edit
+    const editBtn = Array.from(pop.querySelectorAll("button")).find(
+      (b) => b.textContent === "Edit"
+    ) as HTMLButtonElement;
+    editBtn.click();
+    
+    // Modify text
+    const ta = pop.querySelector("textarea") as HTMLTextAreaElement;
+    ta.value = "  new comment text  ";
+    
+    // Click Save
+    const saveBtn = Array.from(pop.querySelectorAll("button")).find(
+      (b) => b.textContent === "Save"
+    ) as HTMLButtonElement;
+    expect(saveBtn).not.toBeUndefined();
+    saveBtn.click();
+    
+    expect(post).toHaveBeenCalledWith({
+      v: 1,
+      type: "editComment",
+      id: "aaaa2345",
+      body: "new comment text",
+    });
+    expect(isPopoverOpen()).toBe(false);
+  });
+
+  it("opens directly in edit mode when editMode=true, Cancel closes popover", () => {
+    openCommentPopover(anchorEl(), comment({ body: "some text" }), post, true);
+    const pop = document.querySelector(".pmk-popover")!;
+    
+    // Starts in edit mode
+    const ta = pop.querySelector("textarea") as HTMLTextAreaElement;
+    expect(ta).not.toBeNull();
+    expect(ta.value).toBe("some text");
+    
+    // Click Cancel
+    const cancelBtn = Array.from(pop.querySelectorAll("button")).find(
+      (b) => b.textContent === "Cancel"
+    ) as HTMLButtonElement;
+    cancelBtn.click();
+    
+    // Popover is closed
+    expect(isPopoverOpen()).toBe(false);
+  });
 });

@@ -241,13 +241,22 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
     );
   } else {
     actions.append(
-      actionButton("Jump to comment", "jump", () => {
+      actionButton("Open", "jump", () => {
         const target = document.querySelector(
-          `#penmark-root [data-pmk-id="${c.id}"]`,
+          `#penmark-root [data-pmk-id="${c.id}"]`
         ) as HTMLElement;
         if (target) {
           target.scrollIntoView?.({ block: "center", behavior: "smooth" });
           openCommentPopover(target, c, cfg.post);
+        }
+      }),
+      actionButton("Edit", "edit", () => {
+        const target = document.querySelector(
+          `#penmark-root [data-pmk-id="${c.id}"]`
+        ) as HTMLElement;
+        if (target) {
+          target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+          openCommentPopover(target, c, cfg.post, true);
         }
       }),
       actionButton("✓ Resolve", "resolve", () =>

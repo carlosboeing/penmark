@@ -26,7 +26,7 @@ import { buildBlockMap, planAnchor } from "../core/comments/placement.js";
 import { reconcile } from "../core/comments/reconcile.js";
 import type { ReconciledComment, ReconcileResult } from "../core/comments/reconcile.js";
 import type { NewComment, TextEdit } from "../core/comments/serializer.js";
-import { buildAddCommentEdits, buildResolveCommentEdits } from "../core/comments/serializer.js";
+import { buildAddCommentEdits, buildResolveCommentEdits, buildEditCommentEdits } from "../core/comments/serializer.js";
 import type { ParsedDoc } from "../core/comments/types.js";
 import type { WireComment, WireExtent } from "../core/protocol/messages.js";
 import { stripFrontmatter } from "../core/render/frontmatter.js";
@@ -155,6 +155,11 @@ export function planAddComment(input: AddCommentInput): AddPlan {
 /** Plan the edits to resolve (= delete) the comment `id` from `source` (R3). */
 export function planResolveComment(source: string, id: string): TextEdit[] {
   return buildResolveCommentEdits(source, parseDoc(source), id);
+}
+
+/** Plan the edits to edit the comment `id` with `newBody` in `source`. */
+export function planEditComment(source: string, id: string, newBody: string): TextEdit[] | null {
+  return buildEditCommentEdits(source, parseDoc(source), id, newBody);
 }
 
 // ---------------------------------------------------------------------------

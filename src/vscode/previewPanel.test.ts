@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import {
   handleAddComment,
   handleResolveComment,
+  handleEditComment,
   handleExportReview,
   enqueueMutation,
 } from "./previewPanel.js";
@@ -37,6 +38,7 @@ function fakeDoc(text: string, fsPath = "/tmp/doc.md"): vscode.TextDocument {
       }
       return new vscode.Position(line, clamped - lastNl - 1);
     },
+    save: async () => true,
   } as unknown as vscode.TextDocument;
 }
 
@@ -89,6 +91,24 @@ describe("handleResolveComment — host wiring (R7)", () => {
 
   it("is a no-op (no edit) when the id is absent", async () => {
     await handleResolveComment(fakeDoc(withComment), "nope0000");
+    expect(seam.workspace._appliedEdits).toHaveLength(0);
+  });
+});
+
+describe("handleEditComment — host wiring (R7)", () => {
+  const withComment =
+    "Hello <!--pmk:s abcdefgh-->world<!--/pmk:s abcdefgh-->.\n\n" +
+    "<!-- pmk:review v1 -->\n" +
+    "<!--pmk:c abcdefgh\nt (human) · 2026-06-14 12:00 +10:00\n> world\n\nnote\n-->\n" +
+    "<!-- /pmk:review -->\n";
+
+  it("applies one WorkspaceEdit when the id exists", async () => {
+    await handleEditComment(fakeDoc(withComment), "abcdefgh", "new note text");
+    expect(seam.workspace._appliedEdits).toHaveLength(1);
+  });
+
+  it("is a no-op (no edit) when the id is absent", async () => {
+    await handleEditComment(fakeDoc(withComment), "nope0000", "new note text");
     expect(seam.workspace._appliedEdits).toHaveLength(0);
   });
 });

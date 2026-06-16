@@ -9,6 +9,7 @@ import {
   offsetEditsToWorkspaceEdit,
   planAddComment,
   planResolveComment,
+  planEditComment,
   resolveAuthor,
 } from "./comments.js";
 import { buildReviewPrompt } from "../core/comments/exportPrompt.js";
@@ -280,6 +281,9 @@ export async function handleAddComment(
   }
   const edit = offsetEditsToWorkspaceEdit(document.uri, document, plan.edits);
   await vscode.workspace.applyEdit(edit);
+  if (typeof document.save === "function") {
+    await document.save();
+  }
 }
 
 /**
@@ -294,6 +298,27 @@ export async function handleResolveComment(
   if (edits.length === 0) return;
   const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
   await vscode.workspace.applyEdit(edit);
+  if (typeof document.save === "function") {
+    await document.save();
+  }
+}
+
+/**
+ * Edit/update the body of the comment `id` as one WorkspaceEdit (R7). A
+ * no-op when nothing matches.
+ */
+export async function handleEditComment(
+  document: vscode.TextDocument,
+  id: string,
+  newBody: string,
+): Promise<void> {
+  const edits = planEditComment(document.getText(), id, newBody);
+  if (!edits || edits.length === 0) return;
+  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
+  await vscode.workspace.applyEdit(edit);
+  if (typeof document.save === "function") {
+    await document.save();
+  }
 }
 
 /**
@@ -536,6 +561,14 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
         const id = message.id;
         if (typeof id !== "string") break;
         enqueueMutation(entry, () => handleResolveComment(entry.document, id));
+        break;
+      }
+
+      case "editComment": {
+        const id = message.id;
+        const body = message.body;
+        if (typeof id !== "string" || typeof body !== "string") break;
+        enqueueMutation(entry, () => handleEditComment(entry.document, id, body));
         break;
       }
 

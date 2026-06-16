@@ -70,6 +70,7 @@ export function openCommentPopover(
   anchor: HTMLElement,
   comment: WireComment,
   postMessage: PostMessage,
+  editMode = false,
 ): void {
   closeCommentPopover();
 
@@ -106,26 +107,88 @@ export function openCommentPopover(
     el.appendChild(note);
   }
 
-  // --- body ---
+  // --- body container ---
   const body = document.createElement("div");
   body.className = "pmk-popover-body";
-  body.textContent = comment.body;
   el.appendChild(body);
 
-  // --- actions: Resolve ---
+  // --- actions container ---
   const actions = document.createElement("div");
   actions.className = "pmk-popover-actions";
-
-  const resolve = document.createElement("button");
-  resolve.type = "button";
-  resolve.className = "pmk-popover-btn primary";
-  resolve.textContent = "✓ Resolve";
-  resolve.addEventListener("click", () => {
-    postMessage({ v: 1, type: "resolveComment", id: comment.id });
-    closeCommentPopover();
-  });
-  actions.appendChild(resolve);
   el.appendChild(actions);
+
+  function renderViewMode() {
+    body.replaceChildren();
+    body.textContent = comment.body;
+
+    actions.replaceChildren();
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "pmk-popover-btn";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => {
+      renderEditMode();
+    });
+
+    const resolveBtn = document.createElement("button");
+    resolveBtn.type = "button";
+    resolveBtn.className = "pmk-popover-btn primary";
+    resolveBtn.textContent = "✓ Resolve";
+    resolveBtn.addEventListener("click", () => {
+      postMessage({ v: 1, type: "resolveComment", id: comment.id });
+      closeCommentPopover();
+    });
+
+    actions.append(editBtn, resolveBtn);
+  }
+
+  function renderEditMode() {
+    body.replaceChildren();
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "pmk-commentbox-input";
+    textarea.value = comment.body;
+    textarea.rows = 3;
+    textarea.style.width = "100%";
+    textarea.style.boxSizing = "border-box";
+    textarea.style.resize = "vertical";
+    body.appendChild(textarea);
+
+    actions.replaceChildren();
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "pmk-popover-btn";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => {
+      if (editMode) {
+        closeCommentPopover();
+      } else {
+        renderViewMode();
+      }
+    });
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "pmk-popover-btn primary";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", () => {
+      const val = textarea.value.trim();
+      if (val === "") return;
+      postMessage({ v: 1, type: "editComment", id: comment.id, body: val });
+      closeCommentPopover();
+    });
+
+    actions.append(cancelBtn, saveBtn);
+    textarea.focus();
+  }
+
+  if (editMode) {
+    renderEditMode();
+  } else {
+    renderViewMode();
+  }
 
   document.body.appendChild(el);
   positionOver(el, anchor);
