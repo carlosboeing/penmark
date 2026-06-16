@@ -461,7 +461,7 @@ function snapSpan(
     }
 
     const mapToSourceStart = (cleanIdx: number): number => {
-      if (cleanIdx <= 0) return block.startOffset + prefixLen;
+      if (cleanIdx < 0) return block.startOffset + prefixLen;
       if (cleanIdx >= cleanText.length) return block.startOffset + blockText.length;
       return block.startOffset + prefixLen + mapping[cleanIdx]!;
     };

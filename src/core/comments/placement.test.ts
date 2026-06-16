@@ -280,6 +280,18 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
       range: { start: text.lastIndexOf("AI"), end: text.lastIndexOf("AI") + 2 },
     });
   });
+
+  it("reproduces Bug: selecting 'I' in '**In one line:**' does not swallow delimiters", () => {
+    const text = "**In one line:**\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    // Rendered text is "In one line:"
+    // "I" starts at index 0 in rendered text.
+    const r = planAnchor(text, { start: 0, end: 1 }, map, "I");
+    expect(r).toEqual({
+      kind: "span",
+      range: { start: 2, end: 3 }, // Index 2 in source is "I"
+    });
+  });
 });
 
 describe("planAnchor — block (§4.2)", () => {
@@ -343,6 +355,14 @@ describe("planAnchor — block (§4.2)", () => {
     const sel = rangeOf(text, "b |\n|---|---|\n| 1"); // spans row boundary \n
     const r = planAnchor(text, sel, map, "b | | 1");
     expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
+  });
+
+  it("selection of cell content matching end of clean table text snaps correctly", () => {
+    const text = "| a |\n|---|\n| 1 |\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 3, type: "table" }]);
+    const sel = rangeOf(text, "1");
+    const r = planAnchor(text, sel, map, "1");
+    expect(r).toEqual({ kind: "span", range: sel });
   });
 
   it("aligns selection coordinates to the correct cell when a word occurs in multiple cells", () => {
