@@ -84,9 +84,11 @@ function applyOpenState(): void {
   if (_open) {
     _d.panel.setAttribute("data-open", "");
     _d.panel.removeAttribute("inert");
+    document.body.setAttribute("data-pmk-drawer-open", "");
   } else {
     _d.panel.removeAttribute("data-open");
     _d.panel.setAttribute("inert", "");
+    document.body.removeAttribute("data-pmk-drawer-open");
   }
 }
 

@@ -289,7 +289,10 @@ interface SnapInterval {
   type: "always" | "cross";
 }
 
-function cleanMarkdown(blockText: string): { cleanText: string; mapping: number[] } {
+function cleanMarkdown(
+  blockText: string,
+  blockType: BlockType,
+): { cleanText: string; mapping: number[] } {
   let cleanText = blockText;
   const mapping = Array.from({ length: blockText.length }, (_, i) => i);
 
@@ -297,6 +300,94 @@ function cleanMarkdown(blockText: string): { cleanText: string; mapping: number[
     cleanText = cleanText.slice(0, start) + cleanText.slice(end);
     mapping.splice(start, end - start);
   };
+
+  if (blockType === "table") {
+    // For tables, remove alignment/separator row, newlines, cell delimiters (|),
+    // and leading/trailing padding spaces within cells so that cleanText matches
+    // the concatenated text of the rendered table cells.
+    const lines = blockText.split("\n");
+    let currentOffset = 0;
+    const rangesToRemove: Array<{ start: number; end: number }> = [];
+
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+      const line = lines[lineIdx]!;
+      const lineStart = currentOffset;
+      const lineEnd = lineStart + line.length;
+
+      // Check for alignment separator row: e.g. |---|---|
+      if (/^[ \t]*\|[ \t]*[:\- \t|]+$/.test(line)) {
+        const endWithNl = lineEnd + (lineIdx < lines.length - 1 ? 1 : 0);
+        rangesToRemove.push({ start: lineStart, end: endWithNl });
+      } else {
+        // Data or header row: remove the newline
+        if (lineIdx < lines.length - 1) {
+          rangesToRemove.push({ start: lineEnd, end: lineEnd + 1 });
+        }
+
+        let i = 0;
+        while (i < line.length) {
+          // If it's an unescaped pipe '|', remove it
+          if (line.charAt(i) === "|" && (i === 0 || line.charAt(i - 1) !== "\\")) {
+            rangesToRemove.push({ start: lineStart + i, end: lineStart + i + 1 });
+            i++;
+            continue;
+          }
+
+          const cellStart = i;
+          while (
+            i < line.length &&
+            (line.charAt(i) !== "|" || (i > 0 && line.charAt(i - 1) === "\\"))
+          ) {
+            i++;
+          }
+          const cellEnd = i;
+
+          const cellStr = line.slice(cellStart, cellEnd);
+          const leadingSpaces = cellStr.length - cellStr.trimStart().length;
+          const trailingSpaces = cellStr.length - cellStr.trimEnd().length;
+
+          if (leadingSpaces > 0) {
+            rangesToRemove.push({
+              start: lineStart + cellStart,
+              end: lineStart + cellStart + leadingSpaces,
+            });
+          }
+          if (trailingSpaces > 0 && cellEnd - trailingSpaces > cellStart) {
+            rangesToRemove.push({
+              start: lineStart + cellEnd - trailingSpaces,
+              end: lineStart + cellEnd,
+            });
+          }
+        }
+      }
+      currentOffset += line.length + 1; // +1 for the \n
+    }
+
+    // Sort ranges descending to remove without shifting preceding offsets
+    rangesToRemove.sort((a, b) => b.start - a.start);
+
+    // Merge overlapping or adjacent ranges
+    const mergedRanges: Array<{ start: number; end: number }> = [];
+    for (const r of rangesToRemove) {
+      if (mergedRanges.length === 0) {
+        mergedRanges.push(r);
+      } else {
+        const last = mergedRanges[mergedRanges.length - 1]!;
+        if (r.end >= last.start) {
+          last.start = Math.min(last.start, r.start);
+          last.end = Math.max(last.end, r.end);
+        } else {
+          mergedRanges.push(r);
+        }
+      }
+    }
+
+    for (const r of mergedRanges) {
+      if (r.start < r.end && r.start >= 0 && r.end <= blockText.length) {
+        removeRange(r.start, r.end);
+      }
+    }
+  }
 
   // 1. Handle Links: [text](url)
   const linkRe = /\[([^\]]*)\]\(([^)]*)\)/g;
@@ -341,7 +432,7 @@ function snapSpan(
 
   const prefixLen = getBlockPrefixLength(blockText);
   const contentText = blockText.slice(prefixLen);
-  const { cleanText, mapping } = cleanMarkdown(contentText);
+  const { cleanText, mapping } = cleanMarkdown(contentText, block.type);
 
   let s: number;
   let e: number;
@@ -377,7 +468,12 @@ function snapSpan(
 
     const mapToSourceEnd = (cleanIdx: number): number => {
       if (cleanIdx <= 0) return block.startOffset + prefixLen;
-      if (cleanIdx >= cleanText.length) return block.startOffset + blockText.length;
+      if (cleanIdx >= cleanText.length) {
+        if (cleanText.length > 0) {
+          return block.startOffset + prefixLen + mapping[cleanText.length - 1]! + 1;
+        }
+        return block.startOffset + blockText.length;
+      }
       return block.startOffset + prefixLen + mapping[cleanIdx - 1]! + 1;
     };
 

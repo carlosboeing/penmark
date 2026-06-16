@@ -539,6 +539,27 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
         break;
       }
 
+      case "jumpToSource": {
+        const id = message.id;
+        if (typeof id !== "string") break;
+        const analysis = analyzeComments(entry.document.getText());
+        const rc = analysis.result.comments.find((c) => c.entry.id === id);
+        if (rc) {
+          const start = rc.extent ? rc.extent.start : rc.entry.rawStart;
+          const end = rc.extent ? rc.extent.end : rc.entry.rawEnd;
+          void vscode.window
+            .showTextDocument(entry.document, { preserveFocus: false })
+            .then((editor) => {
+              const startPos = entry.document.positionAt(start);
+              const endPos = entry.document.positionAt(end);
+              const range = new vscode.Range(startPos, endPos);
+              editor.selection = new vscode.Selection(startPos, endPos);
+              editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+            });
+        }
+        break;
+      }
+
       case "openLink": {
         const href = message.href;
         if (!href) break;

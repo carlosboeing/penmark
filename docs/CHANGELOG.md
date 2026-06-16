@@ -4,12 +4,14 @@ What shipped in this project, when. Most recent first. Each entry references the
 
 ## 2026-06-16
 
-### Table cell inline comments supported
+### Table cell inline comments, drawer layout, and jump-to-source fixes
 
 Span comments (open/close tags) are now supported on individual words or text selections inside table cells, falling back to block comments only if the selection spans cell delimiters (`|`) or row boundaries (`\n`).
 
-- **Comment placement logic updated** — Excluded `table` from `SPAN_HOSTILE_BLOCKS` and added structural boundary validation inside `snapSpan` to enforce cell/row isolation.
-- **Unit tests added** — Verifies table cell span comments, boundary crossing block fallback, and row crossing block fallback in `placement.test.ts`.
+- **Table cell coordinate mapping alignment** — Added custom table layout parsing inside `cleanMarkdown` to strip table syntax (`|` delimiters, separator rows, spaces, newlines) and track character indices precisely, ensuring the host aligns cell-specific selections to the correct source location rather than jumping to a matching quote in a different cell.
+- **Drawer placement and layout shrinking** — Moved the Comments drawer to the left side (`left: 0`, `border-right`, `transform: translateX(-100%)`) and added a responsive CSS transition on wider screens (`min-width: 600px`) that pushes (`padding-left: 320px`) and shrinks the preview document to prevent the drawer from overlaying and hiding highlighted comments.
+- **Jump to source action** — Implemented the host case handler for the `jumpToSource` webview message in `previewPanel.ts` to focus the editor, select the comment range, and scroll/reveal the comment in the center of the viewport (falling back to the raw review block entry position for orphans).
+- **Unit tests added** — Verifies table cell span comments, boundary/row crossing block fallbacks, and cell coordinate mapping alignment in `placement.test.ts`.
 
 ## 2026-06-15
 

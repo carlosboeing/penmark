@@ -345,6 +345,18 @@ describe("planAnchor — block (§4.2)", () => {
     expect(r).toEqual({ kind: "block", blockLineStart: tableStart });
   });
 
+  it("aligns selection coordinates to the correct cell when a word occurs in multiple cells", () => {
+    const text = "| col 1 |\n| --- |\n| person |\n| person |\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 4, type: "table" }]);
+    // Rendered text is "col 1 person person".
+    // Selecting the second "person", which starts at rendered index 11 (after "col 1" (5) + "person" (6))
+    const r = planAnchor(text, { start: 11, end: 17 }, map, "person");
+    expect(r).toEqual({
+      kind: "span",
+      range: rangeOf(text, "person", text.lastIndexOf("person")),
+    });
+  });
+
   it("selection that exactly equals one paragraph block → block", () => {
     const text = "alpha beta gamma\n";
     const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);

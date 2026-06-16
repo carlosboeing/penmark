@@ -27,8 +27,9 @@ body {
   position: relative;
   background-color: var(--pmk-color-bg);
   color: var(--pmk-color-fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial,
-    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
   font-size: 16px;
   line-height: 1.5;
   word-wrap: break-word;
@@ -81,7 +82,9 @@ body {
   font-size: 11px;
   font-family: inherit;
   padding: 2px 8px;
-  transition: background-color 0.1s, border-color 0.1s;
+  transition:
+    background-color 0.1s,
+    border-color 0.1s;
 }
 
 .pmk-topbar-btn:hover {
@@ -164,9 +167,15 @@ body.pmk-content-full #penmark-root {
   padding-bottom: 0.3em;
 }
 
-#penmark-root h3 { font-size: 1.25em; }
-#penmark-root h4 { font-size: 1em; }
-#penmark-root h5 { font-size: 0.875em; }
+#penmark-root h3 {
+  font-size: 1.25em;
+}
+#penmark-root h4 {
+  font-size: 1em;
+}
+#penmark-root h5 {
+  font-size: 0.875em;
+}
 #penmark-root h6 {
   font-size: 0.85em;
   color: var(--pmk-color-fg-muted);
@@ -219,8 +228,8 @@ body.pmk-content-full #penmark-root {
 /* Code */
 
 #penmark-root code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
-    monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 85%;
   padding: 0.2em 0.4em;
   color: var(--pmk-color-code-fg);
@@ -260,7 +269,11 @@ body.pmk-content-full #penmark-root {
   background-color: var(--pmk-copy-btn-bg);
   color: var(--pmk-copy-btn-fg);
   opacity: 0;
-  transition: opacity 0.1s, background-color 0.1s, border-color 0.1s, color 0.1s;
+  transition:
+    opacity 0.1s,
+    background-color 0.1s,
+    border-color 0.1s,
+    color 0.1s;
 }
 
 #penmark-root pre:hover .pmk-copy-btn,
@@ -418,8 +431,15 @@ foreignObject p {
  * note/cluster/band backgrounds dark, so white text is legible on them. Light
  * mode is left to mermaid's own defaults.
  */
-:is(body.theme-dark, body[data-theme="dark"]) #penmark-root .pmk-mermaid svg :is(.nodeLabel, .edgeLabel, .cluster-label),
-:is(body.theme-dark, body[data-theme="dark"]) #pmk-mermaid-lightbox svg :is(.nodeLabel, .edgeLabel, .cluster-label) {
+:is(body.theme-dark, body[data-theme="dark"])
+  #penmark-root
+  .pmk-mermaid
+  svg
+  :is(.nodeLabel, .edgeLabel, .cluster-label),
+:is(body.theme-dark, body[data-theme="dark"])
+  #pmk-mermaid-lightbox
+  svg
+  :is(.nodeLabel, .edgeLabel, .cluster-label) {
   color: #fff;
 }
 
@@ -485,7 +505,11 @@ foreignObject p {
   background-color: var(--pmk-copy-btn-bg);
   color: var(--pmk-copy-btn-fg);
   opacity: 0;
-  transition: opacity 0.1s, background-color 0.1s, border-color 0.1s, color 0.1s;
+  transition:
+    opacity 0.1s,
+    background-color 0.1s,
+    border-color 0.1s,
+    color 0.1s;
 }
 
 #penmark-root .pmk-mermaid:hover .pmk-mermaid-expand,
@@ -645,10 +669,7 @@ body.pmk-hl-strong {
   transition: background-color 0.12s ease;
 }
 #penmark-root .pmk-hl:hover {
-  background-color: rgba(
-    var(--pmk-comment-hl-rgb),
-    calc(var(--pmk-comment-hl-alpha, 0.28) + 0.12)
-  );
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.12));
 }
 
 /* Block anchor: the whole block is outlined (a span would be wrong for, e.g., a
@@ -660,10 +681,7 @@ body.pmk-hl-strong {
   outline: 2px solid var(--pmk-comment-hl-border);
   outline-offset: 4px;
   border-radius: 2px;
-  background-color: rgba(
-    var(--pmk-comment-hl-rgb),
-    calc(var(--pmk-comment-hl-alpha, 0.28) * 0.4)
-  );
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.4));
   cursor: pointer;
 }
 
@@ -673,10 +691,7 @@ body.pmk-hl-strong {
   outline: 2px solid var(--pmk-comment-hl-border);
   outline-offset: 4px;
   border-radius: 2px;
-  background-color: rgba(
-    var(--pmk-comment-hl-rgb),
-    calc(var(--pmk-comment-hl-alpha, 0.28) * 0.3)
-  );
+  background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.3));
   cursor: pointer;
 }
 
@@ -929,11 +944,11 @@ body.pmk-hl-strong {
   flex: none;
 }
 
-/* The slide-in drawer panel — lives in <body>, overlays from the right edge. */
+/* The slide-in drawer panel — lives in <body>, slides in from the left edge. */
 .pmk-drawer {
   position: fixed;
   top: 0;
-  right: 0;
+  left: 0;
   bottom: 0;
   z-index: 6;
   width: 320px;
@@ -941,9 +956,9 @@ body.pmk-hl-strong {
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-color-bg);
-  border-left: 1px solid var(--pmk-color-border-default);
+  border-right: 1px solid var(--pmk-color-border-default);
   box-shadow: var(--pmk-comment-popover-shadow);
-  transform: translateX(100%);
+  transform: translateX(-100%);
   transition: transform 160ms ease;
 }
 .pmk-drawer[data-open] {
@@ -952,6 +967,16 @@ body.pmk-hl-strong {
 @media (prefers-reduced-motion: reduce) {
   .pmk-drawer {
     transition: none;
+  }
+}
+
+/* Shrink the preview on wide screens when the drawer is open (no overlay) */
+@media (min-width: 600px) {
+  body {
+    transition: padding-left 160ms ease;
+  }
+  body[data-pmk-drawer-open] {
+    padding-left: 320px;
   }
 }
 
