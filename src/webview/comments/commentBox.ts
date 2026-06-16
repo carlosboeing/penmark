@@ -69,7 +69,7 @@ export function openCommentBox(
   closeCommentBox();
 
   const el = document.createElement("div");
-  el.className = "pmk-commentbox";
+  el.className = "pmk-commentbox pmk-enter";
   el.setAttribute("role", "dialog");
   el.setAttribute("aria-label", "Add a comment");
 
@@ -110,12 +110,26 @@ export function openCommentBox(
   actions.append(cancel, submit);
   el.appendChild(actions);
 
+  const hint = document.createElement("p");
+  hint.className = "pmk-commentbox-hint";
+  hint.textContent = "⌘/Ctrl+Enter to submit";
+  el.appendChild(hint);
+
   document.body.appendChild(el);
   positionOver(el, anchor);
 
   const onKeydown = (e: KeyboardEvent): void => {
     if (e.key === "Escape") {
       e.stopPropagation();
+      draft?.set(undefined);
+      closeCommentBox();
+      return;
+    }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      const body = ta.value.trim();
+      if (body === "") return;
+      postMessage({ v: 1, type: "addComment", range, quote, body });
       draft?.set(undefined);
       closeCommentBox();
     }

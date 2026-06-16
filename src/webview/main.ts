@@ -51,8 +51,16 @@ import { resolveTheme, applyResolvedTheme, observeIdeTheme } from "./theme.js";
 import { installTopbar } from "./topbar.js";
 import { applyTypography } from "./typography.js";
 import { installImageLightbox } from "./imageLightbox.js";
-import { renderFrontmatterCard } from "./frontmatterCard.js";
+import { renderFrontmatterCard, estimateReadingMinutes } from "./frontmatterCard.js";
 import { installKeyboardNav } from "./keyboard.js";
+import {
+  ensureSettingsPanel,
+  syncPreviewUiState,
+  toggleSettingsPanel,
+  closeSettingsPanel,
+  applyHighlightIntensity,
+  type PreviewUiState,
+} from "./settingsPanel.js";
 
 // acquireVsCodeApi is injected by the extension host (or the test harness stub).
 declare function acquireVsCodeApi(): {
@@ -97,7 +105,9 @@ if (_initialRoot) {
 }
 
 let _lastComments: WireComment[] = [];
+let _lastUiState: PreviewUiState | null = null;
 installKeyboardNav(() => _lastComments);
+ensureSettingsPanel((m) => vscode.postMessage(m));
 
 // ---------------------------------------------------------------------------
 // Scroll sync (T10) — bidirectional, echo-suppressed
@@ -461,7 +471,28 @@ window.addEventListener("message", (event: MessageEvent) => {
           msg.docName,
           (m) => vscode.postMessage(m),
           topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
+          toggleSettingsPanel,
         );
+      }
+
+      if (msg.typography && msg.highlightIntensity) {
+        _lastUiState = {
+          theme: msg.theme,
+          typography: msg.typography,
+          highlightIntensity: msg.highlightIntensity,
+        };
+        syncPreviewUiState(_lastUiState);
+      } else if (msg.typography) {
+        _lastUiState = {
+          theme: msg.theme,
+          typography: msg.typography,
+          highlightIntensity: "medium",
+        };
+        syncPreviewUiState(_lastUiState);
+      }
+
+      if (msg.highlightIntensity) {
+        applyHighlightIntensity(msg.highlightIntensity);
       }
 
       // Ensure the scroll-sync listener is attached to the live root (T10).
@@ -484,7 +515,8 @@ window.addEventListener("message", (event: MessageEvent) => {
       if (msg.typography) {
         applyTypography(root, msg.typography);
       }
-      renderFrontmatterCard(msg.frontmatter);
+      const readingMin = estimateReadingMinutes(root.textContent ?? "");
+      renderFrontmatterCard(msg.frontmatter, readingMin);
       _lastComments = msg.comments ?? [];
 
       installTaskCheckboxHandler(root);
@@ -555,6 +587,7 @@ window.addEventListener("message", (event: MessageEvent) => {
           _lastDocName,
           (m) => vscode.postMessage(m),
           topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
+          toggleSettingsPanel,
         );
       }
       break;
@@ -563,6 +596,19 @@ window.addEventListener("message", (event: MessageEvent) => {
     case "setTypography": {
       const root = getRoot();
       if (root) applyTypography(root, msg.typography);
+      if (_lastUiState) {
+        _lastUiState.typography = msg.typography;
+        syncPreviewUiState(_lastUiState);
+      }
+      break;
+    }
+
+    case "setHighlightIntensity": {
+      applyHighlightIntensity(msg.highlightIntensity);
+      if (_lastUiState) {
+        _lastUiState.highlightIntensity = msg.highlightIntensity;
+        syncPreviewUiState(_lastUiState);
+      }
       break;
     }
 

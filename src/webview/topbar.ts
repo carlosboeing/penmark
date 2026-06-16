@@ -40,6 +40,7 @@ export function installTopbar(
   docName: string,
   postMessage: (msg: unknown) => void,
   comments?: TopbarCommentsOpts,
+  onOpenSettings?: () => void,
 ): void {
   // Clear previous content safely.
   while (container.firstChild) {
@@ -68,6 +69,18 @@ export function installTopbar(
     container.appendChild(chip);
   }
 
+  // Settings — opens the in-preview settings panel.
+  if (onOpenSettings) {
+    const settingsBtn = document.createElement("button");
+    settingsBtn.type = "button";
+    settingsBtn.className = "pmk-topbar-btn pmk-topbar-settings";
+    settingsBtn.setAttribute("aria-label", "Preview settings");
+    settingsBtn.setAttribute("title", "Preview settings");
+    settingsBtn.textContent = "Settings";
+    settingsBtn.addEventListener("click", onOpenSettings);
+    container.appendChild(settingsBtn);
+  }
+
   // Theme switcher group
   const switcher = document.createElement("div");
   switcher.className = "pmk-topbar-switcher";
@@ -91,7 +104,7 @@ export function installTopbar(
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "pmk-topbar-btn pmk-topbar-comments";
-    toggle.textContent = `💬 Comments (${comments.openCount})`; // 💬
+    toggle.textContent = `Comments (${comments.openCount})`;
     toggle.addEventListener("click", () => comments.onToggleDrawer());
     container.appendChild(toggle);
   }

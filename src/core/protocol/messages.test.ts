@@ -105,6 +105,8 @@ describe("protocol/messages", () => {
           return msg.type;
         case "setTypography":
           return msg.type;
+        case "setHighlightIntensity":
+          return msg.type;
         case "revealLine":
           return msg.type;
         case "copied":
@@ -143,6 +145,8 @@ describe("protocol/messages", () => {
         case "exportReview":
           return msg.type;
         case "toggleTaskCheckbox":
+          return msg.type;
+        case "updateSetting":
           return msg.type;
         default:
           return assertNever(msg);

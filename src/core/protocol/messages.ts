@@ -14,6 +14,18 @@ export const PROTOCOL_VERSION = 1;
 
 export type ThemeMode = "light" | "dark" | "auto";
 
+/** Comment highlight tint strength (penmark.comments.highlightIntensity). */
+export type HighlightIntensity = "subtle" | "medium" | "strong";
+
+/** Keys the in-preview settings panel may persist via updateSetting. */
+export type PenmarkSettingKey =
+  | "theme"
+  | "preset"
+  | "textSize"
+  | "lineHeight"
+  | "contentWidth"
+  | "highlightIntensity";
+
 /**
  * Resolved on-screen extent of a comment anchor, in document coordinates.
  * Sent host → webview as part of a comment payload. Null on the comment when
@@ -64,11 +76,13 @@ export type HostToWebview =
       attention: number;
       typography?: TypographySettings;
       frontmatter?: FrontmatterFields;
+      highlightIntensity?: HighlightIntensity;
     }
   | { v: 1; type: "comments"; comments: WireComment[]; attention: number }
   | { v: 1; type: "setTheme"; theme: ThemeMode }
   | { v: 1; type: "setContentWidth"; contentWidth: ContentWidth }
   | { v: 1; type: "setTypography"; typography: TypographySettings }
+  | { v: 1; type: "setHighlightIntensity"; highlightIntensity: HighlightIntensity }
   | { v: 1; type: "revealLine"; line: number }
   | { v: 1; type: "copied" };
 
@@ -90,4 +104,5 @@ export type WebviewToHost =
   | { v: 1; type: "editComment"; id: string; body: string }
   | { v: 1; type: "jumpToSource"; id: string }
   | { v: 1; type: "exportReview" }
-  | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean };
+  | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean }
+  | { v: 1; type: "updateSetting"; key: PenmarkSettingKey; value: string | number };

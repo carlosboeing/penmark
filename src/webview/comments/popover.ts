@@ -75,7 +75,7 @@ export function openCommentPopover(
   closeCommentPopover();
 
   const el = document.createElement("div");
-  el.className = "pmk-popover";
+  el.className = "pmk-popover pmk-enter";
   el.setAttribute("role", "dialog");
   el.setAttribute("aria-label", `Comment by ${comment.author}`);
 

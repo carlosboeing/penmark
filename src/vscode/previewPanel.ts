@@ -1,6 +1,12 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import type { ContentWidth, HostToWebview, ThemeMode } from "../core/protocol/messages.js";
+import type {
+  ContentWidth,
+  HighlightIntensity,
+  HostToWebview,
+  PenmarkSettingKey,
+  ThemeMode,
+} from "../core/protocol/messages.js";
 import { resolveTypography, type TypographySettings } from "../core/settings/typography.js";
 import { buildShellHtml, generateNonce, type HighlightIntensity } from "./html.js";
 import { loadHighlighterIfNeeded } from "./hljsLoader.js";
@@ -257,6 +263,14 @@ function attachConfigListener(entry: PanelEntry): vscode.Disposable {
       };
       void entry.panel.webview.postMessage(msg);
     }
+    if (e.affectsConfiguration("penmark.comments.highlightIntensity")) {
+      const msg: Extract<HostToWebview, { type: "setHighlightIntensity" }> = {
+        v: 1,
+        type: "setHighlightIntensity",
+        highlightIntensity: configuredHighlightIntensity(),
+      };
+      void entry.panel.webview.postMessage(msg);
+    }
   });
 }
 
@@ -422,6 +436,56 @@ export function enqueueMutation(entry: PanelEntry, op: () => Promise<void>): voi
     });
 }
 
+/** Persist a penmark.* setting from the in-preview settings panel. */
+export async function handleUpdateSetting(
+  key: PenmarkSettingKey,
+  value: string | number,
+): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration("penmark");
+  const validThemes: ThemeMode[] = ["light", "dark", "auto"];
+  const validPresets = ["github", "reading", "compact", "focus", "print", "custom"];
+  const validSizes = ["small", "medium", "large", "x-large"];
+  const validWidths: ContentWidth[] = ["comfortable", "wide", "full"];
+  const validIntensity: HighlightIntensity[] = ["subtle", "medium", "strong"];
+
+  switch (key) {
+    case "theme":
+      if (typeof value === "string" && validThemes.includes(value as ThemeMode)) {
+        await cfg.update("theme", value, vscode.ConfigurationTarget.Global);
+      }
+      break;
+    case "preset":
+      if (typeof value === "string" && validPresets.includes(value)) {
+        await cfg.update("preset", value, vscode.ConfigurationTarget.Global);
+      }
+      break;
+    case "textSize":
+      if (typeof value === "string" && validSizes.includes(value)) {
+        await cfg.update("textSize", value, vscode.ConfigurationTarget.Global);
+      }
+      break;
+    case "lineHeight":
+      if (typeof value === "number" && value >= 1.2 && value <= 2) {
+        await cfg.update("lineHeight", value, vscode.ConfigurationTarget.Global);
+      }
+      break;
+    case "contentWidth":
+      if (typeof value === "string" && validWidths.includes(value as ContentWidth)) {
+        await cfg.update("contentWidth", value, vscode.ConfigurationTarget.Global);
+      }
+      break;
+    case "highlightIntensity":
+      if (typeof value === "string" && validIntensity.includes(value as HighlightIntensity)) {
+        await cfg.update(
+          "comments.highlightIntensity",
+          value,
+          vscode.ConfigurationTarget.Global,
+        );
+      }
+      break;
+  }
+}
+
 async function postRender(entry: PanelEntry, document: vscode.TextDocument): Promise<void> {
   // Track which document this panel is currently previewing so we can re-post
   // it when the webview signals `ready` (race-free handshake, T5).
@@ -456,6 +520,7 @@ async function postRender(entry: PanelEntry, document: vscode.TextDocument): Pro
     configuredMermaidEnabled(),
     analysis,
     configuredTypography(),
+    configuredHighlightIntensity(),
   );
   entry.lastRenderMessage = msg;
   entry.renderCount++;
@@ -516,6 +581,8 @@ function setupPanelEntry(
       id?: string;
       line?: number;
       checked?: boolean;
+      key?: string;
+      value?: string | number;
     };
     if (message.v !== 1) return;
 
@@ -662,6 +729,25 @@ function setupPanelEntry(
         const checked = message.checked;
         if (typeof line !== "number" || typeof checked !== "boolean") break;
         enqueueMutation(entry, () => handleToggleTaskCheckbox(doc, line, checked));
+        break;
+      }
+
+      case "updateSetting": {
+        const key = message.key;
+        const value = message.value;
+        if (typeof key !== "string" || (typeof value !== "string" && typeof value !== "number")) {
+          break;
+        }
+        const allowed: PenmarkSettingKey[] = [
+          "theme",
+          "preset",
+          "textSize",
+          "lineHeight",
+          "contentWidth",
+          "highlightIntensity",
+        ];
+        if (!allowed.includes(key as PenmarkSettingKey)) break;
+        void handleUpdateSetting(key as PenmarkSettingKey, value);
         break;
       }
     }

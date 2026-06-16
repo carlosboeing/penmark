@@ -1,13 +1,8 @@
 import * as crypto from "crypto";
 import * as vscode from "vscode";
-import type { ContentWidth } from "../core/protocol/messages.js";
+import type { ContentWidth, HighlightIntensity } from "../core/protocol/messages.js";
 
-/**
- * Comment highlight intensity (penmark.comments.highlightIntensity). Applied as a
- * `pmk-hl-*` body class on the shell; media/penmark.css maps each to a tint alpha.
- * Comments are always highlighted (never "off", design §6).
- */
-export type HighlightIntensity = "subtle" | "medium" | "strong";
+export type { HighlightIntensity };
 
 /**
  * Generate a cryptographically random nonce for CSP.
