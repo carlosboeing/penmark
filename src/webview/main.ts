@@ -49,6 +49,10 @@ import { lineToScrollTop, readBlocks, scrollTopToLine } from "./scrollSync.js";
 import { selectionToSourceRange } from "./selection.js";
 import { resolveTheme, applyResolvedTheme, observeIdeTheme } from "./theme.js";
 import { installTopbar } from "./topbar.js";
+import { applyTypography } from "./typography.js";
+import { installImageLightbox } from "./imageLightbox.js";
+import { renderFrontmatterCard } from "./frontmatterCard.js";
+import { installKeyboardNav } from "./keyboard.js";
 
 // acquireVsCodeApi is injected by the extension host (or the test harness stub).
 declare function acquireVsCodeApi(): {
@@ -89,7 +93,11 @@ function getTopbar(): HTMLElement | null {
 const _initialRoot = getRoot();
 if (_initialRoot) {
   installLinkHandler(_initialRoot, (msg) => vscode.postMessage(msg));
+  installImageLightbox(_initialRoot);
 }
+
+let _lastComments: WireComment[] = [];
+installKeyboardNav(() => _lastComments);
 
 // ---------------------------------------------------------------------------
 // Scroll sync (T10) — bidirectional, echo-suppressed
@@ -116,6 +124,27 @@ let _suppressScrollUntil = 0;
 
 /** Last time a `scrolled` message was posted, for throttling. */
 let _lastScrolledPostedAt = 0;
+
+/** Roots wired for task-checkbox toggling (v1.0 polish). */
+const _taskCheckboxRoots = new WeakSet<HTMLElement>();
+
+/** Click a task-list checkbox → toggle the source markdown line via the host. */
+function installTaskCheckboxHandler(root: HTMLElement): void {
+  if (_taskCheckboxRoots.has(root)) return;
+  _taskCheckboxRoots.add(root);
+  root.addEventListener("change", (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") return;
+    const li = target.closest<HTMLElement>("li[data-pmk-line]");
+    if (!li || !root.contains(li)) return;
+    const lineRaw = li.getAttribute("data-pmk-line");
+    if (lineRaw === null) return;
+    const line = Number.parseInt(lineRaw, 10);
+    if (Number.isNaN(line)) return;
+    e.preventDefault();
+    vscode.postMessage({ v: 1, type: "toggleTaskCheckbox", line, checked: target.checked });
+  });
+}
 
 /** Apply a host-driven revealLine by mapping the source line to a scrollTop. */
 function applyRevealLine(root: HTMLElement, line: number): void {
@@ -452,6 +481,14 @@ window.addEventListener("message", (event: MessageEvent) => {
       // Render sanitized HTML using morphdom (D5, D6).
       renderInto(root, msg.html);
 
+      if (msg.typography) {
+        applyTypography(root, msg.typography);
+      }
+      renderFrontmatterCard(msg.frontmatter);
+      _lastComments = msg.comments ?? [];
+
+      installTaskCheckboxHandler(root);
+
       // morphdom reconciles the DOM to the host's button-free HTML on every
       // render, stripping any prior copy buttons — so re-install them now.
       // installCopyButtons is idempotent, so this is safe even if nothing changed.
@@ -500,6 +537,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       // Reconcile-only update (no new HTML): refresh the highlight wiring, the
       // drawer lists, and the topbar count/chip against the new comment set
       // (R15). No docName on this message — reuse the last render's.
+      _lastComments = msg.comments ?? [];
       const root = getRoot();
       if (root) {
         installHighlights(root, msg.comments ?? [], (m) => vscode.postMessage(m));
@@ -519,6 +557,12 @@ window.addEventListener("message", (event: MessageEvent) => {
           topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
         );
       }
+      break;
+    }
+
+    case "setTypography": {
+      const root = getRoot();
+      if (root) applyTypography(root, msg.typography);
       break;
     }
 

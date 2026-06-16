@@ -14,11 +14,28 @@
         "end": 230,
         "text": "dead-letter queue"
       }
+    },
+    {
+      "id": "eeee3333",
+      "author": "carlos",
+      "provenance": "human",
+      "timestamp": "2026-06-12 09:02 +10:00",
+      "quote": "at least once",
+      "state": "intact",
+      "flags": [],
+      "anchorKind": "span",
+      "extent": {
+        "start": 60,
+        "end": 73,
+        "text": "at least once"
+      }
     }
   ],
-  "needsAttention": [],
+  "needsAttention": [
+    "eeee3333"
+  ],
   "strayClosers": [],
   "reviewBlockMisplaced": false,
   "secondReviewBlock": true,
-  "attentionCount": 1
+  "attentionCount": 2
 }

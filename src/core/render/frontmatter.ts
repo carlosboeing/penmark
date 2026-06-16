@@ -13,6 +13,44 @@ export interface FrontmatterResult {
   frontmatter: string | null;
 }
 
+/** Parsed scalar/list fields from YAML frontmatter for the metadata card. */
+export interface FrontmatterFields {
+  title?: string;
+  status?: string;
+  date?: string;
+  author?: string;
+  tags?: string[];
+  [key: string]: string | string[] | undefined;
+}
+
+/**
+ * Parse common YAML frontmatter fields (line-oriented, no full YAML engine).
+ * Supports `key: value` scalars and `tags: [a, b]` inline lists.
+ */
+export function parseFrontmatterFields(raw: string | null): FrontmatterFields {
+  if (!raw) return {};
+  const fields: FrontmatterFields = {};
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const m = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(trimmed);
+    if (!m) continue;
+    const key = m[1] as string;
+    let value = (m[2] ?? "").trim();
+    if (value.startsWith("[") && value.endsWith("]")) {
+      const items = value
+        .slice(1, -1)
+        .split(",")
+        .map((s) => s.trim().replace(/^['"]|['"]$/g, ""))
+        .filter(Boolean);
+      fields[key] = items;
+    } else {
+      fields[key] = value.replace(/^['"]|['"]$/g, "");
+    }
+  }
+  return fields;
+}
+
 /**
  * Strip a leading YAML frontmatter block (`---\n…\n---\n`) from `source`.
  * Returns the body and the raw frontmatter text (or null if absent).

@@ -1,10 +1,11 @@
 import * as nodePath from "path";
 import * as vscode from "vscode";
 import { injectHighlights } from "../core/comments/highlight.js";
-import { stripFrontmatter } from "../core/render/frontmatter.js";
+import { stripFrontmatter, parseFrontmatterFields } from "../core/render/frontmatter.js";
 import { createRenderer } from "../core/render/markdown.js";
 import type { HostToWebview, ThemeMode } from "../core/protocol/messages.js";
 import { PROTOCOL_VERSION } from "../core/protocol/messages.js";
+import type { TypographySettings } from "../core/settings/typography.js";
 import type { CommentAnalysis } from "./comments.js";
 
 // Re-exported so previewPanel can reach the markdown-it block tokenizer (R7
@@ -46,8 +47,9 @@ export function renderDocument(
   highlight?: (code: string, lang: string) => string,
   mermaid = true,
   analysis?: CommentAnalysis,
+  typography?: TypographySettings,
 ): Extract<HostToWebview, { type: "render" }> {
-  const { body } = stripFrontmatter(source);
+  const { body, frontmatter } = stripFrontmatter(source);
 
   // Base directory of the document file, used to resolve relative image paths.
   const docDir = nodePath.dirname(docUri.fsPath);
@@ -96,5 +98,7 @@ export function renderDocument(
     docName,
     comments: analysis?.comments ?? [],
     attention: analysis?.attention ?? 0,
+    typography,
+    frontmatter: parseFrontmatterFields(frontmatter),
   };
 }

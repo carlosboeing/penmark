@@ -272,6 +272,15 @@ function parseEntries(
   return entries;
 }
 
+/** Closed review block region starting at `headerStart`, or null if unclosed. */
+function reviewBlockAt(text: string, headerStart: number): ReviewBlockInfo | null {
+  const closeIdx = text.indexOf(REVIEW_CLOSE, headerStart + REVIEW_OPEN.length);
+  if (closeIdx === -1) return null;
+  const end = closeIdx + REVIEW_CLOSE.length;
+  const atEof = text.slice(end).trim() === "";
+  return { start: headerStart, end, atEof };
+}
+
 export function parseDoc(text: string): ParsedDoc {
   const anchors = new Map<string, ParsedAnchor>();
   const corruption: CorruptionItem[] = [];
@@ -424,7 +433,29 @@ export function parseDoc(text: string): ParsedDoc {
     });
   }
 
-  const entries = review === null ? [] : parseEntries(text, review, corruption);
+  const entries: ParsedEntry[] =
+    review === null ? [] : parseEntries(text, review, corruption);
+
+  // §8.5: parse entries from non-authoritative review blocks too — reconcile
+  // surfaces them in needs-attention rather than dropping them silently.
+  for (let h = 0; h < headerIndices.length; h++) {
+    if (h === authIdx) continue;
+    const headerStart = headerIndices[h] as number;
+    const block = reviewBlockAt(text, headerStart);
+    if (!block) continue;
+    for (const e of parseEntries(text, block, corruption)) {
+      entries.push({ ...e, fromExtraReviewBlock: true });
+    }
+  }
+
+  const inAnyReviewRegion = (start: number): boolean => {
+    for (let h = 0; h < headerIndices.length; h++) {
+      const headerStart = headerIndices[h] as number;
+      const block = h === authIdx ? review : reviewBlockAt(text, headerStart);
+      if (block && start >= block.start && start < block.end) return true;
+    }
+    return false;
+  };
 
   // --- Generic corruption sweep (§9) ------------------------------------------
   // Scan the WHOLE document for any pmk:-shaped comment not already consumed as
@@ -432,8 +463,6 @@ export function parseDoc(text: string): ParsedDoc {
   // residue: malformed IDs, unknown kinds, malformed review headers, leftovers.
   const inConsumed = (start: number, end: number): boolean =>
     consumed.some(([s, e]) => start >= s && end <= e);
-  const inReviewRegion = (start: number): boolean =>
-    review !== null && start >= review.start && start < review.end;
 
   PMK_COMMENT_RE.lastIndex = 0;
   let pm: RegExpExecArray | null;
@@ -448,7 +477,7 @@ export function parseDoc(text: string): ParsedDoc {
     // Review delimiters (valid spacing) and entries inside the authoritative
     // block are handled elsewhere — skip them here.
     if (whole === REVIEW_OPEN || whole === REVIEW_CLOSE) continue;
-    if (inReviewRegion(start)) {
+    if (inAnyReviewRegion(start)) {
       // pmk:c entries (handled by parseEntries) and the closing delimiter live
       // here; ignore them in the residue sweep.
       continue;

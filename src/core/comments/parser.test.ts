@@ -226,7 +226,10 @@ describe("parseDoc — review block detection (§5.1)", () => {
     expect(doc.reviewCount).toBe(2);
     expect(doc.corruption.map((c) => c.rule)).toContain("§5.1-second-review-block");
     // EOF block is authoritative -> its entry (bbbbbbbb) is the parsed one.
-    expect(doc.entries.map((e) => e.id)).toEqual(["bbbbbbbb"]);
+    // Non-EOF block entry is also parsed with fromExtraReviewBlock (§8.5).
+    expect(doc.entries.map((e) => e.id)).toEqual(["bbbbbbbb", "aaaaaaaa"]);
+    expect(doc.entries[0]?.fromExtraReviewBlock).toBeUndefined();
+    expect(doc.entries[1]?.fromExtraReviewBlock).toBe(true);
     expect(doc.review?.atEof).toBe(true);
   });
 });

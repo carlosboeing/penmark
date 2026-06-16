@@ -217,6 +217,7 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   const el = document.createElement("div");
   el.className = attention ? "pmk-drawer-card attention" : "pmk-drawer-card";
   el.setAttribute("data-pmk-id", c.id);
+  el.tabIndex = -1;
 
   el.appendChild(metaRow(c));
 
@@ -306,4 +307,14 @@ export function renderDrawer(comments: WireComment[]): void {
     for (const c of attention) attSec.appendChild(card(c, true, cfg));
     content.appendChild(attSec);
   }
+}
+
+/** Focus the drawer card at `index` for keyboard navigation. */
+export function focusDrawerItem(index: number): void {
+  if (!_d) return;
+  const cards = _d.content.querySelectorAll<HTMLElement>(".pmk-drawer-card");
+  const card = cards[index];
+  if (!card) return;
+  card.focus();
+  card.scrollIntoView({ block: "nearest" });
 }

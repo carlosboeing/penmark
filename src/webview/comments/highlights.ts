@@ -125,3 +125,13 @@ function addGutterDot(host: HTMLElement): void {
     host.insertBefore(dot, host.firstChild);
   }
 }
+
+/** Scroll the preview to a comment highlight by id. */
+export function scrollToCommentId(id: string): void {
+  const root = document.getElementById("penmark-root");
+  if (!root) return;
+  const el = root.querySelector<HTMLElement>(`[data-pmk-id="${id}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.classList.add("pmk-hl-active");
+}

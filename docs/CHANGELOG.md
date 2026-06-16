@@ -2,6 +2,20 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-06-17 (in flight — feat/v1-polish)
+
+### v1.0 Polish — typography, lightbox, checkboxes, frontmatter, keyboard, reconcile, selection
+
+Phase 3 polish features per the v1 design §6 and §11:
+
+- **Typography settings** — `penmark.preset`, `textSize`, `fontFamily`, `headingFontFamily`, `lineHeight`; CSS custom properties on the preview root; live `setTypography` config updates.
+- **Image lightbox** — click any preview image for a full-screen zoomable modal (wheel zoom).
+- **Interactive task checkboxes** — toggle `- [ ]` / `- [x]` in source from the rendered preview (`toggleTaskCheckbox` via `WorkspaceEdit`).
+- **Frontmatter metadata card** — collapsible header card for common YAML keys above the preview content.
+- **Keyboard navigation** — `d` drawer toggle, `j`/`k` drawer items, `n`/`p` comment highlights, `?` shortcut help.
+- **Two-block reconcile (§8.5)** — entries from non-EOF `pmk:review` blocks surface in needs-attention; merge golden promoted from `it.fails`.
+- **Exact selection mapping** — per-text-node `data-pmk-soff` stamps for precise source offsets on marked-up prose.
+
 ## 2026-06-16
 
 ### Table cell inline comments, right-sided drawer layout, and jump-to-comment scroll fixes

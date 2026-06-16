@@ -197,7 +197,10 @@ export function reconcile(text: string, doc: ParsedDoc): ReconcileResult {
   }
 
   const needsAttention = comments.filter(
-    (c) => c.state === "orphan" || c.state === "content-removed",
+    (c) =>
+      c.state === "orphan" ||
+      c.state === "content-removed" ||
+      c.entry.fromExtraReviewBlock === true,
   );
 
   const strayClosers = collectStrayClosers(text, spanClosers, liveOpenerIds, doc);

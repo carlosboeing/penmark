@@ -14,18 +14,12 @@ export type Provenance = "human" | "agent";
 
 /**
  * Reconcile state of a comment (spec §8). The parser does NOT compute these —
- * the reconcile engine (a later task) applies the degradation ladder. The type
- * is declared here as the canonical model so reconcile imports it verbatim.
+ * the reconcile engine applies the degradation ladder.
  */
 export type CommentState = "intact" | "content-removed" | "degraded-recovered" | "orphan";
 
 /**
  * A live anchor marker (or pair) found in the document body.
- *
- * Offsets are char (UTF-16 code unit) positions into the source string.
- * `closerStart`/`closerEnd` and `extentStart`/`extentEnd` are present only for
- * span and range kinds; a block anchor has neither (it has no closer and no
- * between-markers extent — its target is the following block).
  */
 export interface ParsedAnchor {
   id: string;
@@ -55,6 +49,8 @@ export interface ParsedEntry {
   parentId?: string;
   rawStart: number;
   rawEnd: number;
+  /** Parsed from a non-EOF review block; surfaced in needs-attention (§8.5). */
+  fromExtraReviewBlock?: boolean;
 }
 
 /**
