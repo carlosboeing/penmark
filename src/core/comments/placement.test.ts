@@ -172,6 +172,34 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
     expect(r).toEqual({ kind: "span", range: { start: para.startOffset, end: wordEnd } });
   });
 
+  it("clamps selection start to after heading prefix", () => {
+    const text = "## The short version\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "heading" }]);
+    const r = planAnchor(text, { start: 0, end: 6 }, map); // selection "## The"
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "The") });
+  });
+
+  it("falls back to block anchor when selection only covers heading prefix", () => {
+    const text = "## The short version\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "heading" }]);
+    const r = planAnchor(text, { start: 0, end: 2 }, map); // selection "##"
+    expect(r).toEqual({ kind: "block", blockLineStart: 0 });
+  });
+
+  it("clamps selection start to after list marker prefix", () => {
+    const text = "- first point\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "list" }]);
+    const r = planAnchor(text, { start: 0, end: 7 }, map); // selection "- first"
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "first") });
+  });
+
+  it("clamps selection start to after blockquote prefix", () => {
+    const text = "> quoted text\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "blockquote" }]);
+    const r = planAnchor(text, { start: 0, end: 8 }, map); // selection "> quoted"
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "quoted") });
+  });
+
   it("falls back to block when no safe inline boundary exists (whole content is one code span)", () => {
     const text = "`only-code-here`\n";
     const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);

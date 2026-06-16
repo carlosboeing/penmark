@@ -256,14 +256,47 @@ function lineStartContaining(text: string, pos: number): number {
  * end moves right to the interval's end. After snapping we clamp to the block's
  * content bounds and reject an empty or whitespace-only result.
  */
+/**
+ * Returns the length of block-level structural prefixes (headings, blockquotes, list markers)
+ * at the start of `blockText`. This is used to ensure span comments never wrap these prefixes.
+ */
+function getBlockPrefixLength(blockText: string): number {
+  let len = 0;
+  while (true) {
+    const remaining = blockText.slice(len);
+    // 1. Blockquote prefix: e.g. "> "
+    const blockquoteMatch = /^([ \t]*>[ \t]*)/.exec(remaining);
+    if (blockquoteMatch) {
+      len += blockquoteMatch[0].length;
+      continue;
+    }
+    // 2. List item prefix: e.g. "- ", "1. "
+    const listMatch = /^([ \t]*([-*+]|[0-9]+\.)[ \t]+)/.exec(remaining);
+    if (listMatch) {
+      len += listMatch[0].length;
+      continue;
+    }
+    // 3. Heading prefix: e.g. "## "
+    const headingMatch = /^(#{1,6}[ \t]+)/.exec(remaining);
+    if (headingMatch) {
+      len += headingMatch[0].length;
+      continue;
+    }
+    break;
+  }
+  return len;
+}
+
 function snapSpan(text: string, block: BlockSpan, start: number, end: number): SourceRange | null {
   const blockText = text.slice(block.startOffset, block.endOffset);
   const intervals = unsafeIntervals(blockText, block.startOffset);
 
+  const prefixLen = getBlockPrefixLength(blockText);
   // Clamp into the block. Callers pass start <= end (planAnchor normalizes), and
   // a single-block selection cannot exceed the block's end, so only the lower
   // edge needs clamping (a selection may begin in the blank gap before a block).
-  let s = Math.max(start, block.startOffset);
+  // We clamp the lower boundary to start after the block-level structural prefix.
+  let s = Math.max(start, block.startOffset + prefixLen);
   let e = Math.min(end, block.endOffset);
 
   // Snap a boundary out of any interval it falls strictly inside.
