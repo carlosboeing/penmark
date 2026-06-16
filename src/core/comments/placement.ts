@@ -520,6 +520,25 @@ function snapSpan(
   while (s < e && /\s/.test(text.charAt(s))) s++;
   while (e > s && /\s/.test(text.charAt(e - 1))) e--;
 
+  // Expand to word boundaries if selecting a partial word
+  const isWordChar = (char: string): boolean => /[\p{L}\p{N}']/u.test(char);
+  if (s < e) {
+    if (
+      s > block.startOffset + prefixLen &&
+      isWordChar(text.charAt(s)) &&
+      isWordChar(text.charAt(s - 1))
+    ) {
+      while (s > block.startOffset + prefixLen && isWordChar(text.charAt(s - 1))) {
+        s--;
+      }
+    }
+    if (e < block.endOffset && isWordChar(text.charAt(e - 1)) && isWordChar(text.charAt(e))) {
+      while (e < block.endOffset && isWordChar(text.charAt(e))) {
+        e++;
+      }
+    }
+  }
+
   if (s >= e) return null;
   // A snap that swallowed the whole block content is really a block selection.
   if (coversWholeBlock(text, block, s, e)) return null;

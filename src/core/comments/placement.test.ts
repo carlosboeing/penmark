@@ -117,12 +117,12 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
     }
   });
 
-  it("selection splitting an emphasis run → allows selecting inside without snapping to delimiters", () => {
+  it("selection splitting an emphasis run → allows selecting inside without snapping to delimiters, expanding to word boundaries", () => {
     const text = "This is *very important* text here.\n";
     const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
     const sel = rangeOf(text, "very impo");
     const r = planAnchor(text, sel, map);
-    expect(r).toEqual({ kind: "span", range: sel });
+    expect(r).toEqual({ kind: "span", range: rangeOf(text, "very important") });
   });
 
   it("selection splitting a link [text](url) → does not land inside the link delimiters", () => {
@@ -281,7 +281,7 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
     });
   });
 
-  it("reproduces Bug: selecting 'I' in '**In one line:**' does not swallow delimiters", () => {
+  it("reproduces Bug: selecting 'I' in '**In one line:**' does not swallow delimiters and expands to whole word", () => {
     const text = "**In one line:**\n";
     const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
     // Rendered text is "In one line:"
@@ -289,7 +289,18 @@ describe("planAnchor — span inline-safety snapping (§4.1)", () => {
     const r = planAnchor(text, { start: 0, end: 1 }, map, "I");
     expect(r).toEqual({
       kind: "span",
-      range: { start: 2, end: 3 }, // Index 2 in source is "I"
+      range: { start: 2, end: 4 }, // Index 2:4 in source is "In"
+    });
+  });
+
+  it("automatically expands partial word selections to the full word boundaries", () => {
+    const text = "Overflow signed an agreement.\n";
+    const map = mapFrom(text, [{ line0: 0, line1: 1, type: "paragraph" }]);
+    // Selecting "ver" (rendered index 2:5)
+    const r = planAnchor(text, { start: 2, end: 5 }, map, "ver");
+    expect(r).toEqual({
+      kind: "span",
+      range: { start: 0, end: 8 }, // Full word "Overflow"
     });
   });
 });

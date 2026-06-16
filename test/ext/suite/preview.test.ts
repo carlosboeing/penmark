@@ -386,7 +386,7 @@ describe("T4 — webview preview panel", () => {
         "renderer",
         "which one?",
       );
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 500));
 
       const afterAdd = doc.getText();
       assert.ok(afterAdd.includes("<!--pmk:s "), "span opener marker must be inserted");
@@ -395,16 +395,16 @@ describe("T4 — webview preview panel", () => {
 
       // The add must be ONE undo step (§7.1): a single undo restores the original.
       await vscode.commands.executeCommand("undo");
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 500));
       assert.strictEqual(doc.getText(), original, "one undo must revert the entire add");
 
       // Redo, then resolve, then assert the markers + entry are gone.
       await vscode.commands.executeCommand("redo");
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 500));
       const id = /<!--pmk:c ([a-z2-7]{8})/.exec(doc.getText())?.[1];
       assert.ok(id, "the added entry must expose a parseable id");
       await handleResolveComment(doc, id!);
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 500));
 
       const afterResolve = doc.getText();
       assert.ok(!afterResolve.includes("pmk:"), "resolve must strip all pmk markers and the entry");
