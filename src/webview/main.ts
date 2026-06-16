@@ -367,8 +367,8 @@ function installSelectionPreview(): void {
     for (const rect of rects) {
       const box = document.createElement("div");
       box.className = "pmk-hl-preview";
-      box.style.left = `${rect.left}px`;
-      box.style.top = `${rect.top}px`;
+      box.style.left = `${rect.left + window.scrollX}px`;
+      box.style.top = `${rect.top + window.scrollY}px`;
       box.style.width = `${rect.width}px`;
       box.style.height = `${rect.height}px`;
       layer.appendChild(box);
@@ -399,8 +399,8 @@ function installSelectionPreview(): void {
       });
     }
     if (last) {
-      addBtn.style.left = `${last.right}px`;
-      addBtn.style.top = `${last.bottom}px`;
+      addBtn.style.left = `${last.right + window.scrollX}px`;
+      addBtn.style.top = `${last.bottom + window.scrollY}px`;
     }
     layer.appendChild(addBtn);
   });
