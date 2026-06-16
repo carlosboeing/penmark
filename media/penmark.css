@@ -555,11 +555,13 @@ foreignObject p {
 .pmk-mermaid-lightbox-toolbar {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 8px;
   border-bottom: 1px solid var(--pmk-color-border-muted);
 }
 
-.pmk-mermaid-lightbox-close {
+.pmk-mermaid-lightbox-btn {
   appearance: none;
   cursor: pointer;
   font-family: inherit;
@@ -571,9 +573,14 @@ foreignObject p {
   color: var(--pmk-copy-btn-fg);
 }
 
-.pmk-mermaid-lightbox-close:hover {
+.pmk-mermaid-lightbox-btn:hover {
   background-color: var(--pmk-copy-btn-hover-bg);
   border-color: var(--pmk-copy-btn-hover-border);
+}
+
+/* svg-pan-zoom default controls (if ever enabled) — hard-coded black glyphs. */
+.pmk-mermaid-lightbox .svg-pan-zoom-control {
+  display: none;
 }
 
 .pmk-mermaid-lightbox-stage {

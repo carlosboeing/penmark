@@ -40,13 +40,45 @@ function ensureDialog(): HTMLDialogElement {
   const toolbar = document.createElement("div");
   toolbar.className = "pmk-mermaid-lightbox-toolbar";
 
+  for (const { label, action, aria } of [
+    { label: "Zoom out", action: "zoom-out", aria: "Zoom out" },
+    { label: "Zoom in", action: "zoom-in", aria: "Zoom in" },
+    { label: "Fit", action: "fit", aria: "Fit diagram to view" },
+  ] as const) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pmk-mermaid-lightbox-btn";
+    btn.textContent = label;
+    btn.setAttribute("data-pmk-action", action);
+    btn.setAttribute("aria-label", aria);
+    toolbar.appendChild(btn);
+  }
+
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
-  closeBtn.className = "pmk-mermaid-lightbox-close";
+  closeBtn.className = "pmk-mermaid-lightbox-btn pmk-mermaid-lightbox-close";
   closeBtn.textContent = "Close";
   closeBtn.setAttribute("aria-label", "Close diagram");
   closeBtn.addEventListener("click", () => dialog.close());
   toolbar.appendChild(closeBtn);
+
+  toolbar.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLButtonElement)) return;
+    const action = target.getAttribute("data-pmk-action");
+    if (!action || !_panZoom) return;
+    switch (action) {
+      case "zoom-in":
+        _panZoom.zoomIn();
+        break;
+      case "zoom-out":
+        _panZoom.zoomOut();
+        break;
+      case "fit":
+        _panZoom.reset();
+        break;
+    }
+  });
 
   const stage = document.createElement("div");
   stage.className = "pmk-mermaid-lightbox-stage";
@@ -105,7 +137,9 @@ export function openLightbox(sourceSvg: SVGElement, theme: "light" | "dark" = "l
   _panZoom = svgPanZoom(clone, {
     zoomEnabled: true,
     panEnabled: true,
-    controlIconsEnabled: true,
+    // Built-in svg-pan-zoom glyphs are hard-coded black SVG shapes — unreadable in
+    // our themed lightbox; use the labeled toolbar buttons instead.
+    controlIconsEnabled: false,
     fit: true,
     center: true,
     minZoom: 0.2,
