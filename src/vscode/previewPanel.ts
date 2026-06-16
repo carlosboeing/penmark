@@ -610,11 +610,9 @@ function setupPanelEntry(
 
   // Observe penmark.theme config changes and push setTheme to this panel.
   const configListener = attachConfigListener(entry);
-  context.subscriptions.push(configListener);
 
   // Observe editor scroll and push revealLine to this panel (T10, scroll sync).
   const visibleRangeListener = attachVisibleRangeListener(entry);
-  context.subscriptions.push(visibleRangeListener);
 
   // Clean up when the panel is closed: drop it from the map and dispose the
   // per-panel listeners so they never fire on a disposed webview.

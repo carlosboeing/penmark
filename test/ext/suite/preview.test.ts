@@ -413,4 +413,21 @@ describe("T4 — webview preview panel", () => {
       await closeAll();
     }
   });
+
+  it("can open a document using the custom editor", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "penmark-custom-")));
+    const filePath = path.join(dir, "custom-test.md");
+    fs.writeFileSync(filePath, "# Custom Editor Test\n", "utf8");
+    const uri = vscode.Uri.file(filePath);
+
+    // Open using Penmark Custom Editor
+    await vscode.commands.executeCommand("vscode.openWith", uri, "penmark.previewEditor");
+    await new Promise((r) => setTimeout(r, 600));
+
+    const manager = getManager();
+    assert.ok(manager.panelCount() > 0, "custom editor panel should be registered in previewManager");
+    
+    // Cleanup
+    await closeAll();
+  });
 });

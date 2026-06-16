@@ -5,6 +5,7 @@ import {
   PreviewPanelSerializer,
   registerChangeListener,
   previewManager,
+  registerCustomEditorPreview,
 } from "./previewPanel.js";
 
 /** Public API returned from activate() — the test seam lives here. */
@@ -46,9 +47,36 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     ),
   );
 
+  // Register the custom editor provider
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      "penmark.previewEditor",
+      new PenmarkCustomEditorProvider(context),
+      {
+        webviewOptions: {
+          retainContextWhenHidden: false, // In alignment with ADR 0001
+        },
+        supportsMultipleEditorsPerDocument: true,
+      },
+    ),
+  );
+
   // Return the test seam so layer-4 tests can observe panel state via
   // vscode.extensions.getExtension(...).exports.previewManager.
   return { previewManager };
 }
 
 export function deactivate(): void {}
+
+class PenmarkCustomEditorProvider implements vscode.CustomTextEditorProvider {
+  constructor(private readonly context: vscode.ExtensionContext) {}
+
+  public async resolveCustomTextEditor(
+    document: vscode.TextDocument,
+    webviewPanel: vscode.WebviewPanel,
+    _token: vscode.CancellationToken,
+  ): Promise<void> {
+    await registerCustomEditorPreview(this.context, document, webviewPanel);
+  }
+}
+
