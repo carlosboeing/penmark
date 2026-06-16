@@ -124,10 +124,22 @@ describe("drawer", () => {
     expect(cards[1]!.querySelector(".pmk-avatar-agent")).not.toBeNull();
   });
 
-  it("jump-to on an open card posts jumpToSource with the id", () => {
+  it("jump-to on an open card scrolls the comment into view", () => {
     renderDrawer(ALL);
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const mockHl = document.createElement("mark");
+    mockHl.setAttribute("data-pmk-id", "open0001");
+    const root = document.createElement("div");
+    root.id = "penmark-root";
+    root.appendChild(mockHl);
+    document.body.appendChild(root);
+
     (openCards()[0]!.querySelector(".pmk-drawer-action.jump") as HTMLButtonElement).click();
-    expect(post).toHaveBeenCalledWith({ v: 1, type: "jumpToSource", id: "open0001" });
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+
+    root.remove();
   });
 
   it("resolve on an open card posts resolveComment with the id", () => {

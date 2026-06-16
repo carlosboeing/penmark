@@ -240,9 +240,12 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
     );
   } else {
     actions.append(
-      actionButton("Jump to source", "jump", () =>
-        cfg.post({ v: 1, type: "jumpToSource", id: c.id }),
-      ),
+      actionButton("Jump to comment", "jump", () => {
+        const target = document.querySelector(`#penmark-root [data-pmk-id="${c.id}"]`);
+        if (target) {
+          target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+        }
+      }),
       actionButton("✓ Resolve", "resolve", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),

@@ -944,11 +944,11 @@ body.pmk-hl-strong {
   flex: none;
 }
 
-/* The slide-in drawer panel — lives in <body>, slides in from the left edge. */
+/* The slide-in drawer panel — lives in <body>, slides in from the right edge. */
 .pmk-drawer {
   position: fixed;
   top: 0;
-  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 6;
   width: 320px;
@@ -956,9 +956,9 @@ body.pmk-hl-strong {
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-color-bg);
-  border-right: 1px solid var(--pmk-color-border-default);
+  border-left: 1px solid var(--pmk-color-border-default);
   box-shadow: var(--pmk-comment-popover-shadow);
-  transform: translateX(-100%);
+  transform: translateX(100%);
   transition: transform 160ms ease;
 }
 .pmk-drawer[data-open] {
@@ -973,10 +973,10 @@ body.pmk-hl-strong {
 /* Shrink the preview on wide screens when the drawer is open (no overlay) */
 @media (min-width: 600px) {
   body {
-    transition: padding-left 160ms ease;
+    transition: padding-right 160ms ease;
   }
   body[data-pmk-drawer-open] {
-    padding-left: 320px;
+    padding-right: 320px;
   }
 }
 

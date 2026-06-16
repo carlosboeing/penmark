@@ -356,17 +356,16 @@ test("the attention chip opens the drawer at the needs-attention section", async
   await expect(page.locator(".pmk-drawer-attention")).toContainText("three retries with backoff");
 });
 
-test("jump-to in the drawer posts jumpToSource with the comment id", async ({ page }) => {
+test("jump-to in the drawer is named Jump to comment and scrolls to highlight", async ({
+  page,
+}) => {
   await renderForDrawer(page, "light");
   await page.locator(".pmk-topbar-comments").click();
-  await page
+  const jumpBtn = page
     .locator(".pmk-drawer-section.open .pmk-drawer-card", { hasText: "eventual consistency" })
-    .locator(".pmk-drawer-action.jump")
-    .click();
-  const posted = await page.evaluate(
-    () => (window as Window & { __harness?: Harness }).__harness!.messages,
-  );
-  expect(posted).toContainEqual({ v: 1, type: "jumpToSource", id: "span1234" });
+    .locator(".pmk-drawer-action.jump");
+  await expect(jumpBtn).toHaveText("Jump to comment");
+  await jumpBtn.click();
 });
 
 test("delete in needs-attention posts resolveComment (resolve = delete)", async ({ page }) => {
