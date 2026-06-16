@@ -469,6 +469,9 @@ function setupPanelEntry(
 
     switch (message.type) {
       case "ready":
+        // Webview has attached its listener — re-post the current render so the
+        // initial postRender (which may have been dropped before the listener
+        // was attached) is guaranteed to arrive.
         void postRender(entry, entry.document);
         break;
 
@@ -483,6 +486,10 @@ function setupPanelEntry(
       }
 
       case "scrolled": {
+        // Webview scrolled — reveal the matching source line in the editor.
+        // Gated by penmark.scrollSync; opens the host echo-suppression window
+        // so the resulting VisibleRanges change is NOT bounced back as a fresh
+        // revealLine (the webview suppresses its own scroll echo similarly).
         if (!configuredScrollSync()) break;
         const topLine = message.topLine;
         if (typeof topLine !== "number") break;
@@ -499,6 +506,8 @@ function setupPanelEntry(
       case "copyCode": {
         const text = message.text;
         if (typeof text !== "string") break;
+        // Write to the clipboard, then ack the webview so it can flash
+        // "Copied ✓" only after the write was actually issued.
         void handleCopyCode(text).then(() => {
           const ack: Extract<HostToWebview, { type: "copied" }> = { v: 1, type: "copied" };
           void entry.panel.webview.postMessage(ack);
@@ -507,6 +516,9 @@ function setupPanelEntry(
       }
 
       case "addComment": {
+        // Webview requested a new comment on a selection (R7). range is BODY-
+        // relative char offsets (the offset-base seam — see comments.ts); the
+        // host rebases to source coordinates inside planAddComment.
         const { range, quote, body } = message;
         if (
           !range ||
@@ -563,27 +575,34 @@ function setupPanelEntry(
         if (!href) break;
         try {
           if (/^https?:\/\//i.test(href)) {
+            // External URL — open in the system browser.
             void vscode.env.openExternal(vscode.Uri.parse(href, true));
           } else {
+            // Relative or local path — resolve against the document directory
+            // and open inside VS Code.
             const docDir = path.dirname(entry.document.uri.fsPath);
             const absolutePath = path.isAbsolute(href) ? href : path.resolve(docDir, href);
             const fileUri = vscode.Uri.file(absolutePath);
             void vscode.commands.executeCommand("vscode.open", fileUri);
           }
         } catch {
-          // malformed
+          // Malformed href — swallow silently; we must not crash the host.
         }
         break;
       }
     }
   });
 
+  // Observe penmark.theme config changes and push setTheme to this panel.
   const configListener = attachConfigListener(entry);
   context.subscriptions.push(configListener);
 
+  // Observe editor scroll and push revealLine to this panel (T10, scroll sync).
   const visibleRangeListener = attachVisibleRangeListener(entry);
   context.subscriptions.push(visibleRangeListener);
 
+  // Clean up when the panel is closed: drop it from the map and dispose the
+  // per-panel listeners so they never fire on a disposed webview.
   panel.onDidDispose(() => {
     panels.delete(key);
     configListener.dispose();
@@ -632,7 +651,7 @@ export async function registerCustomEditorPreview(
   const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
   const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
   
-  panel.options = {
+  panel.webview.options = {
     enableScripts: true,
     localResourceRoots: [distUri, ...workspaceRoots],
   };

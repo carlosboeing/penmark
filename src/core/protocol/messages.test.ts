@@ -134,6 +134,8 @@ describe("protocol/messages", () => {
           return msg.type;
         case "resolveComment":
           return msg.type;
+        case "editComment":
+          return msg.type;
         case "jumpToSource":
           return msg.type;
         case "exportReview":
