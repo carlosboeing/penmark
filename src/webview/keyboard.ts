@@ -3,7 +3,7 @@
  */
 
 import type { WireComment } from "../core/protocol/messages.js";
-import { closeDrawer, focusDrawerItem, isDrawerOpen, openDrawer, toggleDrawer } from "./comments/drawer.js";
+import { closeDrawer, focusDrawerItem, isDrawerOpen, toggleDrawer } from "./comments/drawer.js";
 import { closeCommentPopover } from "./comments/popover.js";
 import { scrollToCommentId } from "./comments/highlights.js";
 

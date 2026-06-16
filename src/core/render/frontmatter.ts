@@ -36,7 +36,7 @@ export function parseFrontmatterFields(raw: string | null): FrontmatterFields {
     const m = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(trimmed);
     if (!m) continue;
     const key = m[1] as string;
-    let value = (m[2] ?? "").trim();
+    const value = (m[2] ?? "").trim();
     if (value.startsWith("[") && value.endsWith("]")) {
       const items = value
         .slice(1, -1)
