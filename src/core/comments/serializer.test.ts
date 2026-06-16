@@ -271,7 +271,10 @@ describe("buildResolveCommentEdits", () => {
       body: "note",
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
-    const out = applyEdits(withComment, buildResolveCommentEdits(withComment, parseDoc(withComment), "ffffffff"));
+    const out = applyEdits(
+      withComment,
+      buildResolveCommentEdits(withComment, parseDoc(withComment), "ffffffff"),
+    );
     expect(out).toBe(text);
     expect(parseDoc(out).anchors.has("ffffffff")).toBe(false);
   });
@@ -287,7 +290,10 @@ describe("buildResolveCommentEdits", () => {
       body: "note",
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
-    const out = applyEdits(withComment, buildResolveCommentEdits(withComment, parseDoc(withComment), "gggggggg"));
+    const out = applyEdits(
+      withComment,
+      buildResolveCommentEdits(withComment, parseDoc(withComment), "gggggggg"),
+    );
     expect(out).toBe(text);
     expect(parseDoc(out).anchors.has("gggggggg")).toBe(false);
   });
@@ -310,7 +316,12 @@ describe("buildQuoteRefreshEdit (§7.6 tooling-only)", () => {
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
 
-    const edit = buildQuoteRefreshEdit(withComment, parseDoc(withComment), "aaaaaaaa", "new -- quote");
+    const edit = buildQuoteRefreshEdit(
+      withComment,
+      parseDoc(withComment),
+      "aaaaaaaa",
+      "new -- quote",
+    );
     expect(edit).not.toBeNull();
     const out = applyEdits(withComment, [edit!]);
 
@@ -344,7 +355,12 @@ describe("buildQuoteRefreshEdit (§7.6 tooling-only)", () => {
       body: "note",
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
-    const edit = buildQuoteRefreshEdit(withComment, parseDoc(withComment), "aaaaaaaa", "line one\nline two");
+    const edit = buildQuoteRefreshEdit(
+      withComment,
+      parseDoc(withComment),
+      "aaaaaaaa",
+      "line one\nline two",
+    );
     const out = applyEdits(withComment, [edit!]);
     const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
     expect(entry?.quote).toBe("line one\nline two");
@@ -360,7 +376,12 @@ describe("buildQuoteRefreshEdit (§7.6 tooling-only)", () => {
     });
     const withComment = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), c));
     expect(parseDoc(withComment).entries[0]?.quote).toBe("");
-    const edit = buildQuoteRefreshEdit(withComment, parseDoc(withComment), "aaaaaaaa", "now has a quote");
+    const edit = buildQuoteRefreshEdit(
+      withComment,
+      parseDoc(withComment),
+      "aaaaaaaa",
+      "now has a quote",
+    );
     const out = applyEdits(withComment, [edit!]);
     const entry = parseDoc(out).entries.find((e) => e.id === "aaaaaaaa");
     expect(entry?.quote).toBe("now has a quote");

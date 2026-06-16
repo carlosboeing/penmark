@@ -102,7 +102,9 @@ describe("installHighlights", () => {
 
     installHighlights(root, [comment({ id: "blk12345", body: "block note" })], post);
 
-    expect(table.querySelector(".pmk-gutter-dot") ?? root.querySelector(".pmk-gutter-dot")).not.toBeNull();
+    expect(
+      table.querySelector(".pmk-gutter-dot") ?? root.querySelector(".pmk-gutter-dot"),
+    ).not.toBeNull();
     table.click();
     expect(document.querySelector(".pmk-popover")!.textContent).toContain("block note");
   });

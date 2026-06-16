@@ -71,7 +71,9 @@ describe("openCommentPopover", () => {
   it("Resolve posts resolveComment with the comment id and closes the popover", () => {
     openCommentPopover(anchorEl(), comment({ id: "zzzz2345" }), post);
 
-    const resolve = document.querySelector(".pmk-popover-actions button.primary") as HTMLButtonElement;
+    const resolve = document.querySelector(
+      ".pmk-popover-actions button.primary",
+    ) as HTMLButtonElement;
     expect(resolve.textContent).toContain("Resolve");
     resolve.click();
 

@@ -57,7 +57,9 @@ const REVIEW_CLOSE = "<!-- /pmk:review -->";
  * encoding the quote and body per §6. The returned text starts with the id line
  * and ends with a trailing newline before the comment's `-->` terminator.
  */
-function renderEntry(c: Pick<NewComment, "id" | "author" | "provenance" | "timestamp" | "quote" | "body">): string {
+function renderEntry(
+  c: Pick<NewComment, "id" | "author" | "provenance" | "timestamp" | "quote" | "body">,
+): string {
   const quoteLines = renderQuoteLines(c.quote);
   const body = encodeEntryText(c.body);
   return (
@@ -191,7 +193,11 @@ function anchorRemovalEdits(text: string, anchor: ParsedAnchor): TextEdit[] {
   // the trailing newline they were written with so no blank line is left behind.
   edits.push({ start: anchor.openerStart, end: lineEndAfter(text, anchor.openerEnd), newText: "" });
   if (anchor.closerStart !== undefined && anchor.closerEnd !== undefined) {
-    edits.push({ start: anchor.closerStart, end: lineEndAfter(text, anchor.closerEnd), newText: "" });
+    edits.push({
+      start: anchor.closerStart,
+      end: lineEndAfter(text, anchor.closerEnd),
+      newText: "",
+    });
   }
   return edits;
 }

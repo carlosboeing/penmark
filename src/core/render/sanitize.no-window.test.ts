@@ -16,7 +16,7 @@ describe("sanitize — no-window throw guard (node env)", () => {
     // node environment: typeof window === "undefined". Fresh module: _instance null.
     const { sanitize } = await import("./sanitize.js");
     expect(() => sanitize("<p>x</p>")).toThrow(
-      "sanitize(): no window available. Call initSanitizer(window) before use in non-browser environments."
+      "sanitize(): no window available. Call initSanitizer(window) before use in non-browser environments.",
     );
   });
 });

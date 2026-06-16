@@ -76,16 +76,13 @@ export function injectHighlights(html: string, recon: ReconcileResult): string {
 
   // Block markers: tag the immediately following element of a live (intact)
   // block; otherwise just drop the marker (keep the element and any whitespace).
-  out = out.replace(
-    BLOCK_MARKER,
-    (_match, id: string, gap: string, tag: string) => {
-      const state = stateById.get(id);
-      if (state === "intact") {
-        return `${gap}<${tag} data-pmk-id="${id}" data-pmk-state="${state}" data-pmk-block=""`;
-      }
-      return `${gap}<${tag}`;
-    },
-  );
+  out = out.replace(BLOCK_MARKER, (_match, id: string, gap: string, tag: string) => {
+    const state = stateById.get(id);
+    if (state === "intact") {
+      return `${gap}<${tag} data-pmk-id="${id}" data-pmk-state="${state}" data-pmk-block=""`;
+    }
+    return `${gap}<${tag}`;
+  });
 
   // Strip any leftover pmk markers (lone openers/closers, half-pairs). DOMPurify
   // would also remove these as comments, but stripping here keeps the host output

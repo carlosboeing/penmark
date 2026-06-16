@@ -46,9 +46,7 @@ describe("selectionToSourceRange (R10)", () => {
   });
 
   it("returns null for a selection in a region with no data-pmk-coff (e.g. the top bar)", () => {
-    const root = setBody(
-      '<div id="root"><div class="pmk-topbar">Penmark</div></div>',
-    );
+    const root = setBody('<div id="root"><div class="pmk-topbar">Penmark</div></div>');
     const bar = root.querySelector(".pmk-topbar")!.firstChild!;
     const range = document.createRange();
     range.setStart(bar, 0);
@@ -89,9 +87,7 @@ describe("selectionToSourceRange (R10)", () => {
   });
 
   it("handles a selection whose boundaries are element nodes (child-index offsets)", () => {
-    const root = setBody(
-      '<div id="root"><p data-pmk-coff="0">Hello <em>world</em></p></div>',
-    );
+    const root = setBody('<div id="root"><p data-pmk-coff="0">Hello <em>world</em></p></div>');
     const p = root.querySelector("p")!;
     const range = document.createRange();
     range.setStart(p, 0); // before "Hello " (element container, child index 0)

@@ -152,7 +152,9 @@ describe("drawer", () => {
 
   it("re-anchor in needs-attention invokes onReanchor with id, quote, and body", () => {
     renderDrawer(ALL);
-    (attentionCards()[0]!.querySelector(".pmk-drawer-action.reanchor") as HTMLButtonElement).click();
+    (
+      attentionCards()[0]!.querySelector(".pmk-drawer-action.reanchor") as HTMLButtonElement
+    ).click();
     expect(onReanchor).toHaveBeenCalledWith(
       "orph0001",
       "three retries with backoff",

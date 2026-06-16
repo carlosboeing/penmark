@@ -39,9 +39,7 @@ describe("round-trip: resolve drops exactly one id, leaves the rest intact", () 
       const text = readFileSync(resolve(CONFORMANCE, file), "utf8");
       const doc = parseDoc(text);
       // Only resolve comments whose anchor parses intact (live anchor present).
-      const resolvableIds = doc.entries
-        .map((e) => e.id)
-        .filter((id) => doc.anchors.has(id));
+      const resolvableIds = doc.entries.map((e) => e.id).filter((id) => doc.anchors.has(id));
       expect(resolvableIds.length).toBeGreaterThan(0);
 
       for (const id of resolvableIds) {
@@ -210,7 +208,11 @@ function assertNoBareHyphenPairs(text: string, start: number, end: number): void
  */
 function pickSpanPlacement(text: string, doc: ReturnType<typeof parseDoc>): AnchorPlacement {
   for (const anchor of doc.anchors.values()) {
-    if (anchor.kind === "span" && anchor.extentStart !== undefined && anchor.extentEnd !== undefined) {
+    if (
+      anchor.kind === "span" &&
+      anchor.extentStart !== undefined &&
+      anchor.extentEnd !== undefined
+    ) {
       const s = anchor.extentStart;
       const e = Math.min(anchor.extentEnd, s + 1);
       if (e > s) return { kind: "span", range: { start: s, end: e } };

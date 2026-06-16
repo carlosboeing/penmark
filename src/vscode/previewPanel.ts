@@ -343,15 +343,14 @@ export async function handleExportReview(document: vscode.TextDocument): Promise
  * Exported for the host unit test (the mechanism is the integrity guarantee).
  */
 export function enqueueMutation(entry: PanelEntry, op: () => Promise<void>): void {
-  entry.mutationChain = (entry.mutationChain ?? Promise.resolve()).then(op).catch((err: unknown) => {
-    console.error("Penmark: comment mutation failed", err);
-  });
+  entry.mutationChain = (entry.mutationChain ?? Promise.resolve())
+    .then(op)
+    .catch((err: unknown) => {
+      console.error("Penmark: comment mutation failed", err);
+    });
 }
 
-async function postRender(
-  entry: PanelEntry,
-  document: vscode.TextDocument,
-): Promise<void> {
+async function postRender(entry: PanelEntry, document: vscode.TextDocument): Promise<void> {
   // Track which document this panel is currently previewing so we can re-post
   // it when the webview signals `ready` (race-free handshake, T5).
   entry.document = document;
@@ -391,10 +390,7 @@ async function postRender(
   void entry.panel.webview.postMessage(msg);
 }
 
-function openOrReveal(
-  context: vscode.ExtensionContext,
-  document: vscode.TextDocument,
-): void {
+function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDocument): void {
   const targetColumn = vscode.ViewColumn.Beside;
 
   const existing = panels.get(targetColumn);
@@ -554,9 +550,7 @@ function openOrReveal(
             // Relative or local path — resolve against the document directory
             // and open inside VS Code.
             const docDir = path.dirname(entry.document.uri.fsPath);
-            const absolutePath = path.isAbsolute(href)
-              ? href
-              : path.resolve(docDir, href);
+            const absolutePath = path.isAbsolute(href) ? href : path.resolve(docDir, href);
             const fileUri = vscode.Uri.file(absolutePath);
             void vscode.commands.executeCommand("vscode.open", fileUri);
           }
@@ -622,10 +616,7 @@ export function registerChangeListener(): vscode.Disposable {
 export class PreviewPanelSerializer implements vscode.WebviewPanelSerializer {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
-  async deserializeWebviewPanel(
-    panel: vscode.WebviewPanel,
-    savedState: unknown,
-  ): Promise<void> {
+  async deserializeWebviewPanel(panel: vscode.WebviewPanel, savedState: unknown): Promise<void> {
     void savedState;
     const column = panel.viewColumn ?? vscode.ViewColumn.Beside;
 

@@ -118,10 +118,16 @@ test("node labels are vertically centered under the nonce CSP", async ({ page })
   await expect(container.locator("svg")).toBeVisible({ timeout: 15000 });
 
   const deltaY = await page.evaluate(() => {
-    const node = document.querySelector("#penmark-root .pmk-mermaid svg .node") as SVGGElement | null;
+    const node = document.querySelector(
+      "#penmark-root .pmk-mermaid svg .node",
+    ) as SVGGElement | null;
     if (!node) return null;
-    const shape = node.querySelector("rect, path, circle, ellipse, polygon") as SVGGraphicsElement | null;
-    const label = node.querySelector("foreignObject .nodeLabel, foreignObject p, foreignObject span") as Element | null;
+    const shape = node.querySelector(
+      "rect, path, circle, ellipse, polygon",
+    ) as SVGGraphicsElement | null;
+    const label = node.querySelector(
+      "foreignObject .nodeLabel, foreignObject p, foreignObject span",
+    ) as Element | null;
     if (!shape || !label) return null;
     const shapeBox = shape.getBoundingClientRect();
     const labelBox = label.getBoundingClientRect();
@@ -149,8 +155,12 @@ test("node labels stay centered within their boxes under the nonce CSP", async (
   // the label is centered in the shape and does not overflow it.
   const fit = await page.evaluate(() => {
     return [...document.querySelectorAll("#penmark-root .pmk-mermaid svg .node")].map((node) => {
-      const shape = node.querySelector("rect, path, polygon, circle, ellipse") as SVGGraphicsElement;
-      const label = node.querySelector("foreignObject .nodeLabel, foreignObject span, foreignObject p") as Element;
+      const shape = node.querySelector(
+        "rect, path, polygon, circle, ellipse",
+      ) as SVGGraphicsElement;
+      const label = node.querySelector(
+        "foreignObject .nodeLabel, foreignObject span, foreignObject p",
+      ) as Element;
       if (!shape || !label) return null;
       const s = shape.getBoundingClientRect();
       const l = label.getBoundingClientRect();
@@ -219,7 +229,11 @@ test("author style directive colors are applied under the nonce CSP", async ({ p
 
 test("edge labels are centered and sized to their text under the nonce CSP", async ({ page }) => {
   await waitReady(page);
-  await injectRender(page, `<div class="pmk-mermaid" data-pmk-source="${EDGE_LABELS}"></div>`, "dark");
+  await injectRender(
+    page,
+    `<div class="pmk-mermaid" data-pmk-source="${EDGE_LABELS}"></div>`,
+    "dark",
+  );
 
   await expect(page.locator("#penmark-root .pmk-mermaid svg g.edgeLabel").first()).toBeVisible({
     timeout: 15000,
@@ -326,7 +340,9 @@ test("wide sequence diagram does not clip its last participant under the nonce C
   const probe = await page.evaluate(() => {
     const svg = document.querySelector("#penmark-root .pmk-mermaid svg") as SVGSVGElement;
     const root = document.getElementById("penmark-root")!;
-    const label = [...svg.querySelectorAll("text")].find((t) => /Git Repo/.test(t.textContent ?? ""));
+    const label = [...svg.querySelectorAll("text")].find((t) =>
+      /Git Repo/.test(t.textContent ?? ""),
+    );
     if (!label) return null;
     const lb = (label as SVGGraphicsElement).getBoundingClientRect();
     return {
@@ -413,19 +429,16 @@ test("Expand opens the lightbox dialog, zoom changes transform, Esc closes", asy
   await expect(dialogSvg).toBeVisible();
 
   // Capture the viewport transform, zoom in, and assert it changed.
-  const before = await dialog
-    .locator("svg .svg-pan-zoom_viewport")
-    .getAttribute("transform");
+  const before = await dialog.locator("svg .svg-pan-zoom_viewport").getAttribute("transform");
   await page.evaluate(() => {
     const el = document.querySelector("dialog.pmk-mermaid-lightbox svg") as SVGElement | null;
     // Dispatch a wheel event to trigger svg-pan-zoom zoom.
-    el?.dispatchEvent(new WheelEvent("wheel", { deltaY: -200, bubbles: true, clientX: 50, clientY: 50 }));
+    el?.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -200, bubbles: true, clientX: 50, clientY: 50 }),
+    );
   });
   await expect
-    .poll(
-      async () =>
-        dialog.locator("svg .svg-pan-zoom_viewport").getAttribute("transform"),
-    )
+    .poll(async () => dialog.locator("svg .svg-pan-zoom_viewport").getAttribute("transform"))
     .not.toBe(before);
 
   // Esc closes the dialog (native <dialog> behaviour).

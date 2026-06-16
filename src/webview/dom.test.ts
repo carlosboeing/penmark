@@ -31,10 +31,7 @@ describe("renderInto", () => {
   it("preserves DOM node identity of unchanged blocks on incremental re-render", () => {
     const root = document.createElement("div");
     // Two blocks, both carrying data-pmk-offset
-    renderInto(
-      root,
-      '<p data-pmk-offset="0:5">Block A</p><p data-pmk-offset="5:10">Block B</p>',
-    );
+    renderInto(root, '<p data-pmk-offset="0:5">Block A</p><p data-pmk-offset="5:10">Block B</p>');
 
     // Capture a reference to the first block before re-render.
     const blockA = root.querySelector('[data-pmk-offset="0:5"]');
@@ -57,7 +54,7 @@ describe("renderInto", () => {
 
   it("strips <script> tags (XSS neutralization)", () => {
     const root = document.createElement("div");
-    renderInto(root, '<p>Safe</p><script>window.__xss = true</script>');
+    renderInto(root, "<p>Safe</p><script>window.__xss = true</script>");
     expect(root.querySelector("script")).toBeNull();
     expect((window as Window & { __xss?: boolean }).__xss).toBeUndefined();
   });

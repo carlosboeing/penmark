@@ -134,29 +134,13 @@ describe("T4 — webview preview panel", () => {
     assert.ok(html, "lastHtml() should return the shell HTML");
 
     // Must contain a CSP meta tag with a nonce.
-    assert.match(
-      html,
-      /Content-Security-Policy/i,
-      "shell HTML must contain a CSP meta tag",
-    );
-    assert.match(
-      html,
-      /nonce-[a-zA-Z0-9+/=]{16,}/,
-      "CSP must contain a nonce attribute",
-    );
-    assert.match(
-      html,
-      /<meta[^>]+Content-Security-Policy/i,
-      "CSP must be in a <meta> tag",
-    );
+    assert.match(html, /Content-Security-Policy/i, "shell HTML must contain a CSP meta tag");
+    assert.match(html, /nonce-[a-zA-Z0-9+/=]{16,}/, "CSP must contain a nonce attribute");
+    assert.match(html, /<meta[^>]+Content-Security-Policy/i, "CSP must be in a <meta> tag");
 
     // retainContextWhenHidden must NOT be set (not enabled).
     const retainContext = manager.lastRetainContext();
-    assert.strictEqual(
-      retainContext,
-      false,
-      "retainContextWhenHidden must not be enabled",
-    );
+    assert.strictEqual(retainContext, false, "retainContextWhenHidden must not be enabled");
 
     await closeAll();
   });
@@ -347,10 +331,7 @@ describe("T4 — webview preview panel", () => {
       // harness, so if it does not arrive we fall back to the maybePostRevealLine
       // seam — which checks the exact setting + suppression gating the listener
       // uses — to prove "revealLine posted only when setting on".
-      editor.revealRange(
-        new vscode.Range(120, 0, 120, 0),
-        vscode.TextEditorRevealType.AtTop,
-      );
+      editor.revealRange(new vscode.Range(120, 0, 120, 0), vscode.TextEditorRevealType.AtTop);
 
       let onMsg: ReturnType<typeof manager.lastRevealLineMessage>;
       for (let i = 0; i < 20; i++) {
@@ -399,7 +380,12 @@ describe("T4 — webview preview panel", () => {
       // Add a comment on the word "renderer" (body-relative offsets == source
       // offsets here — no frontmatter).
       const start = original.indexOf("renderer");
-      await handleAddComment(doc, { start, end: start + "renderer".length }, "renderer", "which one?");
+      await handleAddComment(
+        doc,
+        { start, end: start + "renderer".length },
+        "renderer",
+        "which one?",
+      );
       await new Promise((r) => setTimeout(r, 150));
 
       const afterAdd = doc.getText();

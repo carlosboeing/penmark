@@ -30,9 +30,7 @@ export function resolveTheme(
 
   // auto: inspect IDE body classes
   const has = (cls: string): boolean =>
-    Array.isArray(bodyClassList)
-      ? bodyClassList.includes(cls)
-      : bodyClassList.contains(cls);
+    Array.isArray(bodyClassList) ? bodyClassList.includes(cls) : bodyClassList.contains(cls);
 
   if (has("vscode-dark") || has("vscode-high-contrast")) return "dark";
   return "light";

@@ -56,9 +56,7 @@ export function buildShellHtml(
   const cssFiles = ["theme-light.css", "theme-dark.css", "penmark.css"];
   const cssLinks = cssFiles
     .map((f) => {
-      const uri = webview.asWebviewUri(
-        vscode.Uri.joinPath(extensionUri, "dist", "media", f),
-      );
+      const uri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "dist", "media", f));
       return `  <link rel="stylesheet" nonce="${nonce}" href="${uri.toString()}">`;
     })
     .join("\n");

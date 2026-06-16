@@ -231,9 +231,7 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   actions.className = "pmk-drawer-actions";
   if (attention) {
     actions.append(
-      actionButton("↻ Re-anchor", "reanchor", () =>
-        cfg.onReanchor(c.id, c.quote, c.body),
-      ),
+      actionButton("↻ Re-anchor", "reanchor", () => cfg.onReanchor(c.id, c.quote, c.body)),
       actionButton("🗑 Delete", "delete", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),

@@ -238,8 +238,18 @@ describe("offsetEditsToWorkspaceEdit", () => {
       { start: 0, end: 0, newText: "X" }, // insert at start
       { start: 9, end: 13, newText: "Y" }, // replace "line" on line 2
     ];
-    const we = offsetEditsToWorkspaceEdit(uri, fakeDoc(text) as unknown as never, edits) as unknown as {
-      _replaces: Array<{ range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }>;
+    const we = offsetEditsToWorkspaceEdit(
+      uri,
+      fakeDoc(text) as unknown as never,
+      edits,
+    ) as unknown as {
+      _replaces: Array<{
+        range: {
+          start: { line: number; character: number };
+          end: { line: number; character: number };
+        };
+        newText: string;
+      }>;
       size: number;
     };
     expect(we.size).toBe(2);
@@ -288,7 +298,9 @@ describe("analyzeComments — reconcile → wire payload (R8)", () => {
   });
 
   it("takes the no-marker fast path for a comment-free document", () => {
-    const { comments, attention, result } = analyzeComments("# Title\n\nJust prose, no comments.\n");
+    const { comments, attention, result } = analyzeComments(
+      "# Title\n\nJust prose, no comments.\n",
+    );
     expect(comments).toHaveLength(0);
     expect(attention).toBe(0);
     expect(result.secondReviewBlock).toBe(false);

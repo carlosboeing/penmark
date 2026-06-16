@@ -6,12 +6,7 @@
  * directly without needing a real layout engine.
  */
 import { describe, it, expect } from "vitest";
-import {
-  lineToScrollTop,
-  scrollTopToLine,
-  readBlocks,
-  type BlockGeometry,
-} from "./scrollSync.js";
+import { lineToScrollTop, scrollTopToLine, readBlocks, type BlockGeometry } from "./scrollSync.js";
 
 // A two-block document:
 //   block A: source lines [10, 20), laid out at offsetTop 100, height 200
@@ -93,9 +88,7 @@ describe("readBlocks", () => {
   it("extracts geometry from [data-pmk-offset] elements in document order", () => {
     const root = document.createElement("div");
     root.innerHTML =
-      '<p data-pmk-offset="10:20">A</p>' +
-      '<p data-pmk-offset="30:40">B</p>' +
-      "<p>no offset</p>";
+      '<p data-pmk-offset="10:20">A</p>' + '<p data-pmk-offset="30:40">B</p>' + "<p>no offset</p>";
 
     // jsdom does not lay out, so offsetTop/offsetHeight are 0 — stub them.
     const els = root.querySelectorAll<HTMLElement>("[data-pmk-offset]");
@@ -113,8 +106,7 @@ describe("readBlocks", () => {
 
   it("skips elements with a malformed offset attribute", () => {
     const root = document.createElement("div");
-    root.innerHTML =
-      '<p data-pmk-offset="bad">A</p><p data-pmk-offset="5:9">B</p>';
+    root.innerHTML = '<p data-pmk-offset="bad">A</p><p data-pmk-offset="5:9">B</p>';
     const blocks = readBlocks(root);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.startLine).toBe(5);

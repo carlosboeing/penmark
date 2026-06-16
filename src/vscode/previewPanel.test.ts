@@ -11,7 +11,11 @@ import type { PanelEntry } from "./previewPanel.js";
 // Test seams exposed by the vscode mock (test/setup/vscode-mock.ts).
 const seam = vscode as unknown as {
   __resetConfig: () => void;
-  workspace: { _appliedEdits: unknown[]; _writtenFiles: Map<string, string>; _resetEdits: () => void };
+  workspace: {
+    _appliedEdits: unknown[];
+    _writtenFiles: Map<string, string>;
+    _resetEdits: () => void;
+  };
   window: { _infos: string[]; _quickPickChoice: string | undefined; _resetMessages: () => void };
   env: { clipboard: { _text: string } };
 };

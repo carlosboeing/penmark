@@ -204,9 +204,10 @@ function parseEntry(inner: string, rawStart: number, rawEnd: number): ParsedEntr
   const line2 = lines[1] ?? "";
   // Meta line: `<author> (human|agent) · <timestamp>`. Split on the LAST
   // provenance tag, then ` · ` separates the tag from the timestamp (§5.2.1).
-  const meta = /^(.*) \((human|agent)\) · (\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})? [+-]\d{2}:\d{2})$/.exec(
-    line2,
-  );
+  const meta =
+    /^(.*) \((human|agent)\) · (\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})? [+-]\d{2}:\d{2})$/.exec(
+      line2,
+    );
   if (meta === null) return null;
   const author = meta[1] as string;
   const provenance = meta[2] as Provenance;
@@ -244,7 +245,11 @@ function parseEntry(inner: string, rawStart: number, rawEnd: number): ParsedEntr
  * is surfaced as `§5.2-malformed-entry` corruption so the review data lands in
  * the "needs attention" path (§8.5: reconcile MUST NEVER silently discard).
  */
-function parseEntries(text: string, info: ReviewBlockInfo, corruption: CorruptionItem[]): ParsedEntry[] {
+function parseEntries(
+  text: string,
+  info: ReviewBlockInfo,
+  corruption: CorruptionItem[],
+): ParsedEntry[] {
   const region = text.slice(info.start, info.end);
   const entries: ParsedEntry[] = [];
   const entryRe = /<!--pmk:c ([\s\S]*?)-->/g;

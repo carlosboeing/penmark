@@ -34,8 +34,7 @@ export function registerOffsets(md: MarkdownIt): void {
       if (
         t.level === 0 &&
         t.map &&
-        (t.type.endsWith("_open") ||
-          ["fence", "code_block", "html_block", "hr"].includes(t.type))
+        (t.type.endsWith("_open") || ["fence", "code_block", "html_block", "hr"].includes(t.type))
       ) {
         t.attrSet("data-pmk-offset", `${t.map[0]}:${t.map[1]}`);
         t.attrSet("data-pmk-coff", String(lineStart[t.map[0]] ?? 0));

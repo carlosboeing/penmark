@@ -86,7 +86,9 @@ describe("injectHighlights — blocks", () => {
   it("tags the next block element of an intact pmk:b marker", () => {
     const html = `<!--pmk:b ddddddff-->\n<table>\n<tr><td>a</td></tr>\n</table>`;
     const out = injectHighlights(html, recon(["ddddddff", "intact"]));
-    expect(out).toContain(`<table data-pmk-id="ddddddff" data-pmk-state="intact" data-pmk-block="">`);
+    expect(out).toContain(
+      `<table data-pmk-id="ddddddff" data-pmk-state="intact" data-pmk-block="">`,
+    );
     expect(out).not.toContain("pmk:b");
   });
 
@@ -102,7 +104,9 @@ describe("injectHighlights — ranges", () => {
   it("wraps the block run of an intact range pair in a div", () => {
     const html = `<!--pmk:r ffffffff o-->\n<p>one</p>\n<p>two</p>\n<!--pmk:r ffffffff c-->`;
     const out = injectHighlights(html, recon(["ffffffff", "intact"]));
-    expect(out).toContain(`<div class="pmk-hl-range" data-pmk-id="ffffffff" data-pmk-state="intact">`);
+    expect(out).toContain(
+      `<div class="pmk-hl-range" data-pmk-id="ffffffff" data-pmk-state="intact">`,
+    );
     expect(out).toContain(`<p>one</p>`);
     expect(out).toContain(`<p>two</p>`);
     expect(out).toContain(`</div>`);

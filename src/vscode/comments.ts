@@ -202,7 +202,11 @@ function charToLineCol(text: string, offset: number): { line: number; col: numbe
  * body-relative). Returns `null` for orphan / content-removed comments, which
  * have no live span to highlight (§8).
  */
-function toWireExtent(body: string, frontmatterLen: number, rc: ReconciledComment): WireExtent | null {
+function toWireExtent(
+  body: string,
+  frontmatterLen: number,
+  rc: ReconciledComment,
+): WireExtent | null {
   if (rc.state === "orphan" || rc.state === "content-removed" || rc.extent === undefined) {
     return null;
   }
