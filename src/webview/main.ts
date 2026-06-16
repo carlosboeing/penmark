@@ -57,7 +57,6 @@ import {
   ensureSettingsPanel,
   syncPreviewUiState,
   toggleSettingsPanel,
-  closeSettingsPanel,
   applyHighlightIntensity,
   type PreviewUiState,
 } from "./settingsPanel.js";
