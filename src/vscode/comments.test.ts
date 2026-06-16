@@ -168,6 +168,28 @@ describe("planAddComment — host add orchestration (R7)", () => {
     expect(source.length > 0 && out.slice(anchor.extentStart, anchor.extentEnd)).toBe("quick");
   });
 
+  it("reproduces Bug 2: selecting AI in 'no decision is made by AI' via planAddComment", () => {
+    const source =
+      "---\ntitle: X\n---\n\n" +
+      "We're preparing the founding-structure decision the way an investor would later examine it: **evidence first, opinions second, every rule applied equally to both sides, and every step documented so it can be checked or challenged.** Research shows founding teams that _deliberate_ their equity split do measurably better than teams that settle it with a quick handshake — so we're doing the deliberate version, properly. AI tools help us do the heavy analysis consistently and at speed, but **no decision is made by AI**: the process produces evidence and options; the founders decide.\n";
+    const body = source.slice(source.indexOf("\n\n") + 1);
+    const bodyIdx = body.lastIndexOf("AI");
+    const range = { start: bodyIdx, end: bodyIdx + 2 };
+    const result = planAddComment({
+      source,
+      range,
+      quote: "AI",
+      body: "note",
+      author: "tester",
+      timestamp: "2026-06-14 12:00 +10:00",
+      tokenize: tokenizeBlockOffsets,
+    });
+    expect("edits" in result).toBe(true);
+    if (!("edits" in result)) return;
+    const out = applyEdits(source, result.edits);
+    expect(out).toContain("**no decision is made by <!--pmk:s ");
+  });
+
   it("composes a span closer that lands at EOF before the new review block", () => {
     // No trailing newline and no existing review block: the span CLOSER insert
     // (at range.end === source.length) and the new-review-block insert (at

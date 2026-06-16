@@ -144,7 +144,7 @@ export function planAddComment(input: AddCommentInput): AddPlan {
 
   const doc = parseDoc(source);
   const blockMap = buildBlockMap(source, tokenize(source));
-  const placement = planAnchor(source, srcRange, blockMap);
+  const placement = planAnchor(source, srcRange, blockMap, quote);
   if ("uncommentable" in placement) return { uncommentable: true };
 
   const id = freshId(existingIds(doc));

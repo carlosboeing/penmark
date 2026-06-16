@@ -36,7 +36,7 @@ function getManager(): ExtensionApi["previewManager"] {
 
 /** Open a markdown document in VS Code and return the text editor. */
 async function openMarkdownEditor(content: string): Promise<vscode.TextEditor> {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "penmark-t4-"));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "penmark-t4-")));
   const filePath = path.join(dir, "test.md");
   fs.writeFileSync(filePath, content, "utf8");
   const uri = vscode.Uri.file(filePath);

@@ -146,4 +146,21 @@ describe("installHighlights", () => {
     mark.click();
     expect(isPopoverOpen()).toBe(false);
   });
+
+  it("does not open the popover when a highlight is clicked if it was resolved in a subsequent render", () => {
+    const mark = seedSpan(root, "abcdefgh");
+    installHighlights(root, [comment({ id: "abcdefgh" })], post);
+
+    // First render/click works
+    mark.click();
+    expect(isPopoverOpen()).toBe(true);
+    closeCommentPopover();
+
+    // Re-render with resolved comment (no comments in the array)
+    installHighlights(root, [], post);
+
+    // Clicking the same element again (even if morphdom hasn't removed it yet) does not open popover
+    mark.click();
+    expect(isPopoverOpen()).toBe(false);
+  });
 });
