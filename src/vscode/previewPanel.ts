@@ -81,7 +81,7 @@ export interface PanelEntry {
 }
 
 /** Active panels keyed by the ViewColumn they occupy. */
-const panels = new Map<vscode.ViewColumn, PanelEntry>();
+const panels = new Map<vscode.ViewColumn | string, PanelEntry>();
 
 /** Accumulated render count across all panels, reset by the test seam. */
 let _totalRenderCount = 0;
@@ -415,35 +415,13 @@ async function postRender(entry: PanelEntry, document: vscode.TextDocument): Pro
   void entry.panel.webview.postMessage(msg);
 }
 
-function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDocument): void {
-  const targetColumn = vscode.ViewColumn.Beside;
-
-  const existing = panels.get(targetColumn);
-  if (existing) {
-    // Reuse: reveal and re-render for the new document.
-    existing.panel.reveal(targetColumn, true /* preserveFocus */);
-    void postRender(existing, document);
-    return;
-  }
-
-  // Build localResourceRoots: dist/ folder + all workspace folders.
-  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
-  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
-  const localResourceRoots = [distUri, ...workspaceRoots];
-
-  const panel = vscode.window.createWebviewPanel(
-    "penmark.preview",
-    "Penmark Preview",
-    { viewColumn: targetColumn, preserveFocus: true },
-    {
-      enableScripts: true,
-      localResourceRoots,
-      // retainContextWhenHidden intentionally NOT set (defaults to false).
-    },
-  );
-
+function setupPanelEntry(
+  context: vscode.ExtensionContext,
+  panel: vscode.WebviewPanel,
+  document: vscode.TextDocument,
+  key: vscode.ViewColumn | string,
+): PanelEntry {
   const nonce = generateNonce();
-
   const scriptUri = vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "main.js");
   const html = buildShellHtml(
     panel.webview,
@@ -457,7 +435,7 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
 
   const entry: PanelEntry = {
     panel,
-    column: targetColumn,
+    column: panel.viewColumn ?? vscode.ViewColumn.Beside,
     html,
     retainContext: false,
     renderCount: 0,
@@ -468,13 +446,12 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
     suppressVisibleRangeUntil: 0,
     lastRevealLinePostedAt: 0,
   };
-  panels.set(targetColumn, entry);
+  panels.set(key, entry);
 
-  // Send the initial render immediately (the webview may or may not be ready;
-  // the `ready` re-post below makes it race-free).
+  // Initial render
   void postRender(entry, document);
 
-  // Handle messages from the webview (T5).
+  // Handle messages from the webview
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     if (!msg || typeof msg !== "object") return;
     const message = msg as {
@@ -492,9 +469,6 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
 
     switch (message.type) {
       case "ready":
-        // Webview has attached its listener — re-post the current render so the
-        // initial postRender (which may have been dropped before the listener
-        // was attached) is guaranteed to arrive.
         void postRender(entry, entry.document);
         break;
 
@@ -509,10 +483,6 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
       }
 
       case "scrolled": {
-        // Webview scrolled — reveal the matching source line in the editor.
-        // Gated by penmark.scrollSync; opens the host echo-suppression window
-        // so the resulting VisibleRanges change is NOT bounced back as a fresh
-        // revealLine (the webview suppresses its own scroll echo similarly).
         if (!configuredScrollSync()) break;
         const topLine = message.topLine;
         if (typeof topLine !== "number") break;
@@ -529,8 +499,6 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
       case "copyCode": {
         const text = message.text;
         if (typeof text !== "string") break;
-        // Write to the clipboard, then ack the webview so it can flash
-        // "Copied ✓" only after the write was actually issued.
         void handleCopyCode(text).then(() => {
           const ack: Extract<HostToWebview, { type: "copied" }> = { v: 1, type: "copied" };
           void entry.panel.webview.postMessage(ack);
@@ -539,9 +507,6 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
       }
 
       case "addComment": {
-        // Webview requested a new comment on a selection (R7). range is BODY-
-        // relative char offsets (the offset-base seam — see comments.ts); the
-        // host rebases to source coordinates inside planAddComment.
         const { range, quote, body } = message;
         if (
           !range ||
@@ -598,39 +563,81 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
         if (!href) break;
         try {
           if (/^https?:\/\//i.test(href)) {
-            // External URL — open in the system browser.
             void vscode.env.openExternal(vscode.Uri.parse(href, true));
           } else {
-            // Relative or local path — resolve against the document directory
-            // and open inside VS Code.
             const docDir = path.dirname(entry.document.uri.fsPath);
             const absolutePath = path.isAbsolute(href) ? href : path.resolve(docDir, href);
             const fileUri = vscode.Uri.file(absolutePath);
             void vscode.commands.executeCommand("vscode.open", fileUri);
           }
         } catch {
-          // Malformed href — swallow silently; we must not crash the host.
+          // malformed
         }
         break;
       }
     }
   });
 
-  // Observe penmark.theme config changes and push setTheme to this panel.
   const configListener = attachConfigListener(entry);
   context.subscriptions.push(configListener);
 
-  // Observe editor scroll and push revealLine to this panel (T10, scroll sync).
   const visibleRangeListener = attachVisibleRangeListener(entry);
   context.subscriptions.push(visibleRangeListener);
 
-  // Clean up when the panel is closed: drop it from the map and dispose the
-  // per-panel listeners so they never fire on a disposed webview.
   panel.onDidDispose(() => {
-    panels.delete(targetColumn);
+    panels.delete(key);
     configListener.dispose();
     visibleRangeListener.dispose();
   });
+
+  return entry;
+}
+
+function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDocument): void {
+  const targetColumn = vscode.ViewColumn.Beside;
+
+  const existing = panels.get(targetColumn);
+  if (existing) {
+    existing.panel.reveal(targetColumn, true /* preserveFocus */);
+    void postRender(existing, document);
+    return;
+  }
+
+  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
+  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
+  const localResourceRoots = [distUri, ...workspaceRoots];
+
+  const panel = vscode.window.createWebviewPanel(
+    "penmark.preview",
+    "Penmark Preview",
+    { viewColumn: targetColumn, preserveFocus: true },
+    {
+      enableScripts: true,
+      localResourceRoots,
+    },
+  );
+
+  setupPanelEntry(context, panel, document, targetColumn);
+}
+
+let customEditorSeq = 0;
+
+export async function registerCustomEditorPreview(
+  context: vscode.ExtensionContext,
+  document: vscode.TextDocument,
+  panel: vscode.WebviewPanel,
+): Promise<void> {
+  const key = `custom-${document.uri.toString()}-${customEditorSeq++}`;
+
+  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
+  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
+  
+  panel.options = {
+    enableScripts: true,
+    localResourceRoots: [distUri, ...workspaceRoots],
+  };
+
+  setupPanelEntry(context, panel, document, key);
 }
 
 // ---------------------------------------------------------------------------
@@ -653,9 +660,10 @@ export function registerChangeListener(): vscode.Disposable {
 
     const timer = setTimeout(() => {
       debounceTimers.delete(key);
-      // Find the panel for the active markdown editor's column.
       panels.forEach((entry) => {
-        void postRender(entry, document);
+        if (entry.document.uri.toString() === document.uri.toString()) {
+          void postRender(entry, document);
+        }
       });
     }, DEBOUNCE_MS);
 
