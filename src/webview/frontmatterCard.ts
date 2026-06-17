@@ -33,8 +33,28 @@ export function renderFrontmatterCard(fields: FrontmatterFields | undefined): vo
 
   const summary = document.createElement("summary");
   const title = formatValue(fields.title as string | undefined) || "Document metadata";
-  const status = fields.status ? ` · ${formatValue(fields.status)}` : "";
-  summary.textContent = `${title}${status}`;
+  const titleEl = document.createElement("span");
+  titleEl.className = "pmk-frontmatter-title";
+  titleEl.textContent = title;
+  summary.appendChild(titleEl);
+
+  if (fields.status) {
+    const status = document.createElement("span");
+    status.className = "pmk-frontmatter-status";
+    status.textContent = formatValue(fields.status);
+    summary.appendChild(status);
+  }
+
+  const tags = fields.tags;
+  if (Array.isArray(tags)) {
+    for (const tagValue of tags) {
+      const tag = document.createElement("span");
+      tag.className = "pmk-frontmatter-tag";
+      tag.textContent = tagValue;
+      summary.appendChild(tag);
+    }
+  }
+
   details.replaceChildren(summary);
 
   const dl = document.createElement("dl");

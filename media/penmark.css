@@ -1354,7 +1354,9 @@ body.pmk-hl-strong {
  * --------------------------------------------------------------------------- */
 
 .pmk-frontmatter-card {
-  margin: 12px 16px 0;
+  margin: 12px auto 0;
+  width: calc(100% - 160px);
+  max-width: 1440px;
   padding: 10px 14px;
   border: 1px solid var(--pmk-color-border-muted);
   border-radius: 8px;
@@ -1363,8 +1365,40 @@ body.pmk-hl-strong {
 }
 
 .pmk-frontmatter-card summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
   cursor: pointer;
   font-weight: 600;
+}
+
+.pmk-frontmatter-title {
+  margin-right: 2px;
+}
+
+.pmk-frontmatter-status,
+.pmk-frontmatter-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.pmk-frontmatter-status {
+  color: var(--pmk-color-accent);
+  background-color: var(--pmk-topbar-btn-active-bg);
+  border: 1px solid var(--pmk-topbar-btn-active-fg);
+}
+
+.pmk-frontmatter-tag {
+  color: var(--pmk-color-fg-muted);
+  background-color: var(--pmk-color-bg);
+  border: 1px solid var(--pmk-color-border-muted);
 }
 
 .pmk-frontmatter-fields {
@@ -1372,6 +1406,12 @@ body.pmk-hl-strong {
   grid-template-columns: auto 1fr;
   gap: 4px 12px;
   margin: 8px 0 0;
+}
+
+@media (max-width: 700px) {
+  .pmk-frontmatter-card {
+    width: calc(100% - 32px);
+  }
 }
 
 .pmk-frontmatter-fields dt {
