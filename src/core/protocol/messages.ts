@@ -7,7 +7,7 @@
  */
 
 import type { CommentState, Provenance } from "../comments/types.js";
-import type { TypographySettings } from "../settings/typography.js";
+import type { PresetName, TextSize, TypographySettings } from "../settings/typography.js";
 import type { FrontmatterFields } from "../render/frontmatter.js";
 
 export const PROTOCOL_VERSION = 1;
@@ -62,6 +62,18 @@ export type PreviewSettingKey =
 
 export type PreviewSettingValue = string | number;
 
+export type HighlightIntensity = "subtle" | "medium" | "strong";
+
+export interface PreviewSettingsState {
+  theme: ThemeMode;
+  preset: PresetName;
+  textSize: TextSize;
+  contentWidth: ContentWidth;
+  highlightIntensity: HighlightIntensity;
+  /** Raw override. Zero means use the active preset's line height. */
+  lineHeight: number;
+}
+
 /** Messages sent from the extension host to the webview. */
 export type HostToWebview =
   | {
@@ -74,6 +86,7 @@ export type HostToWebview =
       attention: number;
       typography?: TypographySettings;
       frontmatter?: FrontmatterFields;
+      settings?: PreviewSettingsState;
     }
   | { v: 1; type: "comments"; comments: WireComment[]; attention: number }
   | { v: 1; type: "setTheme"; theme: ThemeMode }

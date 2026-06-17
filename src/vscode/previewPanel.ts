@@ -2,13 +2,15 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type {
   ContentWidth,
+  HighlightIntensity,
   HostToWebview,
   PreviewSettingKey,
   PreviewSettingValue,
+  PreviewSettingsState,
   ThemeMode,
 } from "../core/protocol/messages.js";
-import { resolveTypography, type TypographySettings } from "../core/settings/typography.js";
-import { buildShellHtml, generateNonce, type HighlightIntensity } from "./html.js";
+import { resolveTypography, type PresetName, type TextSize, type TypographySettings } from "../core/settings/typography.js";
+import { buildShellHtml, generateNonce } from "./html.js";
 import { loadHighlighterIfNeeded } from "./hljsLoader.js";
 import {
   analyzeComments,
@@ -195,16 +197,24 @@ export async function handleUpdateSetting(
 
 /** Resolved typography from penmark.* settings (v1.0 polish). */
 function configuredTypography(): TypographySettings {
+  const settings = configuredPreviewSettings();
+  return resolveTypography({
+    ...settings,
+    lineHeight: settings.lineHeight > 0 ? settings.lineHeight : undefined,
+  });
+}
+
+function configuredPreviewSettings(): PreviewSettingsState {
   const cfg = vscode.workspace.getConfiguration("penmark");
   const lineHeight = cfg.get<number>("lineHeight", 0);
-  return resolveTypography({
-    preset: cfg.get<string>("preset"),
-    textSize: cfg.get<string>("textSize"),
-    fontFamily: cfg.get<string>("fontFamily"),
-    headingFontFamily: cfg.get<string>("headingFontFamily"),
-    lineHeight: lineHeight > 0 ? lineHeight : undefined,
-    contentWidth: cfg.get<ContentWidth>("contentWidth"),
-  });
+  return {
+    theme: configuredTheme(),
+    preset: cfg.get<PresetName>("preset", "github"),
+    textSize: cfg.get<TextSize>("textSize", "medium"),
+    contentWidth: configuredContentWidth(),
+    highlightIntensity: configuredHighlightIntensity(),
+    lineHeight,
+  };
 }
 
 /**
@@ -497,6 +507,7 @@ async function postRender(entry: PanelEntry, document: vscode.TextDocument): Pro
     configuredMermaidEnabled(),
     analysis,
     configuredTypography(),
+    configuredPreviewSettings(),
   );
   entry.lastRenderMessage = msg;
   entry.renderCount++;

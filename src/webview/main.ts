@@ -21,9 +21,13 @@
 import type {
   ContentWidth,
   HostToWebview,
+  PreviewSettingKey,
+  PreviewSettingValue,
+  PreviewSettingsState,
   ThemeMode,
   WireComment,
 } from "../core/protocol/messages.js";
+import { resolveTypography } from "../core/settings/typography.js";
 import {
   openCommentBox,
   closeCommentBox,
@@ -53,6 +57,12 @@ import { applyTypography } from "./typography.js";
 import { installImageLightbox } from "./imageLightbox.js";
 import { renderFrontmatterCard } from "./frontmatterCard.js";
 import { installKeyboardNav } from "./keyboard.js";
+import {
+  ensureSettingsPanel,
+  isSettingsPanelOpen,
+  renderSettingsPanel,
+  toggleSettingsPanel,
+} from "./settingsPanel.js";
 
 // acquireVsCodeApi is injected by the extension host (or the test harness stub).
 declare function acquireVsCodeApi(): {
@@ -97,6 +107,7 @@ if (_initialRoot) {
 }
 
 let _lastComments: WireComment[] = [];
+let _previewSettings: PreviewSettingsState | null = null;
 installKeyboardNav(() => _lastComments);
 
 // ---------------------------------------------------------------------------
@@ -235,6 +246,75 @@ function applyContentWidth(width: ContentWidth): void {
   const cls = document.body.classList;
   cls.remove("pmk-content-comfortable", "pmk-content-wide", "pmk-content-full");
   cls.add(`pmk-content-${width}`);
+}
+
+function applyHighlightIntensity(intensity: string): void {
+  if (intensity !== "subtle" && intensity !== "medium" && intensity !== "strong") return;
+  const cls = document.body.classList;
+  cls.remove("pmk-hl-subtle", "pmk-hl-medium", "pmk-hl-strong");
+  cls.add(`pmk-hl-${intensity}`);
+}
+
+function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettingValue): void {
+  if (key === "theme" && (value === "light" || value === "dark" || value === "auto")) {
+    applyTheme(value);
+  }
+  if (key === "contentWidth" && (value === "comfortable" || value === "wide" || value === "full")) {
+    applyContentWidth(value);
+  }
+  if (key === "comments.highlightIntensity" && typeof value === "string") {
+    applyHighlightIntensity(value);
+  }
+
+  if (!_previewSettings) return;
+  const next: PreviewSettingsState = { ..._previewSettings };
+  switch (key) {
+    case "theme":
+      if (value === "light" || value === "dark" || value === "auto") next.theme = value;
+      break;
+    case "preset":
+      if (
+        value === "github" ||
+        value === "reading" ||
+        value === "compact" ||
+        value === "focus" ||
+        value === "print" ||
+        value === "custom"
+      ) {
+        next.preset = value;
+      }
+      break;
+    case "textSize":
+      if (value === "small" || value === "medium" || value === "large" || value === "x-large") {
+        next.textSize = value;
+      }
+      break;
+    case "contentWidth":
+      if (value === "comfortable" || value === "wide" || value === "full") next.contentWidth = value;
+      break;
+    case "comments.highlightIntensity":
+      if (value === "subtle" || value === "medium" || value === "strong") {
+        next.highlightIntensity = value;
+      }
+      break;
+    case "lineHeight":
+      if (typeof value === "number" && Number.isFinite(value)) next.lineHeight = value;
+      break;
+  }
+  _previewSettings = next;
+  const root = getRoot();
+  if (root && (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth")) {
+    applyTypography(
+      root,
+      resolveTypography({
+        preset: next.preset,
+        textSize: next.textSize,
+        lineHeight: next.lineHeight > 0 ? next.lineHeight : undefined,
+        contentWidth: next.contentWidth,
+      }),
+    );
+  }
+  renderSettingsPanel(next);
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +533,16 @@ window.addEventListener("message", (event: MessageEvent) => {
 
       // Install/refresh the topbar with the current doc name + comments
       // affordances (drawer toggle + attention chip, R15).
+      _previewSettings =
+        msg.settings ??
+        ({
+          theme: msg.theme,
+          preset: msg.typography?.preset ?? "github",
+          textSize: msg.typography?.textSize ?? "medium",
+          contentWidth: msg.typography?.contentWidth ?? "full",
+          highlightIntensity: "medium",
+          lineHeight: msg.typography?.lineHeight ?? 0,
+        } satisfies PreviewSettingsState);
       _lastDocName = msg.docName;
       const topbar = getTopbar();
       if (topbar) {
@@ -461,8 +551,36 @@ window.addEventListener("message", (event: MessageEvent) => {
           msg.docName,
           (m) => vscode.postMessage(m),
           topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
+          {
+            settingsOpen: isSettingsPanelOpen(),
+            onToggleSettings: () => {
+              closeDrawer();
+              toggleSettingsPanel();
+              const freshTopbar = getTopbar();
+              if (freshTopbar) {
+                installTopbar(
+                  freshTopbar,
+                  _lastDocName,
+                  (m) => vscode.postMessage(m),
+                  topbarCommentsOpts(_lastComments, msg.attention ?? 0),
+                  {
+                    settingsOpen: isSettingsPanelOpen(),
+                    onToggleSettings: () => {
+                      closeDrawer();
+                      toggleSettingsPanel();
+                    },
+                  },
+                );
+              }
+            },
+          },
         );
       }
+      ensureSettingsPanel({
+        post: (m) => vscode.postMessage(m),
+        applyLocal: applyPreviewSettingLocally,
+      });
+      renderSettingsPanel(_previewSettings);
 
       // Ensure the scroll-sync listener is attached to the live root (T10).
       // Idempotent — a WeakSet guard prevents double-install across renders.
@@ -555,6 +673,13 @@ window.addEventListener("message", (event: MessageEvent) => {
           _lastDocName,
           (m) => vscode.postMessage(m),
           topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
+          {
+            settingsOpen: isSettingsPanelOpen(),
+            onToggleSettings: () => {
+              closeDrawer();
+              toggleSettingsPanel();
+            },
+          },
         );
       }
       break;
