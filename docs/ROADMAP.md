@@ -4,6 +4,7 @@ Forward view of the Penmark project: what's in flight, queued, parked, and recen
 
 ## In flight
 
+- **Codex UI/UX polish (feat/ui-ux-polish-codex)** — independent premium UI pass for comparison: in-preview settings panel, polished review chrome, HSL semantic tokens for Penmark-owned UI, metadata/lightbox refinements, and Playwright visual-regression coverage. PR open for review.
 - **v1.0 Polish (feat/v1-polish)** — typography presets/settings, image lightbox, interactive task checkboxes, frontmatter metadata card, keyboard navigation, two-block reconcile (§8.5), and exact selection→source mapping. PR open for review.
 - **v0.5.0 Review MVP shipped (2026-06-14)** — all v0.5 tasks R1–R17 merged per the v0.5 plan; inline comments (anchor format core, select-to-comment, highlights + gutter dots + resolve popover, drawer + needs-attention + attention chip, single-`WorkspaceEdit` add/resolve, reconcile degradation ladder, export-as-prompt) on a local-first VSIX on the `v0.5.0` GitHub Release. **Awaiting Carlos: the v0.5 manual cross-IDE smoke checklist** ([guides/release-smoke-checklist-v0.5.md](guides/release-smoke-checklist-v0.5.md)) — sideload the VSIX into VS Code / Cursor / Antigravity and run the add→resolve→drawer→orphan→export journey (the layer-4 / real-IDE verification deferred by plan D16) before the Review MVP is signed off.
 - **v0.1.0 Reading MVP shipped (2026-06-13)** — Phase 0 + all v0.1 tasks T1–T13 merged per the Phase 0 + v0.1 plan; local-first VSIX on the `v0.1.0` GitHub Release. **Awaiting Carlos: the manual cross-IDE smoke checklist** ([guides/release-smoke-checklist.md](guides/release-smoke-checklist.md)) — sideload the VSIX into VS Code / Cursor / Antigravity and confirm rendering, themes, highlighting, mermaid, copy buttons, and scroll sync before the MVP is signed off.
@@ -11,6 +12,7 @@ Forward view of the Penmark project: what's in flight, queued, parked, and recen
 ## Next actions
 
 - **Carlos:** run [guides/release-smoke-checklist-v0.5.md](guides/release-smoke-checklist-v0.5.md) against the `v0.5.0` VSIX across the three IDEs (add→resolve→drawer→orphan→export); file issues for any breakage. Also covers the still-open v0.1.0 reading-path smoke ([guides/release-smoke-checklist.md](guides/release-smoke-checklist.md)).
+- **Review:** compare the independent `feat/ui-ux-polish-codex` PR against the parallel UI/UX polish branch and choose the preferred direction before merging.
 - **Next phase: v1.0 Polish** — in PR (`feat/v1-polish`): settings (fonts, sizes, line spacing, theme presets), image lightbox, interactive task checkboxes, frontmatter metadata card, keyboard navigation, performance pass, two-block reconcile, exact selection mapping.
 
 ## Planned release phases (per design §11)
