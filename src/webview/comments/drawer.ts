@@ -152,12 +152,14 @@ export function ensureDrawer(cfg: DrawerConfig): HTMLElement {
   close.setAttribute("aria-label", "Close comments drawer");
   close.textContent = "✕"; // ✕
   close.addEventListener("click", () => closeDrawer());
-  head.append(title, close);
+  head.appendChild(title);
+  head.appendChild(close);
 
   const content = document.createElement("div");
   content.className = "pmk-drawer-content";
 
-  panel.append(head, content);
+  panel.appendChild(head);
+  panel.appendChild(content);
   document.body.appendChild(panel);
 
   const onKeydown = (e: KeyboardEvent): void => {
@@ -200,7 +202,9 @@ function metaRow(c: WireComment): HTMLElement {
   when.className = "pmk-drawer-when";
   when.textContent = `${c.provenance} · ${c.timestamp}`;
 
-  meta.append(avatar, who, when);
+  meta.appendChild(avatar);
+  meta.appendChild(who);
+  meta.appendChild(when);
   return meta;
 }
 
@@ -234,14 +238,16 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   const actions = document.createElement("div");
   actions.className = "pmk-drawer-actions";
   if (attention) {
-    actions.append(
+    actions.appendChild(
       actionButton("↻ Re-anchor", "reanchor", () => cfg.onReanchor(c.id, c.quote, c.body)),
+    );
+    actions.appendChild(
       actionButton("🗑 Delete", "delete", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),
     );
   } else {
-    actions.append(
+    actions.appendChild(
       actionButton("Open", "jump", () => {
         const target = document.querySelector(
           `#penmark-root [data-pmk-id="${c.id}"]`
@@ -251,6 +257,8 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
           openCommentPopover(target, c, cfg.post);
         }
       }),
+    );
+    actions.appendChild(
       actionButton("Edit", "edit", () => {
         const target = document.querySelector(
           `#penmark-root [data-pmk-id="${c.id}"]`
@@ -260,6 +268,8 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
           openCommentPopover(target, c, cfg.post, true);
         }
       }),
+    );
+    actions.appendChild(
       actionButton("✓ Resolve", "resolve", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),

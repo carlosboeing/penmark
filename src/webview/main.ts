@@ -61,12 +61,20 @@ import {
   type PreviewUiState,
 } from "./settingsPanel.js";
 
-// acquireVsCodeApi is injected by the extension host (or the test harness stub).
-declare function acquireVsCodeApi(): {
+// acquireVsCodeApi is injected by the extension host (inline shell script or harness).
+declare function acquireVsCodeApi(): PenmarkVscodeApi;
+
+interface PenmarkVscodeApi {
   postMessage: (msg: unknown) => void;
   getState: () => unknown;
   setState: (state: unknown) => void;
-};
+}
+
+function getVsCodeApi(): PenmarkVscodeApi {
+  const injected = (globalThis as { __penmarkApi?: PenmarkVscodeApi }).__penmarkApi;
+  if (injected) return injected;
+  return acquireVsCodeApi();
+}
 
 // ---------------------------------------------------------------------------
 // Internal state shape persisted via getState/setState
@@ -85,7 +93,7 @@ interface PersistedState {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-const vscode = acquireVsCodeApi();
+const vscode = getVsCodeApi();
 
 // Look up DOM elements lazily so the module works across DOM resets in tests.
 function getRoot(): HTMLElement | null {
@@ -104,9 +112,15 @@ if (_initialRoot) {
 }
 
 let _lastComments: WireComment[] = [];
+let _lastAttention = 0;
 let _lastUiState: PreviewUiState | null = null;
+let _renderReceived = false;
 installKeyboardNav(() => _lastComments);
-ensureSettingsPanel((m) => vscode.postMessage(m));
+try {
+  ensureSettingsPanel((m) => vscode.postMessage(m));
+} catch (err) {
+  console.error("[Penmark] settings panel init failed:", err);
+}
 
 // ---------------------------------------------------------------------------
 // Scroll sync (T10) — bidirectional, echo-suppressed
@@ -328,7 +342,8 @@ function getOrCreateReanchorHint(): HTMLElement {
     cancel.className = "pmk-reanchor-cancel";
     cancel.textContent = "Cancel";
     cancel.addEventListener("click", () => cancelReanchor());
-    hint.append(label, cancel);
+    hint.appendChild(label);
+    hint.appendChild(cancel);
     document.body.appendChild(hint);
   }
   return hint;
@@ -448,6 +463,16 @@ function installSelectionPreview(): void {
   });
 }
 
+function showRenderError(root: HTMLElement, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error("[Penmark] render failed:", err);
+  root.replaceChildren();
+  const note = document.createElement("p");
+  note.className = "pmk-render-error";
+  note.textContent = `Preview failed to render: ${message}`;
+  root.appendChild(note);
+}
+
 window.addEventListener("message", (event: MessageEvent) => {
   const msg = event.data as HostToWebview;
   if (!msg || typeof msg !== "object" || msg.v !== 1) return;
@@ -457,110 +482,101 @@ window.addEventListener("message", (event: MessageEvent) => {
       const root = getRoot();
       if (!root) break;
 
-      // Apply theme embedded in the render message.
-      applyTheme(msg.theme);
+      _renderReceived = true;
+      console.info(
+        "[Penmark] render received for",
+        msg.docName,
+        `(${String(msg.html?.length ?? 0)} bytes html)`,
+      );
 
-      // Install/refresh the topbar with the current doc name + comments
-      // affordances (drawer toggle + attention chip, R15).
-      _lastDocName = msg.docName;
-      const topbar = getTopbar();
-      if (topbar) {
-        installTopbar(
-          topbar,
-          msg.docName,
-          (m) => vscode.postMessage(m),
-          topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
-          toggleSettingsPanel,
-        );
+      // Core paint first — post-render affordances must not block or undo this.
+      try {
+        applyTheme(msg.theme);
+
+        if (msg.highlightIntensity) {
+          applyHighlightIntensity(msg.highlightIntensity);
+        }
+
+        installScrollListener(root);
+        closeCommentPopover();
+        closeCommentBox();
+
+        renderInto(root, msg.html ?? "");
+        root.querySelector(".pmk-loading")?.remove();
+        console.info("[Penmark] render applied,", root.childElementCount, "top-level blocks");
+      } catch (err) {
+        showRenderError(root, err);
+        break;
       }
 
-      if (msg.typography && msg.highlightIntensity) {
-        _lastUiState = {
+      try {
+        _lastDocName = msg.docName;
+        const topbar = getTopbar();
+        if (topbar) {
+          installTopbar(
+            topbar,
+            msg.docName,
+            (m) => vscode.postMessage(m),
+            topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
+            toggleSettingsPanel,
+            msg.theme,
+          );
+        }
+
+        if (msg.typography && msg.highlightIntensity) {
+          _lastUiState = {
+            theme: msg.theme,
+            typography: msg.typography,
+            highlightIntensity: msg.highlightIntensity,
+          };
+          syncPreviewUiState(_lastUiState);
+        } else if (msg.typography) {
+          _lastUiState = {
+            theme: msg.theme,
+            typography: msg.typography,
+            highlightIntensity: "medium",
+          };
+          syncPreviewUiState(_lastUiState);
+        }
+
+        installSelectionPreview();
+
+        if (msg.typography) {
+          applyTypography(root, msg.typography);
+        }
+        const readingMin = estimateReadingMinutes(root.textContent ?? "");
+        renderFrontmatterCard(msg.frontmatter, readingMin);
+        _lastComments = msg.comments ?? [];
+        _lastAttention = msg.attention ?? 0;
+
+        installTaskCheckboxHandler(root);
+        installCopyButtons(root, (m) => vscode.postMessage(m));
+        installHighlights(root, msg.comments ?? [], (m) => vscode.postMessage(m));
+
+        ensureDrawer({
+          post: (m) => vscode.postMessage(m),
+          onReanchor: requestReanchor,
+          store: drawerStateStore,
+        });
+        renderDrawer(msg.comments ?? []);
+
+        if (hasMermaid(root)) {
+          void ensureMermaid(root, resolvedTheme());
+        }
+
+        const saved = vscode.getState() as PersistedState | undefined;
+        if (saved?.scrollTop && root.scrollHeight > root.clientHeight) {
+          root.scrollTop = Math.min(saved.scrollTop, root.scrollHeight - root.clientHeight);
+        }
+
+        const current = (vscode.getState() as PersistedState | undefined) ?? {
+          scrollTop: 0,
           theme: msg.theme,
-          typography: msg.typography,
-          highlightIntensity: msg.highlightIntensity,
         };
-        syncPreviewUiState(_lastUiState);
-      } else if (msg.typography) {
-        _lastUiState = {
-          theme: msg.theme,
-          typography: msg.typography,
-          highlightIntensity: "medium",
-        };
-        syncPreviewUiState(_lastUiState);
+        vscode.setState({ ...current, theme: msg.theme });
+      } catch (err) {
+        console.error("[Penmark] post-render failed (content should still be visible):", err);
       }
-
-      if (msg.highlightIntensity) {
-        applyHighlightIntensity(msg.highlightIntensity);
-      }
-
-      // Ensure the scroll-sync listener is attached to the live root (T10).
-      // Idempotent — a WeakSet guard prevents double-install across renders.
-      installScrollListener(root);
-
-      // Attach the selection snap-preview once (R10/R14). Listener + overlay live
-      // outside the morphed root, so they survive re-renders; the listener
-      // resolves the live root per-event.
-      installSelectionPreview();
-
-      // Close any open comment popover / add-box — their anchor is about to be
-      // reconciled away by morphdom.
-      closeCommentPopover();
-      closeCommentBox();
-
-      // Render sanitized HTML using morphdom (D5, D6).
-      renderInto(root, msg.html);
-
-      if (msg.typography) {
-        applyTypography(root, msg.typography);
-      }
-      const readingMin = estimateReadingMinutes(root.textContent ?? "");
-      renderFrontmatterCard(msg.frontmatter, readingMin);
-      _lastComments = msg.comments ?? [];
-
-      installTaskCheckboxHandler(root);
-
-      // morphdom reconciles the DOM to the host's button-free HTML on every
-      // render, stripping any prior copy buttons — so re-install them now.
-      // installCopyButtons is idempotent, so this is safe even if nothing changed.
-      installCopyButtons(root, (m) => vscode.postMessage(m));
-
-      // Re-install comment highlights (gutter dots + click-to-open popover) on
-      // the host-injected <mark>/block/range elements. morphdom strips these
-      // post-render additions too, so re-install on every render (R11). The
-      // host always sends comments; default to [] so a partial message (older
-      // build / harness fixture) cannot crash the whole message handler.
-      installHighlights(root, msg.comments ?? [], (m) => vscode.postMessage(m));
-
-      // Comments drawer (R15): ensure the panel exists, then re-render the open
-      // + needs-attention lists. The panel lives in <body> (outside the morphed
-      // root), so it survives re-renders; only its contents are rebuilt here.
-      ensureDrawer({
-        post: (m) => vscode.postMessage(m),
-        onReanchor: requestReanchor,
-        store: drawerStateStore,
-      });
-      renderDrawer(msg.comments ?? []);
-
-      // Lazily render mermaid diagrams — only when a .pmk-mermaid container
-      // exists (prose-only docs never load the multi-MB mermaid chunk). The
-      // diagram theme follows the resolved preview theme (T6).
-      if (hasMermaid(root)) {
-        void ensureMermaid(root, resolvedTheme());
-      }
-
-      // Restore persisted scroll position.
-      const saved = vscode.getState() as PersistedState | undefined;
-      if (saved?.scrollTop) {
-        root.scrollTop = saved.scrollTop;
-      }
-
-      // Persist updated theme.
-      const current = (vscode.getState() as PersistedState | undefined) ?? {
-        scrollTop: 0,
-        theme: msg.theme,
-      };
-      vscode.setState({ ...current, theme: msg.theme });
       break;
     }
 
@@ -569,6 +585,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       // drawer lists, and the topbar count/chip against the new comment set
       // (R15). No docName on this message — reuse the last render's.
       _lastComments = msg.comments ?? [];
+      _lastAttention = msg.attention ?? 0;
       const root = getRoot();
       if (root) {
         installHighlights(root, msg.comments ?? [], (m) => vscode.postMessage(m));
@@ -587,6 +604,7 @@ window.addEventListener("message", (event: MessageEvent) => {
           (m) => vscode.postMessage(m),
           topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
           toggleSettingsPanel,
+          _currentSetting,
         );
       }
       break;
@@ -624,6 +642,18 @@ window.addEventListener("message", (event: MessageEvent) => {
       };
       vscode.setState({ ...current, theme: msg.theme });
 
+      const topbar = getTopbar();
+      if (topbar) {
+        installTopbar(
+          topbar,
+          _lastDocName,
+          (m) => vscode.postMessage(m),
+          topbarCommentsOpts(_lastComments, _lastAttention),
+          toggleSettingsPanel,
+          msg.theme,
+        );
+      }
+
       // Re-render existing diagrams under the new theme — but only if the chunk
       // was already loaded (never trigger the heavy import from a theme change).
       const root = getRoot();
@@ -653,7 +683,47 @@ window.addEventListener("message", (event: MessageEvent) => {
 
 // Post ready after the listener is attached — the host re-sends the render on
 // receiving this, making the initial postRender race-free.
-vscode.postMessage({ v: 1, type: "ready" });
+window.addEventListener("error", (event) => {
+  console.error("[Penmark] uncaught error:", event.error ?? event.message);
+  const root = getRoot();
+  if (!root || root.querySelector(".pmk-render-error")) return;
+  const loadingOnly =
+    root.childElementCount === 1 && root.querySelector(".pmk-loading") !== null;
+  if (loadingOnly || root.childElementCount === 0) {
+    showRenderError(root, event.error ?? event.message);
+  }
+});
+
+try {
+  const _bootState = vscode.getState() as PersistedState | undefined;
+  applyTheme(_bootState?.theme ?? "auto");
+} catch (err) {
+  console.error("[Penmark] bootstrap theme failed:", err);
+  const root = getRoot();
+  if (root) showRenderError(root, err);
+}
+console.info("[Penmark] posting ready");
+function postReady(): void {
+  vscode.postMessage({ v: 1, type: "ready" });
+}
+postReady();
+for (const delayMs of [400, 1200]) {
+  setTimeout(() => {
+    if (_renderReceived) return;
+    console.info("[Penmark] re-posting ready (no render yet)");
+    postReady();
+  }, delayMs);
+}
+
+setTimeout(() => {
+  if (_renderReceived) return;
+  const root = getRoot();
+  if (!root?.querySelector(".pmk-loading")) return;
+  showRenderError(
+    root,
+    "No render message from the extension host. Open Output → Penmark for host logs, then reload the window.",
+  );
+}, 4000);
 
 // Make TypeScript treat this as an ES module.
 export {};

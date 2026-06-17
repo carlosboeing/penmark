@@ -89,7 +89,8 @@ export function renderFrontmatterCard(
     dt.textContent = key;
     const dd = document.createElement("dd");
     dd.textContent = formatValue(fields[key]);
-    dl.append(dt, dd);
+    dl.appendChild(dt);
+    dl.appendChild(dd);
   }
   details.appendChild(dl);
 

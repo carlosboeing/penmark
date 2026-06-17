@@ -28,8 +28,8 @@ body {
 
 body {
   position: relative;
-  background-color: var(--pmk-color-bg);
-  color: var(--pmk-color-fg);
+  background-color: var(--pmk-color-bg, #ffffff);
+  color: var(--pmk-color-fg, #1f2328);
   font-family: var(
     --pmk-font-family,
     -apple-system,
@@ -106,12 +106,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 16px;
+  gap: 12px;
+  padding: 6px 12px;
   background-color: var(--pmk-topbar-bg);
   border-bottom: 1px solid var(--pmk-topbar-border);
   color: var(--pmk-topbar-fg);
   font-size: 12px;
-  min-height: 36px;
+  min-height: 40px;
+}
+
+.pmk-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .pmk-topbar-docname {
@@ -119,17 +128,96 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
   min-width: 0;
 }
 
-.pmk-topbar-switcher {
+.pmk-topbar-actions {
   display: flex;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
   flex-shrink: 0;
-  margin-left: 12px;
 }
 
+/* Segmented theme control — visually distinct from tool icons */
+.pmk-topbar-theme {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 8px;
+  background-color: var(--pmk-color-bg-inset);
+  border: 1px solid var(--pmk-color-border-default);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.pmk-topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pmk-topbar-icon-btn {
+  position: relative;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--pmk-topbar-fg);
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background-color var(--pmk-duration-fast) var(--pmk-ease-out),
+    border-color var(--pmk-duration-fast) var(--pmk-ease-out),
+    color var(--pmk-duration-fast) var(--pmk-ease-out),
+    box-shadow var(--pmk-duration-fast) var(--pmk-ease-out);
+}
+
+.pmk-topbar-icon-btn:hover {
+  background-color: var(--pmk-topbar-btn-hover-bg);
+  border-color: var(--pmk-color-border-muted);
+}
+
+.pmk-topbar-icon-btn:focus-visible {
+  outline: 2px solid var(--pmk-topbar-btn-active-fg);
+  outline-offset: 1px;
+}
+
+.pmk-topbar-theme-btn[data-active="true"] {
+  background-color: var(--pmk-topbar-btn-active-bg);
+  border-color: color-mix(in srgb, var(--pmk-topbar-btn-active-fg) 35%, transparent);
+  color: var(--pmk-topbar-btn-active-fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.pmk-topbar-icon {
+  display: block;
+  flex: none;
+}
+
+.pmk-topbar-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background-color: var(--pmk-topbar-btn-active-fg);
+  color: var(--pmk-color-bg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Legacy text button class — kept for chips and other callers */
 .pmk-topbar-btn {
   appearance: none;
   background: transparent;
@@ -168,10 +256,19 @@ body {
  * grows to a 1600px ceiling so prose stays readable on ultra-wide panes.
  */
 #penmark-root {
-  padding: 0 80px;
+  padding: 0 80px 48px;
   width: 100%;
   max-width: 1600px;
   margin: 0 auto;
+  min-height: 1px;
+}
+
+.pmk-loading,
+.pmk-render-error {
+  margin: 24px 0;
+  color: var(--pmk-color-fg-muted);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 body.pmk-content-comfortable #penmark-root {
@@ -1043,7 +1140,6 @@ body.pmk-hl-strong {
   background-color: var(--pmk-comment-note-fg);
 }
 .pmk-topbar-comments {
-  margin-left: 8px;
   flex: none;
 }
 
@@ -1494,6 +1590,3 @@ body.pmk-hl-strong {
   line-height: 1.4;
 }
 
-.pmk-topbar-settings {
-  margin-right: 4px;
-}

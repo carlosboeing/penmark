@@ -6,8 +6,21 @@
  */
 
 import type { ThemeMode } from "../core/protocol/messages.js";
+import { createTopbarIcon } from "./topbarIcons.js";
 
 const THEME_MODES: ThemeMode[] = ["light", "dark", "auto"];
+
+const THEME_LABELS: Record<ThemeMode, string> = {
+  light: "Light theme",
+  dark: "Dark theme",
+  auto: "Match editor theme",
+};
+
+const THEME_ICONS = {
+  light: "sun",
+  dark: "moon",
+  auto: "auto",
+} as const;
 
 /**
  * Comments-drawer affordances for the topbar (R15). Omitted by older callers /
@@ -25,15 +38,35 @@ export interface TopbarCommentsOpts {
   onOpenAttention: () => void;
 }
 
+function iconButton(opts: {
+  className: string;
+  label: string;
+  icon: ReturnType<typeof createTopbarIcon>;
+  onClick: () => void;
+  badge?: number;
+}): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = opts.className;
+  btn.setAttribute("aria-label", opts.label);
+  btn.setAttribute("title", opts.label);
+  btn.appendChild(opts.icon);
+  if (opts.badge !== undefined && opts.badge > 0) {
+    const badge = document.createElement("span");
+    badge.className = "pmk-topbar-badge";
+    badge.textContent = opts.badge > 9 ? "9+" : String(opts.badge);
+    badge.setAttribute("aria-hidden", "true");
+    btn.appendChild(badge);
+  }
+  btn.addEventListener("click", opts.onClick);
+  return btn;
+}
+
 /**
  * Install (or re-install) the topbar into `container`.
  *
  * Safe to call multiple times — clears the container and rebuilds.
  * All node creation uses safe DOM methods (no innerHTML with untrusted content).
- *
- * When `comments` is supplied (R15), a discreet amber attention chip
- * ("N orphaned", only when `attention > 0`) and a "Comments (N)" drawer toggle
- * are added.
  */
 export function installTopbar(
   container: HTMLElement,
@@ -41,71 +74,96 @@ export function installTopbar(
   postMessage: (msg: unknown) => void,
   comments?: TopbarCommentsOpts,
   onOpenSettings?: () => void,
+  currentTheme: ThemeMode = "auto",
 ): void {
-  // Clear previous content safely.
   while (container.firstChild) {
     container.removeChild(container.firstChild);
   }
 
-  // Doc name label
+  const left = document.createElement("div");
+  left.className = "pmk-topbar-left";
+
   const nameEl = document.createElement("span");
   nameEl.className = "pmk-topbar-docname";
   nameEl.textContent = docName;
-  container.appendChild(nameEl);
+  left.appendChild(nameEl);
 
-  // Amber attention chip — discreet, only when something needs attention.
   if (comments && comments.attention > 0) {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "pmk-topbar-chip";
     chip.setAttribute("title", `${comments.attention} comment(s) could not be re-anchored`);
+    chip.setAttribute("aria-label", `${comments.attention} orphaned comments`);
     const dot = document.createElement("span");
     dot.className = "pmk-topbar-chip-dot";
     dot.setAttribute("aria-hidden", "true");
     const label = document.createElement("span");
     label.textContent = `${comments.attention} orphaned`;
-    chip.append(dot, label);
+    chip.appendChild(dot);
+    chip.appendChild(label);
     chip.addEventListener("click", () => comments.onOpenAttention());
-    container.appendChild(chip);
+    left.appendChild(chip);
   }
 
-  // Settings — opens the in-preview settings panel.
-  if (onOpenSettings) {
-    const settingsBtn = document.createElement("button");
-    settingsBtn.type = "button";
-    settingsBtn.className = "pmk-topbar-btn pmk-topbar-settings";
-    settingsBtn.setAttribute("aria-label", "Preview settings");
-    settingsBtn.setAttribute("title", "Preview settings");
-    settingsBtn.textContent = "Settings";
-    settingsBtn.addEventListener("click", onOpenSettings);
-    container.appendChild(settingsBtn);
-  }
+  container.appendChild(left);
 
-  // Theme switcher group
-  const switcher = document.createElement("div");
-  switcher.className = "pmk-topbar-switcher";
+  const actions = document.createElement("div");
+  actions.className = "pmk-topbar-actions";
+
+  const themeGroup = document.createElement("div");
+  themeGroup.className = "pmk-topbar-theme";
+  themeGroup.setAttribute("role", "group");
+  themeGroup.setAttribute("aria-label", "Preview theme");
 
   for (const mode of THEME_MODES) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pmk-topbar-btn";
-    btn.setAttribute("data-theme-mode", mode);
-    btn.textContent = mode;
-    btn.addEventListener("click", () => {
-      postMessage({ v: 1, type: "themeSelected", theme: mode });
+    const label = THEME_LABELS[mode];
+    const btn = iconButton({
+      className: "pmk-topbar-icon-btn pmk-topbar-theme-btn",
+      label,
+      icon: createTopbarIcon(THEME_ICONS[mode]),
+      onClick: () => postMessage({ v: 1, type: "themeSelected", theme: mode }),
     });
-    switcher.appendChild(btn);
+    btn.setAttribute("data-theme-mode", mode);
+    if (mode === currentTheme) {
+      btn.setAttribute("data-active", "true");
+    }
+    themeGroup.appendChild(btn);
   }
 
-  container.appendChild(switcher);
+  actions.appendChild(themeGroup);
 
-  // Comments drawer toggle (R15).
+  const tools = document.createElement("div");
+  tools.className = "pmk-topbar-tools";
+  tools.setAttribute("role", "group");
+  tools.setAttribute("aria-label", "Preview tools");
+
+  if (onOpenSettings) {
+    tools.appendChild(
+      iconButton({
+        className: "pmk-topbar-icon-btn pmk-topbar-settings",
+        label: "Preview settings",
+        icon: createTopbarIcon("settings"),
+        onClick: onOpenSettings,
+      }),
+    );
+  }
+
   if (comments) {
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "pmk-topbar-btn pmk-topbar-comments";
-    toggle.textContent = `Comments (${comments.openCount})`;
-    toggle.addEventListener("click", () => comments.onToggleDrawer());
-    container.appendChild(toggle);
+    const commentLabel =
+      comments.openCount > 0
+        ? `Comments (${comments.openCount})`
+        : "Comments";
+    tools.appendChild(
+      iconButton({
+        className: "pmk-topbar-icon-btn pmk-topbar-comments",
+        label: commentLabel,
+        icon: createTopbarIcon("comments"),
+        badge: comments.openCount,
+        onClick: () => comments.onToggleDrawer(),
+      }),
+    );
   }
+
+  actions.appendChild(tools);
+  container.appendChild(actions);
 }

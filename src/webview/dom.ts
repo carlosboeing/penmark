@@ -37,10 +37,31 @@ ensureSanitizer();
  * @param root  The container element to render into.
  * @param html  Raw (unsanitized) HTML from the render protocol message.
  */
+function appendSanitizedHtml(root: HTMLElement, safe: string): void {
+  if (!safe) return;
+  const tpl = document.createElement("template");
+  tpl.innerHTML = safe;
+  const frag = document.createDocumentFragment();
+  while (tpl.content.firstChild) {
+    frag.appendChild(tpl.content.firstChild);
+  }
+  root.appendChild(frag);
+}
+
 export function renderInto(root: HTMLElement, html: string): void {
   ensureSanitizer();
 
-  const safe = sanitize(html);
+  const safe = sanitize(html ?? "");
+
+  // First paint: replace the shell placeholder in one shot (faster than morphdom
+  // on large documents and avoids edge cases morphing a lone .pmk-loading node).
+  const bootstrap =
+    root.childElementCount <= 1 && root.querySelector(".pmk-loading") !== null;
+  if (bootstrap) {
+    root.replaceChildren();
+    appendSanitizedHtml(root, safe);
+    return;
+  }
 
   // Build a scratch element to wrap the sanitized fragment so morphdom can
   // diff the full subtree of `root` against it.

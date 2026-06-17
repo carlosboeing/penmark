@@ -96,7 +96,9 @@ export function openCommentPopover(
   when.className = "pmk-popover-when";
   when.textContent = `${comment.provenance} · ${comment.timestamp}`;
 
-  meta.append(avatar, who, when);
+  meta.appendChild(avatar);
+  meta.appendChild(who);
+  meta.appendChild(when);
   el.appendChild(meta);
 
   // --- degraded-recovered affordance (the anchored text was edited) ---
@@ -140,7 +142,8 @@ export function openCommentPopover(
       closeCommentPopover();
     });
 
-    actions.append(editBtn, resolveBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(resolveBtn);
   }
 
   function renderEditMode() {
@@ -180,7 +183,8 @@ export function openCommentPopover(
       closeCommentPopover();
     });
 
-    actions.append(cancelBtn, saveBtn);
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
     textarea.focus();
   }
 

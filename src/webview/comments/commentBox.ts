@@ -107,7 +107,8 @@ export function openCommentBox(
     closeCommentBox();
   });
 
-  actions.append(cancel, submit);
+  actions.appendChild(cancel);
+  actions.appendChild(submit);
   el.appendChild(actions);
 
   const hint = document.createElement("p");

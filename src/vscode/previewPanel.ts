@@ -20,7 +20,7 @@ import {
   resolveAuthor,
 } from "./comments.js";
 import { buildReviewPrompt } from "../core/comments/exportPrompt.js";
-import { logReconcileCorruption } from "./outputChannel.js";
+import { logPreview, logReconcileCorruption, penmarkOutput } from "./outputChannel.js";
 
 // The markdown-it render stack (src/vscode/render.ts → markdown-it + plugins) is
 // LAZY-loaded so it is NOT evaluated at activation — keeping activate() within
@@ -85,6 +85,10 @@ export interface PanelEntry {
    * corrupt document floods the output channel for the whole session (§9).
    */
   lastCorruptionKey?: string;
+  /** Whether the webview has posted `ready` (stops blind render retries). */
+  readyReceived?: boolean;
+  /** Pending render-retry timers — cleared on `ready` or panel dispose. */
+  renderRetryTimers?: ReturnType<typeof setTimeout>[];
 }
 
 /** Active panels keyed by the ViewColumn they occupy. */
@@ -117,6 +121,16 @@ const REVEAL_LINE_THROTTLE_MS = 100;
  */
 function configuredTheme(): ThemeMode {
   return vscode.workspace.getConfiguration("penmark").get<ThemeMode>("theme", "auto");
+}
+
+/** Resolve penmark.theme to light/dark for the shell's first-paint body class. */
+function resolveShellTheme(mode: ThemeMode): "light" | "dark" {
+  if (mode === "light") return "light";
+  if (mode === "dark") return "dark";
+  const kind = vscode.window.activeColorTheme.kind;
+  return kind === vscode.ColorThemeKind.Dark || kind === vscode.ColorThemeKind.HighContrast
+    ? "dark"
+    : "light";
 }
 
 /**
@@ -486,54 +500,152 @@ export async function handleUpdateSetting(
   }
 }
 
+function resolvePanelDocument(entry: PanelEntry): vscode.TextDocument | undefined {
+  if (entry.document) return entry.document;
+  const active = vscode.window.activeTextEditor;
+  if (active?.document.languageId === "markdown") return active.document;
+  return undefined;
+}
+
+function isEntryLive(entry: PanelEntry): boolean {
+  for (const live of panels.values()) {
+    if (live === entry) return true;
+  }
+  return false;
+}
+
+function clearRenderRetries(entry: PanelEntry): void {
+  if (!entry.renderRetryTimers) return;
+  for (const id of entry.renderRetryTimers) clearTimeout(id);
+  entry.renderRetryTimers = undefined;
+}
+
+function postRenderMessage(entry: PanelEntry, msg: Extract<HostToWebview, { type: "render" }>): void {
+  if (!isEntryLive(entry)) return;
+  try {
+    void entry.panel.webview.postMessage(msg).then(
+      () => logPreview(`posted render for ${msg.docName} (${msg.html.length} bytes html)`),
+      (err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        logPreview(`postMessage(render) failed for ${msg.docName}: ${message}`);
+      },
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logPreview(`postMessage(render) threw for ${msg.docName}: ${message}`);
+  }
+}
+
+/**
+ * Push the latest render payload to the webview. Replays a cached render when
+ * the host finished rendering before the webview listener attached; otherwise
+ * triggers a fresh render from the live document.
+ */
+function deliverRenderToWebview(entry: PanelEntry, reason: string): void {
+  if (!isEntryLive(entry)) return;
+  logPreview(`deliverRender (${reason})`);
+  if (entry.lastRenderMessage) {
+    postRenderMessage(entry, entry.lastRenderMessage);
+    return;
+  }
+  const doc = resolvePanelDocument(entry);
+  if (!doc) {
+    logPreview("deliverRender: no markdown document available");
+    return;
+  }
+  entry.document = doc;
+  void postRender(entry, doc);
+}
+
+/** Blind retries until the webview posts `ready` (covers host→webview message races). */
+function scheduleRenderRetries(entry: PanelEntry): void {
+  clearRenderRetries(entry);
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  for (const delayMs of [250, 750, 2000]) {
+    const id = setTimeout(() => {
+      if (!isEntryLive(entry) || entry.readyReceived) return;
+      deliverRenderToWebview(entry, `retry@${delayMs}ms`);
+    }, delayMs);
+    timers.push(id);
+  }
+  entry.renderRetryTimers = timers;
+}
+
 async function postRender(entry: PanelEntry, document: vscode.TextDocument): Promise<void> {
   // Track which document this panel is currently previewing so we can re-post
   // it when the webview signals `ready` (race-free handshake, T5).
   entry.document = document;
 
-  const text = document.getText();
-  // Lazily load highlight.js only when the document has a language-tagged fence
-  // (D8). Prose-only documents never trigger the dynamic import.
-  const highlight = await loadHighlighterIfNeeded(text);
+  try {
+    const text = document.getText();
+    // Lazily load highlight.js only when the document has a language-tagged fence
+    // (D8). Prose-only documents never trigger the dynamic import.
+    const highlight = await loadHighlighterIfNeeded(text);
 
-  // Reconcile comments read-only on every render (R8): classify them, surface
-  // the attention count + per-comment state to the webview, and log any
-  // corruption signals to the output channel (no toast — design §9). This
-  // applies no edits; opening a document never mutates it.
-  const analysis = analyzeComments(text);
-  // Log corruption only when the signal-set changes (not every render), so a
-  // persistently corrupt document does not flood the channel session-long (§9).
-  const corruptionKey = `${analysis.result.secondReviewBlock}|${analysis.result.reviewBlockMisplaced}`;
-  if (corruptionKey !== entry.lastCorruptionKey) {
-    logReconcileCorruption(docName(document), analysis.result);
-    entry.lastCorruptionKey = corruptionKey;
+    // Reconcile comments read-only on every render (R8): classify them, surface
+    // the attention count + per-comment state to the webview, and log any
+    // corruption signals to the output channel (no toast — design §9). This
+    // applies no edits; opening a document never mutates it.
+    const analysis = analyzeComments(text);
+    // Log corruption only when the signal-set changes (not every render), so a
+    // persistently corrupt document does not flood the channel session-long (§9).
+    const corruptionKey = `${analysis.result.secondReviewBlock}|${analysis.result.reviewBlockMisplaced}`;
+    if (corruptionKey !== entry.lastCorruptionKey) {
+      logReconcileCorruption(docName(document), analysis.result);
+      entry.lastCorruptionKey = corruptionKey;
+    }
+
+    const renderDocument = await getRenderDocument();
+    const msg = renderDocument(
+      text,
+      document.uri,
+      docName(document),
+      configuredTheme(),
+      entry.panel.webview,
+      highlight,
+      configuredMermaidEnabled(),
+      analysis,
+      configuredTypography(),
+      configuredHighlightIntensity(),
+    );
+    entry.lastRenderMessage = msg;
+    entry.renderCount++;
+    _totalRenderCount++;
+    postRenderMessage(entry, msg);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    penmarkOutput().appendLine(
+      `[${new Date().toISOString()}] render failed for ${docName(document)}: ${message}`,
+    );
+    const safe = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const fallback: Extract<HostToWebview, { type: "render" }> = {
+      v: 1,
+      type: "render",
+      html: `<p class="pmk-render-error">Penmark could not render this document: ${safe}</p>`,
+      theme: configuredTheme(),
+      docName: docName(document),
+      comments: [],
+      attention: 0,
+      typography: configuredTypography(),
+      frontmatter: {},
+      highlightIntensity: configuredHighlightIntensity(),
+    };
+    entry.lastRenderMessage = fallback;
+    entry.renderCount++;
+    _totalRenderCount++;
+    postRenderMessage(entry, fallback);
   }
-
-  const renderDocument = await getRenderDocument();
-  const msg = renderDocument(
-    text,
-    document.uri,
-    docName(document),
-    configuredTheme(),
-    entry.panel.webview,
-    highlight,
-    configuredMermaidEnabled(),
-    analysis,
-    configuredTypography(),
-    configuredHighlightIntensity(),
-  );
-  entry.lastRenderMessage = msg;
-  entry.renderCount++;
-  _totalRenderCount++;
-  void entry.panel.webview.postMessage(msg);
 }
 
-function setupPanelEntry(
-  context: vscode.ExtensionContext,
-  panel: vscode.WebviewPanel,
-  document: vscode.TextDocument | undefined,
-  key: vscode.ViewColumn | string,
-): PanelEntry {
+/** Set webview options and assign a fresh shell document (new nonce each call). */
+function applyShellHtml(context: vscode.ExtensionContext, panel: vscode.WebviewPanel): string {
+  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
+  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
+  panel.webview.options = {
+    enableScripts: true,
+    localResourceRoots: [distUri, ...workspaceRoots],
+  };
+
   const nonce = generateNonce();
   const scriptUri = vscode.Uri.joinPath(context.extensionUri, "dist", "webview", "main.js");
   const html = buildShellHtml(
@@ -543,13 +655,43 @@ function setupPanelEntry(
     context.extensionUri,
     configuredContentWidth(),
     configuredHighlightIntensity(),
+    resolveShellTheme(configuredTheme()),
   );
   panel.webview.html = html;
+  logPreview(`shell applied (${html.length} bytes)`);
+  return html;
+}
 
+/**
+ * (Re)load the webview shell and kick the ready/render handshake.
+ *
+ * With retainContextWhenHidden: false the host discards iframe content when a
+ * panel is hidden or before the first visible frame in some forks (Antigravity).
+ * Extensions must re-assign webview.html when the panel becomes visible again.
+ */
+function bootstrapWebview(entry: PanelEntry, context: vscode.ExtensionContext): void {
+  if (!isEntryLive(entry)) return;
+  entry.html = applyShellHtml(context, entry.panel);
+  entry.readyReceived = false;
+  clearRenderRetries(entry);
+  scheduleRenderRetries(entry);
+  const doc = resolvePanelDocument(entry);
+  if (doc) {
+    entry.document = doc;
+    void postRender(entry, doc);
+  }
+}
+
+function setupPanelEntry(
+  context: vscode.ExtensionContext,
+  panel: vscode.WebviewPanel,
+  document: vscode.TextDocument | undefined,
+  key: vscode.ViewColumn | string,
+): PanelEntry {
   const entry: PanelEntry = {
     panel,
     column: panel.viewColumn ?? vscode.ViewColumn.Beside,
-    html,
+    html: "",
     retainContext: false,
     renderCount: 0,
     lastRenderMessage: undefined,
@@ -561,10 +703,13 @@ function setupPanelEntry(
   };
   panels.set(key, entry);
 
-  // Initial render
-  if (document) {
-    void postRender(entry, document);
-  }
+  bootstrapWebview(entry, context);
+
+  const viewStateListener = panel.onDidChangeViewState(() => {
+    if (panel.visible) {
+      bootstrapWebview(entry, context);
+    }
+  });
 
   // Handle messages from the webview
   panel.webview.onDidReceiveMessage((msg: unknown) => {
@@ -588,12 +733,11 @@ function setupPanelEntry(
 
     switch (message.type) {
       case "ready":
-        // Webview has attached its listener — re-post the current render so the
-        // initial postRender (which may have been dropped before the listener
-        // was attached) is guaranteed to arrive.
-        if (entry.document) {
-          void postRender(entry, entry.document);
-        }
+        // Webview has attached its listener — replay any cached render immediately
+        // (initial postRender may have been dropped before the listener existed).
+        entry.readyReceived = true;
+        clearRenderRetries(entry);
+        deliverRenderToWebview(entry, "ready");
         break;
 
       case "themeSelected": {
@@ -762,9 +906,11 @@ function setupPanelEntry(
   // Clean up when the panel is closed: drop it from the map and dispose the
   // per-panel listeners so they never fire on a disposed webview.
   panel.onDidDispose(() => {
+    clearRenderRetries(entry);
     panels.delete(key);
     configListener.dispose();
     visibleRangeListener.dispose();
+    viewStateListener.dispose();
   });
 
   return entry;
@@ -776,7 +922,10 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
   const existing = panels.get(targetColumn);
   if (existing) {
     existing.panel.reveal(targetColumn, true /* preserveFocus */);
-    void postRender(existing, document);
+    existing.document = document;
+    if (existing.panel.visible) {
+      bootstrapWebview(existing, context);
+    }
     return;
   }
 
@@ -805,15 +954,6 @@ export async function registerCustomEditorPreview(
   panel: vscode.WebviewPanel,
 ): Promise<void> {
   const key = `custom-${document.uri.toString()}-${customEditorSeq++}`;
-
-  const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
-  const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
-  
-  panel.webview.options = {
-    enableScripts: true,
-    localResourceRoots: [distUri, ...workspaceRoots],
-  };
-
   setupPanelEntry(context, panel, document, key);
 }
 

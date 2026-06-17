@@ -78,4 +78,30 @@ describe("renderInto", () => {
     const root = document.createElement("div");
     expect(() => renderInto(root, "")).not.toThrow();
   });
+
+  it("strips inline style attributes before DOM insertion (CSP)", () => {
+    const root = document.createElement("div");
+    renderInto(
+      root,
+      '<h1 style="color:white;background:white">Title</h1><p style="display:none">x</p>',
+    );
+    expect(root.querySelectorAll("[style]").length).toBe(0);
+    expect(root.querySelector("h1")?.textContent).toBe("Title");
+  });
+
+  it("replaces bootstrap loading placeholder on first paint", () => {
+    const root = document.createElement("div");
+    root.innerHTML = '<p class="pmk-loading">Loading preview…</p>';
+    renderInto(root, "<h1>Title</h1><p>Body</p>");
+    expect(root.querySelector(".pmk-loading")).toBeNull();
+    expect(root.textContent).toContain("Title");
+    expect(root.textContent).toContain("Body");
+  });
+
+  it("uses bootstrap fast path only for the loading placeholder", () => {
+    const root = document.createElement("div");
+    root.innerHTML = "<p>Existing</p>";
+    renderInto(root, "<p>Replaced</p>");
+    expect(root.textContent).toBe("Replaced");
+  });
 });

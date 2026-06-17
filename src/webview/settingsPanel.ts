@@ -58,7 +58,8 @@ function labelRow(label: string, control: HTMLElement): HTMLElement {
   const lbl = document.createElement("label");
   lbl.className = "pmk-settings-label";
   lbl.textContent = label;
-  row.append(lbl, control);
+  row.appendChild(lbl);
+  row.appendChild(control);
   return row;
 }
 
@@ -96,7 +97,8 @@ function rebuildPanel(): void {
   close.setAttribute("aria-label", "Close settings");
   close.textContent = "×";
   close.addEventListener("click", () => closeSettingsPanel());
-  header.append(title, close);
+  header.appendChild(title);
+  header.appendChild(close);
   _panel.appendChild(header);
 
   const body = document.createElement("div");
@@ -173,7 +175,8 @@ function rebuildPanel(): void {
   });
   const lineWrap = document.createElement("div");
   lineWrap.className = "pmk-settings-range-wrap";
-  lineWrap.append(lineRange, lineVal);
+  lineWrap.appendChild(lineRange);
+  lineWrap.appendChild(lineVal);
   body.appendChild(labelRow("Line height", lineWrap));
 
   body.appendChild(
@@ -226,7 +229,8 @@ function ensureDom(): void {
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-label", "Preview settings");
 
-  document.body.append(scrim, panel);
+  document.body.appendChild(scrim);
+  document.body.appendChild(panel);
   _scrim = scrim;
   _panel = panel;
 
