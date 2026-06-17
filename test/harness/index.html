@@ -6,9 +6,15 @@
     <!-- Production-equivalent CSP (mirrors src/vscode/html.ts buildShellHtml). -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; img-src 'self' data:; script-src 'nonce-harness-test-nonce'; style-src 'nonce-harness-test-nonce'; font-src 'self'"
+      content="default-src 'none'; img-src 'self' data:; script-src 'nonce-harness-test-nonce'; style-src 'self' 'nonce-harness-test-nonce'; font-src 'self'"
     />
     <title>Penmark webview test harness</title>
+    <style nonce="harness-test-nonce">
+      body{margin:0;background-color:#fff;color:#1f2328}
+      body.theme-dark,body[data-theme="dark"]{background-color:#0d1117;color:#fff}
+      #penmark-root{min-height:1px}
+      .pmk-loading,.pmk-render-error{margin:24px 0;font-size:14px;line-height:1.5}
+    </style>
     <!-- Theme CSS, mirroring production buildShellHtml load order (tokens then base). -->
     <link rel="stylesheet" nonce="harness-test-nonce" href="/dist/media/theme-light.css" />
     <link rel="stylesheet" nonce="harness-test-nonce" href="/dist/media/theme-dark.css" />

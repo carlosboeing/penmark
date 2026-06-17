@@ -66,9 +66,11 @@ describe("layer-1 first-render budget — 1k-line doc (design §8)", () => {
   const doc = gen1kDoc();
 
   it(`renders + sanitizes a 1k-line doc in under ${FIRST_RENDER_BUDGET_MS} ms (median of ${RUNS})`, () => {
-    // Warm up once (untimed): primes the JIT and the markdown-it/hljs internals.
-    const warm = renderOnce(doc);
-    expect(warm.length).toBeGreaterThan(0);
+    // Warm up (untimed): primes JIT, markdown-it, and hljs on cold CI runners.
+    for (let w = 0; w < 3; w++) {
+      const warm = renderOnce(doc);
+      if (w === 0) expect(warm.length).toBeGreaterThan(0);
+    }
 
     const samples: number[] = [];
     for (let i = 0; i < RUNS; i++) {

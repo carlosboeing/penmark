@@ -30,14 +30,15 @@ describe("installTopbar", () => {
     expect(topbar.textContent).toContain("my-doc.md");
   });
 
-  it("renders theme buttons: light, dark, auto", () => {
+  it("renders theme icon buttons: light, dark, auto", () => {
     const post = makePostMessage();
-    installTopbar(document.getElementById("penmark-topbar")!, "test.md", post);
+    installTopbar(document.getElementById("penmark-topbar")!, "test.md", post, undefined, undefined, "dark");
     const buttons = document.querySelectorAll("[data-theme-mode]");
     const modes = Array.from(buttons).map((b) => b.getAttribute("data-theme-mode"));
     expect(modes).toContain("light");
     expect(modes).toContain("dark");
     expect(modes).toContain("auto");
+    expect(document.querySelector("[data-theme-mode='dark']")?.getAttribute("data-active")).toBe("true");
   });
 
   it("clicking the light button posts {v:1,type:'themeSelected',theme:'light'}", () => {
@@ -78,7 +79,7 @@ describe("installTopbar", () => {
     return document.getElementById("penmark-topbar")!;
   }
 
-  it("renders a Comments toggle showing the open-comment count", () => {
+  it("renders a Comments icon toggle with a count badge", () => {
     installTopbar(topbar(), "test.md", makePostMessage(), {
       openCount: 3,
       attention: 0,
@@ -87,7 +88,8 @@ describe("installTopbar", () => {
     });
     const toggle = topbar().querySelector(".pmk-topbar-comments") as HTMLButtonElement;
     expect(toggle).not.toBeNull();
-    expect(toggle.textContent).toContain("3");
+    expect(toggle.getAttribute("aria-label")).toBe("Comments (3)");
+    expect(toggle.querySelector(".pmk-topbar-badge")?.textContent).toBe("3");
   });
 
   it("clicking the Comments toggle invokes onToggleDrawer", () => {
@@ -132,6 +134,25 @@ describe("installTopbar", () => {
     });
     (topbar().querySelector(".pmk-topbar-chip") as HTMLElement).click();
     expect(onOpenAttention).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a settings icon button when onOpenSettings is provided", () => {
+    const onOpenSettings = vi.fn();
+    installTopbar(topbar(), "test.md", makePostMessage(), undefined, onOpenSettings);
+    const btn = topbar().querySelector(".pmk-topbar-settings") as HTMLButtonElement;
+    expect(btn.getAttribute("title")).toBe("Preview settings");
+    btn.click();
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps the comment badge at 9+", () => {
+    installTopbar(topbar(), "test.md", makePostMessage(), {
+      openCount: 12,
+      attention: 0,
+      onToggleDrawer: vi.fn(),
+      onOpenAttention: vi.fn(),
+    });
+    expect(topbar().querySelector(".pmk-topbar-badge")?.textContent).toBe("9+");
   });
 
   it("omits the Comments toggle and chip when no comment opts are passed", () => {

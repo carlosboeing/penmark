@@ -47,6 +47,17 @@ const PMK_KEEP_ATTRS: ReadonlySet<string> = new Set([
   "data-pmk-block",
 ]);
 
+/**
+ * DOMPurify profile for Penmark. `style` must be stripped explicitly — in the
+ * webview's jsdom/browser binding the default profile does not always remove
+ * `style=""` from markdown raw HTML, and each surviving attribute triggers a
+ * CSP violation under `style-src 'nonce-…'` (no `'unsafe-inline'`).
+ */
+const SANITIZE_OPTS = {
+  FORBID_ATTR: ["style"],
+  FORBID_TAGS: ["style"],
+} as const;
+
 let _instance: DOMPurifyInstance | null = null;
 
 /**
@@ -130,10 +141,11 @@ export function initSanitizer(win: WindowLike): void {
  * Sanitize rendered HTML before it reaches the webview DOM.
  *
  * Strips: script tags, event-handler attributes (on*=), javascript: URIs,
- * iframes, and all HTML comments (including <!--pmk:...-->).
+ * iframes, inline style attributes and <style> elements (CSP: style-src nonce),
+ * and all HTML comments (including <!--pmk:...-->).
  * Preserves: data-pmk-offset, class (hljs/mermaid), id, href (https), src.
  */
 export function sanitize(html: string): string {
-  if (html === "") return "";
-  return getInstance().sanitize(html);
+  if (!html) return "";
+  return getInstance().sanitize(html, SANITIZE_OPTS);
 }

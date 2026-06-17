@@ -38,6 +38,19 @@ describe("sanitize — XSS neutralization", () => {
     expect(out).toContain("Legitimate paragraph");
   });
 
+  it("strips inline style attributes (CSP: style-src nonce, no unsafe-inline)", () => {
+    const out = sanitize('<p style="color:red">text</p><span style="display:none">x</span>');
+    expect(out).not.toMatch(/\bstyle\s*=/i);
+    expect(out).toContain("text");
+    expect(out).toContain("x");
+  });
+
+  it("strips <style> elements", () => {
+    const out = sanitize('<style>body{color:red}</style><p>safe</p>');
+    expect(out).not.toMatch(/<style/i);
+    expect(out).toContain("safe");
+  });
+
   it("strips onerror attribute from <img>", () => {
     const out = sanitize(fixture("img-onerror.html"));
     expect(out).not.toMatch(/\bonerror\b/i);

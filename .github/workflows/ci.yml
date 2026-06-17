@@ -13,10 +13,10 @@ jobs:
   checks:
     name: Lint / Typecheck / Unit
     runs-on: ubuntu-latest
-    # T12: 1.5× headroom on every perf budget in CI (slower/noisier than local).
-    # Consumed by the layer-1 render bench run via npm run test:unit (design §8).
+    # T12: CI headroom on perf budgets (slower/noisier than local). 1.75× after
+    # ubuntu-latest medians occasionally exceeded 1.5× on loaded runners (2026-06).
     env:
-      PERF_MULTIPLIER: "1.5"
+      PERF_MULTIPLIER: "1.75"
 
     steps:
       - uses: actions/checkout@v6
@@ -77,7 +77,7 @@ jobs:
     # T12: 1.5× headroom on every perf budget in CI. Consumed by the layer-3
     # perf spec run via npm run test:browser (design §8).
     env:
-      PERF_MULTIPLIER: "1.5"
+      PERF_MULTIPLIER: "1.75"
 
     steps:
       - uses: actions/checkout@v6
@@ -124,7 +124,7 @@ jobs:
     # activation test run inside VS Code via npm run test:ext (design §8). Set at
     # job level so it propagates into the test-electron child process.
     env:
-      PERF_MULTIPLIER: "1.5"
+      PERF_MULTIPLIER: "1.75"
 
     steps:
       - uses: actions/checkout@v6

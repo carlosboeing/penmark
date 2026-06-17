@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { injectHighlights } from "../core/comments/highlight.js";
 import { stripFrontmatter, parseFrontmatterFields } from "../core/render/frontmatter.js";
 import { createRenderer } from "../core/render/markdown.js";
-import type { HostToWebview, ThemeMode } from "../core/protocol/messages.js";
+import type { HostToWebview, ThemeMode, HighlightIntensity } from "../core/protocol/messages.js";
 import { PROTOCOL_VERSION } from "../core/protocol/messages.js";
 import type { TypographySettings } from "../core/settings/typography.js";
 import type { CommentAnalysis } from "./comments.js";
@@ -48,6 +48,7 @@ export function renderDocument(
   mermaid = true,
   analysis?: CommentAnalysis,
   typography?: TypographySettings,
+  highlightIntensity: HighlightIntensity = "medium",
 ): Extract<HostToWebview, { type: "render" }> {
   const { body, frontmatter } = stripFrontmatter(source);
 
@@ -100,5 +101,6 @@ export function renderDocument(
     attention: analysis?.attention ?? 0,
     typography,
     frontmatter: parseFrontmatterFields(frontmatter),
+    highlightIntensity,
   };
 }

@@ -17,6 +17,11 @@ export function penmarkOutput(): vscode.OutputChannel {
   return _channel;
 }
 
+/** One-line preview pipeline diagnostic (handshake / render delivery). */
+export function logPreview(line: string): void {
+  penmarkOutput().appendLine(`[${new Date().toISOString()}] ${line}`);
+}
+
 /**
  * Write a one-line diagnostic for each corruption signal reconcile reports.
  * Returns the number of lines written (0 — and no channel allocation — when the
