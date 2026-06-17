@@ -19,7 +19,18 @@ const seam = vscode as unknown as {
     _writtenFiles: Map<string, string>;
     _resetEdits: () => void;
   };
-  window: { _infos: string[]; _quickPickChoice: string | undefined; _resetMessages: () => void };
+  window: {
+    visibleTextEditors: Array<{
+      document: { uri: { toString: () => string } };
+      edit: (
+        callback: (builder: { replace: (range: vscode.Range, newText: string) => void }) => void,
+        options?: { undoStopBefore: boolean; undoStopAfter: boolean },
+      ) => Promise<boolean>;
+    }>;
+    _infos: string[];
+    _quickPickChoice: string | undefined;
+    _resetMessages: () => void;
+  };
   env: { clipboard: { _text: string } };
 };
 
@@ -48,6 +59,7 @@ beforeEach(() => {
   seam.__resetConfig();
   seam.workspace._resetEdits();
   seam.window._resetMessages();
+  seam.window.visibleTextEditors.length = 0;
   seam.env.clipboard._text = "";
 });
 
@@ -63,6 +75,54 @@ describe("handleAddComment — host wiring (R7)", () => {
     );
     expect(seam.workspace._appliedEdits).toHaveLength(1);
     expect(seam.window._infos).toHaveLength(0);
+  });
+
+  it("does not force-save after applying the edit so undo remains available", async () => {
+    const text = "The renderer uses markdown-it under the hood.\n";
+    const start = text.indexOf("renderer");
+    let saves = 0;
+    const doc = fakeDoc(text);
+    doc.save = async () => {
+      saves++;
+      return true;
+    };
+    await handleAddComment(
+      doc,
+      { start, end: start + "renderer".length },
+      "renderer",
+      "which one?",
+    );
+    expect(seam.workspace._appliedEdits).toHaveLength(1);
+    expect(saves).toBe(0);
+  });
+
+  it("uses the visible source editor edit stack with explicit undo stops", async () => {
+    const text = "The renderer uses markdown-it under the hood.\n";
+    const start = text.indexOf("renderer");
+    const doc = fakeDoc(text);
+    const replacements: Array<{ range: vscode.Range; newText: string }> = [];
+    let undoOptions: { undoStopBefore: boolean; undoStopAfter: boolean } | undefined;
+    seam.window.visibleTextEditors.push({
+      document: { uri: doc.uri },
+      edit: async (callback, options) => {
+        undoOptions = options;
+        callback({
+          replace: (range, newText) => replacements.push({ range, newText }),
+        });
+        return true;
+      },
+    });
+
+    await handleAddComment(
+      doc,
+      { start, end: start + "renderer".length },
+      "renderer",
+      "which one?",
+    );
+
+    expect(seam.workspace._appliedEdits).toHaveLength(0);
+    expect(replacements.length).toBeGreaterThan(0);
+    expect(undoOptions).toEqual({ undoStopBefore: true, undoStopAfter: true });
   });
 
   it("shows a discreet message and applies NO edit for an uncommentable selection (§4.1)", async () => {
@@ -91,6 +151,18 @@ describe("handleResolveComment — host wiring (R7)", () => {
     expect(seam.workspace._appliedEdits).toHaveLength(1);
   });
 
+  it("does not force-save after applying the edit so undo remains available", async () => {
+    let saves = 0;
+    const doc = fakeDoc(withComment);
+    doc.save = async () => {
+      saves++;
+      return true;
+    };
+    await handleResolveComment(doc, "abcdefgh");
+    expect(seam.workspace._appliedEdits).toHaveLength(1);
+    expect(saves).toBe(0);
+  });
+
   it("is a no-op (no edit) when the id is absent", async () => {
     await handleResolveComment(fakeDoc(withComment), "nope0000");
     expect(seam.workspace._appliedEdits).toHaveLength(0);
@@ -107,6 +179,18 @@ describe("handleEditComment — host wiring (R7)", () => {
   it("applies one WorkspaceEdit when the id exists", async () => {
     await handleEditComment(fakeDoc(withComment), "abcdefgh", "new note text");
     expect(seam.workspace._appliedEdits).toHaveLength(1);
+  });
+
+  it("does not force-save after applying the edit so undo remains available", async () => {
+    let saves = 0;
+    const doc = fakeDoc(withComment);
+    doc.save = async () => {
+      saves++;
+      return true;
+    };
+    await handleEditComment(doc, "abcdefgh", "new note text");
+    expect(seam.workspace._appliedEdits).toHaveLength(1);
+    expect(saves).toBe(0);
   });
 
   it("is a no-op (no edit) when the id is absent", async () => {

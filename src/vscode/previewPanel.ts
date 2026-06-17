@@ -228,6 +228,42 @@ function findEditorForEntry(entry: PanelEntry): vscode.TextEditor | undefined {
   );
 }
 
+function findVisibleEditorForDocument(document: vscode.TextDocument): vscode.TextEditor | undefined {
+  return vscode.window.visibleTextEditors.find(
+    (e) => e.document.uri.toString() === document.uri.toString(),
+  );
+}
+
+async function applyDocumentTextEdits(
+  document: vscode.TextDocument,
+  edits: Array<{ start: number; end: number; newText: string }>,
+): Promise<void> {
+  const editor = findVisibleEditorForDocument(document);
+  if (editor) {
+    const applied = await editor.edit(
+      (builder) => {
+        for (const e of edits) {
+          builder.replace(
+            new vscode.Range(document.positionAt(e.start), document.positionAt(e.end)),
+            e.newText,
+          );
+        }
+      },
+      { undoStopBefore: true, undoStopAfter: true },
+    );
+    if (!applied) {
+      throw new Error("Penmark: failed to apply comment edit");
+    }
+    return;
+  }
+
+  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (!applied) {
+    throw new Error("Penmark: failed to apply comment edit");
+  }
+}
+
 /**
  * Post a `revealLine` to the panel for the given source line — IF scroll sync
  * is on and we are not inside the host echo-suppression window. Opens the
@@ -377,11 +413,7 @@ export async function handleAddComment(
     );
     return;
   }
-  const edit = offsetEditsToWorkspaceEdit(document.uri, document, plan.edits);
-  await vscode.workspace.applyEdit(edit);
-  if (typeof document.save === "function") {
-    await document.save();
-  }
+  await applyDocumentTextEdits(document, plan.edits);
 }
 
 /**
@@ -394,11 +426,7 @@ export async function handleResolveComment(
 ): Promise<void> {
   const edits = planResolveComment(document.getText(), id);
   if (edits.length === 0) return;
-  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
-  await vscode.workspace.applyEdit(edit);
-  if (typeof document.save === "function") {
-    await document.save();
-  }
+  await applyDocumentTextEdits(document, edits);
 }
 
 /**
@@ -412,11 +440,7 @@ export async function handleEditComment(
 ): Promise<void> {
   const edits = planEditComment(document.getText(), id, newBody);
   if (!edits || edits.length === 0) return;
-  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
-  await vscode.workspace.applyEdit(edit);
-  if (typeof document.save === "function") {
-    await document.save();
-  }
+  await applyDocumentTextEdits(document, edits);
 }
 
 /**

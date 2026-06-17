@@ -12,6 +12,7 @@ Independent UI/UX pass for comparison against the parallel `feat/v1-polish` work
 - **Review UI polish** — emoji-free comment controls, drawer status chips, refined attention states, and focused visual-regression coverage for the settings panel, comments, and lightboxes.
 - **Metadata and lightbox polish** — frontmatter status/tag chips and image-lightbox Zoom out, Zoom in, Fit, and Close controls matching the Mermaid lightbox vocabulary.
 - **Semantic UI tokens** — Penmark-owned chrome now uses HSL-based `--pmk-ui-*` tokens while markdown content stays on the GitHub-compatible reading palette.
+- **Undo-safe comment edits** — comment add/resolve/edit now use the visible source editor's edit stack with explicit undo stops and no forced save, keeping review mutations as normal editor changes.
 - **Verification coverage** — added unit and Playwright coverage for settings persistence, webview interactions, HSL semantic tokens, frontmatter, comments, settings, and image lightbox states.
 
 ## 2026-06-17 (in flight — feat/v1-polish)

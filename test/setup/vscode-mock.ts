@@ -127,6 +127,13 @@ export const workspace = {
 };
 
 export const window = {
+  visibleTextEditors: [] as Array<{
+    document: { uri: { toString: () => string } };
+    edit: (
+      callback: (builder: { replace: (range: Range, newText: string) => void }) => void,
+      options?: { undoStopBefore: boolean; undoStopAfter: boolean },
+    ) => Promise<boolean>;
+  }>,
   _warnings: [] as string[],
   _infos: [] as string[],
   /** Lines written to any "Penmark" output channel (test seam). */
