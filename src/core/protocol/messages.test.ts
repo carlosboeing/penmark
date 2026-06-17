@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { PROTOCOL_VERSION } from "./messages.js";
-import type { HostToWebview, WebviewToHost, WireComment, WireExtent } from "./messages.js";
+import type {
+  HostToWebview,
+  PreviewSettingKey,
+  WebviewToHost,
+  WireComment,
+  WireExtent,
+} from "./messages.js";
 
 describe("protocol/messages", () => {
   it("PROTOCOL_VERSION is 1", () => {
@@ -89,6 +95,18 @@ describe("protocol/messages", () => {
     ]);
   });
 
+  it("WebviewToHost carries validated preview setting updates", () => {
+    const key: PreviewSettingKey = "comments.highlightIntensity";
+    const msg: WebviewToHost = {
+      v: 1,
+      type: "updateSetting",
+      key,
+      value: "strong",
+    };
+    expect(msg.key).toBe("comments.highlightIntensity");
+    expect(msg.value).toBe("strong");
+  });
+
   it("exhaustively narrows every HostToWebview variant", () => {
     const assertNever = (x: never): never => {
       throw new Error(`unexpected host message: ${JSON.stringify(x)}`);
@@ -131,6 +149,8 @@ describe("protocol/messages", () => {
         case "openLink":
           return msg.type;
         case "themeSelected":
+          return msg.type;
+        case "updateSetting":
           return msg.type;
         case "addComment":
           return msg.type;

@@ -1,6 +1,12 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import type { ContentWidth, HostToWebview, ThemeMode } from "../core/protocol/messages.js";
+import type {
+  ContentWidth,
+  HostToWebview,
+  PreviewSettingKey,
+  PreviewSettingValue,
+  ThemeMode,
+} from "../core/protocol/messages.js";
 import { resolveTypography, type TypographySettings } from "../core/settings/typography.js";
 import { buildShellHtml, generateNonce, type HighlightIntensity } from "./html.js";
 import { loadHighlighterIfNeeded } from "./hljsLoader.js";
@@ -150,6 +156,41 @@ function configuredHighlightIntensity(): HighlightIntensity {
   return vscode.workspace
     .getConfiguration("penmark")
     .get<HighlightIntensity>("comments.highlightIntensity", "medium");
+}
+
+const VALID_SETTING_VALUES = {
+  theme: ["light", "dark", "auto"],
+  preset: ["github", "reading", "compact", "focus", "print", "custom"],
+  textSize: ["small", "medium", "large", "x-large"],
+  contentWidth: ["comfortable", "wide", "full"],
+  "comments.highlightIntensity": ["subtle", "medium", "strong"],
+} as const;
+
+function isStringSettingValue(key: PreviewSettingKey, value: PreviewSettingValue): boolean {
+  if (key === "lineHeight") return false;
+  return (
+    typeof value === "string" &&
+    (VALID_SETTING_VALUES[key] as readonly string[]).includes(value)
+  );
+}
+
+function isLineHeightValue(value: PreviewSettingValue): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 2.5;
+}
+
+export async function handleUpdateSetting(
+  key: PreviewSettingKey,
+  value: PreviewSettingValue,
+): Promise<void> {
+  if (key === "lineHeight") {
+    if (!isLineHeightValue(value)) return;
+  } else if (!isStringSettingValue(key, value)) {
+    return;
+  }
+
+  await vscode.workspace
+    .getConfiguration("penmark")
+    .update(key, value, vscode.ConfigurationTarget.Global);
 }
 
 /** Resolved typography from penmark.* settings (v1.0 polish). */
@@ -535,6 +576,18 @@ function setupPanelEntry(
           void vscode.workspace
             .getConfiguration("penmark")
             .update("theme", theme, vscode.ConfigurationTarget.Global);
+        }
+        break;
+      }
+
+      case "updateSetting": {
+        const key = (message as { key?: unknown }).key;
+        const value = (message as { value?: unknown }).value;
+        if (
+          typeof key === "string" &&
+          (typeof value === "string" || typeof value === "number")
+        ) {
+          void handleUpdateSetting(key as PreviewSettingKey, value);
         }
         break;
       }

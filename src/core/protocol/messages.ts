@@ -52,6 +52,16 @@ export type ContentWidth = "comfortable" | "wide" | "full";
 
 export type { TypographySettings, FrontmatterFields };
 
+export type PreviewSettingKey =
+  | "theme"
+  | "preset"
+  | "textSize"
+  | "contentWidth"
+  | "comments.highlightIntensity"
+  | "lineHeight";
+
+export type PreviewSettingValue = string | number;
+
 /** Messages sent from the extension host to the webview. */
 export type HostToWebview =
   | {
@@ -79,6 +89,7 @@ export type WebviewToHost =
   | { v: 1; type: "copyCode"; text: string }
   | { v: 1; type: "openLink"; href: string }
   | { v: 1; type: "themeSelected"; theme: ThemeMode }
+  | { v: 1; type: "updateSetting"; key: PreviewSettingKey; value: PreviewSettingValue }
   | {
       v: 1;
       type: "addComment";

@@ -5,6 +5,7 @@ import {
   handleResolveComment,
   handleEditComment,
   handleExportReview,
+  handleUpdateSetting,
   enqueueMutation,
 } from "./previewPanel.js";
 import type { PanelEntry } from "./previewPanel.js";
@@ -14,6 +15,7 @@ const seam = vscode as unknown as {
   __resetConfig: () => void;
   workspace: {
     _appliedEdits: unknown[];
+    _configUpdates: Array<{ section: string; key: string; value: unknown; target: unknown }>;
     _writtenFiles: Map<string, string>;
     _resetEdits: () => void;
   };
@@ -183,5 +185,31 @@ describe("handleExportReview — host wiring (R9)", () => {
     seam.window._quickPickChoice = "Save to file";
     await handleExportReview(fakeDoc(oneComment, "/tmp/design.v1.md"));
     expect(seam.workspace._writtenFiles.has("/tmp/design.v1.review.md")).toBe(true);
+  });
+});
+
+describe("handleUpdateSetting — preview settings panel host wiring", () => {
+  it("persists valid preview settings globally", async () => {
+    await handleUpdateSetting("preset", "reading");
+    await handleUpdateSetting("textSize", "large");
+    await handleUpdateSetting("contentWidth", "comfortable");
+    await handleUpdateSetting("comments.highlightIntensity", "strong");
+    await handleUpdateSetting("lineHeight", 1.65);
+
+    expect(seam.workspace._configUpdates.map((u) => [u.key, u.value])).toEqual([
+      ["preset", "reading"],
+      ["textSize", "large"],
+      ["contentWidth", "comfortable"],
+      ["comments.highlightIntensity", "strong"],
+      ["lineHeight", 1.65],
+    ]);
+  });
+
+  it("rejects invalid preview settings without writing config", async () => {
+    await handleUpdateSetting("preset", "neon");
+    await handleUpdateSetting("lineHeight", 9);
+    await handleUpdateSetting("theme", "solarized");
+
+    expect(seam.workspace._configUpdates).toHaveLength(0);
   });
 });
