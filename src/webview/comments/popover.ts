@@ -134,7 +134,7 @@ export function openCommentPopover(
     const resolveBtn = document.createElement("button");
     resolveBtn.type = "button";
     resolveBtn.className = "pmk-popover-btn primary";
-    resolveBtn.textContent = "✓ Resolve";
+    resolveBtn.textContent = "Resolve";
     resolveBtn.addEventListener("click", () => {
       postMessage({ v: 1, type: "resolveComment", id: comment.id });
       closeCommentPopover();

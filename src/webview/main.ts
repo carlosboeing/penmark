@@ -497,14 +497,14 @@ function installSelectionPreview(): void {
     // of opening the add-box (R15).
     if (isReanchorPending()) {
       addBtn.className = "pmk-add-comment-btn pmk-reanchor-here";
-      addBtn.textContent = "📍 Re-anchor here"; // 📍
+      addBtn.textContent = "Re-anchor here";
       addBtn.addEventListener("click", () => {
         commitReanchor(range);
         layer.replaceChildren();
       });
     } else {
       addBtn.className = "pmk-add-comment-btn";
-      addBtn.textContent = "💬 Add comment"; // 💬
+      addBtn.textContent = "Add comment";
       addBtn.addEventListener("click", () => {
         // Open first (positionOver reads addBtn's rect), then remove the button but keep highlights.
         openCommentBox(addBtn, range, quote, (m) => vscode.postMessage(m), commentDraftStore);

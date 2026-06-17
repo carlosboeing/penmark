@@ -101,6 +101,7 @@ describe("installTopbar", () => {
     const toggle = topbar().querySelector(".pmk-topbar-comments") as HTMLButtonElement;
     expect(toggle).not.toBeNull();
     expect(toggle.textContent).toContain("3");
+    expect(toggle.textContent).toBe("Comments (3)");
   });
 
   it("clicking the Comments toggle invokes onToggleDrawer", () => {

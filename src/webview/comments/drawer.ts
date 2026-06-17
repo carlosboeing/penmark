@@ -200,7 +200,11 @@ function metaRow(c: WireComment): HTMLElement {
   when.className = "pmk-drawer-when";
   when.textContent = `${c.provenance} · ${c.timestamp}`;
 
-  meta.append(avatar, who, when);
+  const state = document.createElement("span");
+  state.className = `pmk-drawer-status pmk-drawer-status-${c.state}`;
+  state.textContent = c.extent === null ? "Needs attention" : c.state === "intact" ? "Open" : "Edited";
+
+  meta.append(avatar, who, state, when);
   return meta;
 }
 
@@ -235,8 +239,8 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   actions.className = "pmk-drawer-actions";
   if (attention) {
     actions.append(
-      actionButton("↻ Re-anchor", "reanchor", () => cfg.onReanchor(c.id, c.quote, c.body)),
-      actionButton("🗑 Delete", "delete", () =>
+      actionButton("Re-anchor", "reanchor", () => cfg.onReanchor(c.id, c.quote, c.body)),
+      actionButton("Delete", "delete", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),
     );
@@ -260,7 +264,7 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
           openCommentPopover(target, c, cfg.post, true);
         }
       }),
-      actionButton("✓ Resolve", "resolve", () =>
+      actionButton("Resolve", "resolve", () =>
         cfg.post({ v: 1, type: "resolveComment", id: c.id }),
       ),
     );

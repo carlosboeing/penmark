@@ -1233,6 +1233,25 @@ body.pmk-hl-strong {
 .pmk-drawer-who {
   font-weight: 600;
 }
+.pmk-drawer-status {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--pmk-color-fg-muted);
+  background-color: var(--pmk-color-bg-muted);
+  border: 1px solid var(--pmk-color-border-muted);
+}
+.pmk-drawer-status-orphan,
+.pmk-drawer-status-content-removed {
+  color: var(--pmk-comment-note-fg);
+  background-color: var(--pmk-comment-note-bg);
+  border-color: var(--pmk-comment-note-border);
+}
+.pmk-drawer-status-degraded-recovered {
+  color: var(--pmk-color-accent);
+  background-color: var(--pmk-topbar-btn-active-bg);
+  border-color: var(--pmk-topbar-btn-active-fg);
+}
 .pmk-drawer-when {
   margin-left: auto;
   font-size: 11px;

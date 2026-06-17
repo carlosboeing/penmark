@@ -236,6 +236,7 @@ describe("main.ts message loop", () => {
 
     const addBtn = document.querySelector(".pmk-add-comment-btn") as HTMLButtonElement;
     expect(addBtn).not.toBeNull();
+    expect(addBtn.textContent).toBe("Add comment");
 
     addBtn.click();
     const box = document.querySelector(".pmk-commentbox");
@@ -374,7 +375,7 @@ describe("main.ts message loop", () => {
     // The selection affordance now commits the re-anchor.
     const here = document.querySelector(".pmk-reanchor-here") as HTMLButtonElement;
     expect(here).not.toBeNull();
-    expect(here.textContent).toContain("Re-anchor here");
+    expect(here.textContent).toBe("Re-anchor here");
     here.click();
 
     const posted = getMock()._messages;

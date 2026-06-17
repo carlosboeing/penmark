@@ -107,7 +107,7 @@ export function installTopbar(
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "pmk-topbar-btn pmk-topbar-comments";
-    toggle.textContent = `💬 Comments (${comments.openCount})`; // 💬
+    toggle.textContent = `Comments (${comments.openCount})`;
     toggle.addEventListener("click", () => comments.onToggleDrawer());
     container.appendChild(toggle);
   }
