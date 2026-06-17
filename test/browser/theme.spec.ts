@@ -74,3 +74,36 @@ for (const theme of ["light", "dark"] as const) {
     });
   });
 }
+
+test("Penmark-owned UI semantic tokens are HSL-based", async ({ page }) => {
+  await page.goto("/");
+
+  await page.waitForFunction(() => {
+    const h = (window as Window & { __harness?: Harness }).__harness;
+    return h !== undefined && h.messages.length > 0;
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    await renderShowcase(page, theme);
+    await expect(page.locator("body")).toHaveAttribute("data-theme", theme);
+
+    const tokens = await page.evaluate(() => {
+      const styles = getComputedStyle(document.body);
+      return {
+        panel: styles.getPropertyValue("--pmk-ui-panel").trim(),
+        elevated: styles.getPropertyValue("--pmk-ui-elevated").trim(),
+        border: styles.getPropertyValue("--pmk-ui-border").trim(),
+        focus: styles.getPropertyValue("--pmk-ui-focus").trim(),
+        shadow: styles.getPropertyValue("--pmk-ui-shadow").trim(),
+        warningBg: styles.getPropertyValue("--pmk-ui-warning-bg").trim(),
+      };
+    });
+
+    expect(tokens.panel, `${theme} panel`).toMatch(/^hsl\(/);
+    expect(tokens.elevated, `${theme} elevated`).toMatch(/^hsl\(/);
+    expect(tokens.border, `${theme} border`).toMatch(/^hsl\(/);
+    expect(tokens.focus, `${theme} focus`).toMatch(/^hsl\(/);
+    expect(tokens.warningBg, `${theme} warning background`).toMatch(/^hsl\(/);
+    expect(tokens.shadow, `${theme} shadow`).toContain("hsl(");
+  }
+});

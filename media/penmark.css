@@ -757,9 +757,9 @@ body.pmk-hl-strong {
   position: absolute;
   width: 330px;
   max-width: calc(100vw - 24px);
-  background-color: var(--pmk-color-bg);
+  background-color: var(--pmk-ui-elevated);
   color: var(--pmk-color-fg);
-  border: 1px solid var(--pmk-color-border-default);
+  border: 1px solid var(--pmk-ui-border);
   border-radius: 10px;
   box-shadow: var(--pmk-comment-popover-shadow);
   padding: 12px 14px;
@@ -843,7 +843,7 @@ body.pmk-hl-strong {
   background-color: var(--pmk-color-accent-hover);
 }
 .pmk-popover-btn:focus-visible {
-  outline: 2px solid var(--pmk-color-accent);
+  outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 2px;
 }
 
@@ -875,7 +875,7 @@ body.pmk-hl-strong {
   background-color: var(--pmk-color-accent-hover);
 }
 .pmk-add-comment-btn:focus-visible {
-  outline: 2px solid var(--pmk-color-accent);
+  outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 2px;
 }
 
@@ -885,9 +885,9 @@ body.pmk-hl-strong {
   position: absolute;
   width: 320px;
   max-width: calc(100vw - 24px);
-  background-color: var(--pmk-color-bg);
+  background-color: var(--pmk-ui-elevated);
   color: var(--pmk-color-fg);
-  border: 1px solid var(--pmk-color-border-default);
+  border: 1px solid var(--pmk-ui-border);
   border-radius: 10px;
   box-shadow: var(--pmk-comment-popover-shadow);
   padding: 12px;
@@ -902,12 +902,12 @@ body.pmk-hl-strong {
   line-height: 1.5;
   color: var(--pmk-color-fg);
   background-color: var(--pmk-color-bg);
-  border: 1px solid var(--pmk-color-border-default);
+  border: 1px solid var(--pmk-ui-border);
   border-radius: 6px;
   padding: 7px 9px;
 }
 .pmk-commentbox-input:focus-visible {
-  outline: 2px solid var(--pmk-color-accent);
+  outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 1px;
   border-color: transparent;
 }
@@ -939,7 +939,7 @@ body.pmk-hl-strong {
   background-color: var(--pmk-color-accent-hover);
 }
 .pmk-commentbox-btn:focus-visible {
-  outline: 2px solid var(--pmk-color-accent);
+  outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 2px;
 }
 
@@ -1000,9 +1000,9 @@ body.pmk-hl-strong {
   max-width: 88vw;
   display: flex;
   flex-direction: column;
-  background-color: var(--pmk-color-bg);
+  background-color: var(--pmk-ui-elevated);
   color: var(--pmk-color-fg);
-  border-left: 1px solid var(--pmk-color-border-default);
+  border-left: 1px solid var(--pmk-ui-border);
   box-shadow: var(--pmk-comment-popover-shadow);
   transform: translateX(100%);
   transition: transform 180ms ease;
@@ -1019,7 +1019,7 @@ body.pmk-hl-strong {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--pmk-color-border-muted);
+  border-bottom: 1px solid var(--pmk-ui-border-muted);
 }
 
 .pmk-settings-title {
@@ -1034,7 +1034,7 @@ body.pmk-hl-strong {
   font-size: 12px;
   color: var(--pmk-color-fg-muted);
   background-color: transparent;
-  border: 1px solid var(--pmk-color-border-muted);
+  border: 1px solid var(--pmk-ui-border-muted);
   border-radius: 6px;
   padding: 4px 10px;
 }
@@ -1047,7 +1047,7 @@ body.pmk-hl-strong {
 .pmk-settings-close:focus-visible,
 .pmk-settings-option:focus-visible,
 .pmk-settings-line-height:focus-visible {
-  outline: 2px solid var(--pmk-color-accent);
+  outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 2px;
 }
 
@@ -1117,8 +1117,8 @@ body.pmk-hl-strong {
   min-height: 30px;
   box-sizing: border-box;
   color: var(--pmk-color-fg);
-  background-color: var(--pmk-color-bg);
-  border: 1px solid var(--pmk-color-border-default);
+  background-color: var(--pmk-ui-elevated);
+  border: 1px solid var(--pmk-ui-border);
   border-radius: 7px;
   padding: 5px 8px;
   font: inherit;
@@ -1136,8 +1136,8 @@ body.pmk-hl-strong {
   max-width: 86vw;
   display: flex;
   flex-direction: column;
-  background-color: var(--pmk-color-bg);
-  border-left: 1px solid var(--pmk-color-border-default);
+  background-color: var(--pmk-ui-elevated);
+  border-left: 1px solid var(--pmk-ui-border);
   box-shadow: var(--pmk-comment-popover-shadow);
   transform: translateX(100%);
   transition: transform 160ms ease;
@@ -1168,7 +1168,7 @@ body.pmk-hl-strong {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--pmk-color-border-muted);
+  border-bottom: 1px solid var(--pmk-ui-border-muted);
 }
 .pmk-drawer-title {
   font-weight: 600;
@@ -1189,7 +1189,7 @@ body.pmk-hl-strong {
   background-color: var(--pmk-topbar-btn-hover-bg);
 }
 .pmk-drawer-close:focus-visible {
-  outline: 2px solid var(--pmk-color-accent);
+  outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 1px;
 }
 
@@ -1216,9 +1216,9 @@ body.pmk-hl-strong {
 .pmk-drawer-card {
   margin-bottom: 10px;
   padding: 10px;
-  border: 1px solid var(--pmk-color-border-muted);
+  border: 1px solid var(--pmk-ui-border-muted);
   border-radius: 8px;
-  background-color: var(--pmk-color-bg);
+  background-color: var(--pmk-ui-elevated);
 }
 .pmk-drawer-card.attention {
   border-style: dashed;
@@ -1239,7 +1239,7 @@ body.pmk-hl-strong {
   font-size: 10.5px;
   color: var(--pmk-color-fg-muted);
   background-color: var(--pmk-color-bg-muted);
-  border: 1px solid var(--pmk-color-border-muted);
+  border: 1px solid var(--pmk-ui-border-muted);
 }
 .pmk-drawer-status-orphan,
 .pmk-drawer-status-content-removed {
@@ -1289,7 +1289,7 @@ body.pmk-hl-strong {
   text-decoration: underline;
 }
 .pmk-drawer-action:focus-visible {
-  outline: 2px solid var(--pmk-color-accent);
+  outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 2px;
   border-radius: 3px;
 }
@@ -1358,9 +1358,9 @@ body.pmk-hl-strong {
   width: calc(100% - 160px);
   max-width: 1440px;
   padding: 10px 14px;
-  border: 1px solid var(--pmk-color-border-muted);
+  border: 1px solid var(--pmk-ui-border-muted);
   border-radius: 8px;
-  background-color: var(--pmk-color-bg-muted);
+  background-color: var(--pmk-ui-panel);
   font-size: 0.9em;
 }
 
@@ -1397,8 +1397,8 @@ body.pmk-hl-strong {
 
 .pmk-frontmatter-tag {
   color: var(--pmk-color-fg-muted);
-  background-color: var(--pmk-color-bg);
-  border: 1px solid var(--pmk-color-border-muted);
+  background-color: var(--pmk-ui-elevated);
+  border: 1px solid var(--pmk-ui-border-muted);
 }
 
 .pmk-frontmatter-fields {
@@ -1443,7 +1443,7 @@ body.pmk-hl-strong {
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 12px;
-  background-color: var(--pmk-color-bg);
-  border: 1px solid var(--pmk-color-border-default);
+  background-color: var(--pmk-ui-elevated);
+  border: 1px solid var(--pmk-ui-border);
   box-shadow: var(--pmk-comment-popover-shadow);
 }
