@@ -80,10 +80,18 @@ export function __resetConfig(): void {
 export const workspace = {
   /** WorkspaceEdits passed to applyEdit, in call order (test seam). */
   _appliedEdits: [] as WorkspaceEdit[],
+  /** Configuration writes via getConfiguration().update(), in call order. */
+  _configUpdates: [] as Array<{
+    section: string;
+    key: string;
+    value: unknown;
+    target: unknown;
+  }>,
   /** Files written via workspace.fs.writeFile, keyed by fsPath (test seam). */
   _writtenFiles: new Map<string, string>(),
   _resetEdits(): void {
     this._appliedEdits.length = 0;
+    this._configUpdates.length = 0;
     this._writtenFiles.clear();
   },
   /** Minimal FileSystem: records writeFile so tests can assert the file path/content. */
@@ -104,6 +112,12 @@ export const workspace = {
       get<T>(key: string, defaultValue?: T): T | undefined {
         return key in values ? (values[key] as T) : defaultValue;
       },
+      update(key: string, value: unknown, target: unknown): Promise<void> {
+        workspace._configUpdates.push({ section, key, value, target });
+        values[key] = value;
+        configStore.set(section, values);
+        return Promise.resolve();
+      },
     };
   },
   applyEdit(edit: WorkspaceEdit): Promise<boolean> {
@@ -113,6 +127,13 @@ export const workspace = {
 };
 
 export const window = {
+  visibleTextEditors: [] as Array<{
+    document: { uri: { toString: () => string } };
+    edit: (
+      callback: (builder: { replace: (range: Range, newText: string) => void }) => void,
+      options?: { undoStopBefore: boolean; undoStopAfter: boolean },
+    ) => Promise<boolean>;
+  }>,
   _warnings: [] as string[],
   _infos: [] as string[],
   /** Lines written to any "Penmark" output channel (test seam). */

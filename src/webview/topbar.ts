@@ -25,6 +25,11 @@ export interface TopbarCommentsOpts {
   onOpenAttention: () => void;
 }
 
+export interface TopbarSettingsOpts {
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
+}
+
 /**
  * Install (or re-install) the topbar into `container`.
  *
@@ -40,6 +45,7 @@ export function installTopbar(
   docName: string,
   postMessage: (msg: unknown) => void,
   comments?: TopbarCommentsOpts,
+  settings?: TopbarSettingsOpts,
 ): void {
   // Clear previous content safely.
   while (container.firstChild) {
@@ -86,12 +92,22 @@ export function installTopbar(
 
   container.appendChild(switcher);
 
+  if (settings) {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "pmk-topbar-btn pmk-topbar-settings";
+    toggle.textContent = "Preview settings";
+    toggle.setAttribute("aria-expanded", settings.settingsOpen ? "true" : "false");
+    toggle.addEventListener("click", () => settings.onToggleSettings());
+    container.appendChild(toggle);
+  }
+
   // Comments drawer toggle (R15).
   if (comments) {
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "pmk-topbar-btn pmk-topbar-comments";
-    toggle.textContent = `💬 Comments (${comments.openCount})`; // 💬
+    toggle.textContent = `Comments (${comments.openCount})`;
     toggle.addEventListener("click", () => comments.onToggleDrawer());
     container.appendChild(toggle);
   }

@@ -22,12 +22,22 @@ export default defineConfig({
             // §8 desync scenarios + real-git concurrent-merge scenarios (design §11).
             "test/golden/reconcile/**/*.test.ts",
             "test/golden/merge/**/*.test.ts",
+          ],
+          environment: "node",
+          sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        test: {
+          name: "perf",
+          include: [
             // T12 layer-1 performance bench: first-render budget over the host
-            // pipeline (design §8). Imports src/core only, so it adds coverage
-            // rather than diluting it. PERF_MULTIPLIER=1.5 in CI (see ci.yml).
+            // pipeline (design §8). Run after the parallel projects so CI runner
+            // contention does not become the measured subject.
             "test/perf/**/*.test.ts",
           ],
           environment: "node",
+          sequence: { groupOrder: 1 },
         },
       },
       {
@@ -36,6 +46,7 @@ export default defineConfig({
           include: ["src/webview/**/*.test.ts", "test/unit/webview/**/*.test.ts"],
           environment: "jsdom",
           setupFiles: ["test/setup/vscode-api-mock.ts"],
+          sequence: { groupOrder: 0 },
         },
       },
       {
@@ -46,6 +57,7 @@ export default defineConfig({
           name: "host",
           include: ["src/vscode/**/*.test.ts", "test/unit/vscode/**/*.test.ts"],
           environment: "node",
+          sequence: { groupOrder: 0 },
         },
       },
     ],

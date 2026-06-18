@@ -2,6 +2,8 @@
 
 Penmark is configured through standard editor settings (the Settings UI, or `settings.json`). All settings live under the `penmark.*` namespace. They can be set at user or workspace scope, and apply to the preview the next time it is opened.
 
+The preview top bar also includes **Preview settings**, a webview-native panel for the most common reading controls. Changes made there are persisted to the same `penmark.*` settings and reflected in the open preview immediately where possible.
+
 ## Settings
 
 | Setting | Type | Default | Description |
@@ -66,4 +68,4 @@ When the preview panel has focus:
 
 Workspace settings (`.vscode/settings.json`) override user settings, so you can pin a per-project preview style.
 
-Most settings take effect when the preview is next opened. If a change does not appear, close and reopen the Penmark preview.
+Theme, content width, typography preset, text size, line height, and highlight intensity are exposed in the preview settings panel for quick adjustment. Settings changed outside the preview generally take effect when the preview is next opened. If a change does not appear, close and reopen the Penmark preview.

@@ -74,7 +74,7 @@ describe("openCommentPopover", () => {
     const resolve = document.querySelector(
       ".pmk-popover-actions button.primary",
     ) as HTMLButtonElement;
-    expect(resolve.textContent).toContain("Resolve");
+    expect(resolve.textContent).toBe("Resolve");
     resolve.click();
 
     expect(post).toHaveBeenCalledWith({ v: 1, type: "resolveComment", id: "zzzz2345" });

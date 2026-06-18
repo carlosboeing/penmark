@@ -45,9 +45,20 @@ body[data-theme="dark"] {
   --pmk-color-table-bg-header: #151b23;
   --pmk-color-table-bg-row-alt: #151b23;
 
+  /* Penmark UI chrome */
+  --pmk-ui-panel: hsl(216 24% 10%);
+  --pmk-ui-elevated: hsl(216 22% 13%);
+  --pmk-ui-border: hsl(214 16% 27%);
+  --pmk-ui-border-muted: hsl(216 14% 22%);
+  --pmk-ui-focus: hsl(212 92% 63%);
+  --pmk-ui-shadow: 0 18px 42px hsl(220 40% 2% / 0.58);
+  --pmk-ui-warning-bg: hsl(38 48% 16%);
+  --pmk-ui-warning-fg: hsl(42 78% 63%);
+  --pmk-ui-warning-border: hsl(36 75% 42%);
+
   /* Topbar */
-  --pmk-topbar-bg: #161b22;
-  --pmk-topbar-border: #3d444d;
+  --pmk-topbar-bg: var(--pmk-ui-panel);
+  --pmk-topbar-border: var(--pmk-ui-border);
   --pmk-topbar-fg: #f0f6fc;
   --pmk-topbar-btn-active-bg: #1c2d3f;
   --pmk-topbar-btn-active-fg: #4493f8;
@@ -68,14 +79,14 @@ body[data-theme="dark"] {
 
   /* Comments (R11) — highlight tint, gutter dot, popover, avatars */
   --pmk-comment-hl-rgb: 187, 153, 0;
-  --pmk-comment-hl-border: #9e6a03;
-  --pmk-comment-popover-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --pmk-comment-hl-border: var(--pmk-ui-warning-border);
+  --pmk-comment-popover-shadow: var(--pmk-ui-shadow);
   --pmk-comment-avatar-fg: #ffffff;
   --pmk-comment-avatar-human: #1f6feb;
   --pmk-comment-avatar-agent: #8957e5;
-  --pmk-comment-note-bg: #3a2d12;
-  --pmk-comment-note-fg: #d3a93c;
-  --pmk-comment-note-border: #9e6a03;
+  --pmk-comment-note-bg: var(--pmk-ui-warning-bg);
+  --pmk-comment-note-fg: var(--pmk-ui-warning-fg);
+  --pmk-comment-note-border: var(--pmk-ui-warning-border);
 
   /* Syntax highlighting (highlight.js token classes) — GitHub dark palette */
   --pmk-hljs-comment: #8b949e;

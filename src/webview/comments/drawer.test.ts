@@ -155,6 +155,19 @@ describe("drawer", () => {
     expect(post).toHaveBeenCalledWith({ v: 1, type: "resolveComment", id: "open0001" });
   });
 
+  it("uses plain text action labels without emoji glyphs", () => {
+    renderDrawer(ALL);
+    const actions = Array.from(document.querySelectorAll(".pmk-drawer-action")).map((btn) =>
+      btn.textContent?.trim(),
+    );
+    expect(actions).toContain("Open");
+    expect(actions).toContain("Edit");
+    expect(actions).toContain("Resolve");
+    expect(actions).toContain("Re-anchor");
+    expect(actions).toContain("Delete");
+    expect(actions.join(" ")).not.toMatch(/[✓↻🗑]/u);
+  });
+
   it("renders the needs-attention section listing orphan + content-removed (quote preserved)", () => {
     renderDrawer(ALL);
     const cards = attentionCards();

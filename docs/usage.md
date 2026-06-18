@@ -15,9 +15,10 @@ A preview panel opens beside the editor.
 ## Reading
 
 - **GitHub-flavored markdown** — tables, task lists, footnotes, strikethrough, autolinks, and GitHub-compatible heading anchors.
-- **Themes** — light, dark, or auto (follows the IDE), set by `penmark.theme`. See [configuration.md](configuration.md).
+- **Preview settings panel** — use **Preview settings** in the top bar to adjust theme, typography preset, text size, content width, comment-highlight intensity, and line height without leaving the preview. The panel writes the same `penmark.*` settings documented in [configuration.md](configuration.md).
+- **Themes** — light, dark, or auto (follows the IDE), set from the settings panel or by `penmark.theme`. See [configuration.md](configuration.md).
 - **Syntax highlighting** — code blocks are highlighted (highlight.js, loaded only when a language-tagged block exists), with a one-click **Copy** button.
-- **Mermaid diagrams** — rendered lazily; click a diagram to open a pan/zoom lightbox. Toggle with `penmark.mermaid.enabled`.
+- **Mermaid diagrams and images** — Mermaid diagrams render lazily; click a diagram or preview image to open a lightbox with zoom controls. Toggle Mermaid rendering with `penmark.mermaid.enabled`.
 - **Scroll sync** — the editor and preview scroll together in both directions; toggle with `penmark.scrollSync`.
 
 ## Reviewing

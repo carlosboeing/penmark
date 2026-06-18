@@ -40,6 +40,19 @@ describe("installTopbar", () => {
     expect(modes).toContain("auto");
   });
 
+  it("renders a Preview settings toggle when settings opts are passed", () => {
+    const onToggleSettings = vi.fn();
+    installTopbar(document.getElementById("penmark-topbar")!, "test.md", makePostMessage(), undefined, {
+      onToggleSettings,
+      settingsOpen: false,
+    });
+    const toggle = document.querySelector(".pmk-topbar-settings") as HTMLButtonElement;
+    expect(toggle).not.toBeNull();
+    expect(toggle.textContent).toContain("Preview settings");
+    toggle.click();
+    expect(onToggleSettings).toHaveBeenCalledTimes(1);
+  });
+
   it("clicking the light button posts {v:1,type:'themeSelected',theme:'light'}", () => {
     const post = makePostMessage();
     installTopbar(document.getElementById("penmark-topbar")!, "test.md", post);
@@ -84,10 +97,11 @@ describe("installTopbar", () => {
       attention: 0,
       onToggleDrawer: vi.fn(),
       onOpenAttention: vi.fn(),
-    });
+    }, { onToggleSettings: vi.fn(), settingsOpen: false });
     const toggle = topbar().querySelector(".pmk-topbar-comments") as HTMLButtonElement;
     expect(toggle).not.toBeNull();
     expect(toggle.textContent).toContain("3");
+    expect(toggle.textContent).toBe("Comments (3)");
   });
 
   it("clicking the Comments toggle invokes onToggleDrawer", () => {
@@ -97,7 +111,7 @@ describe("installTopbar", () => {
       attention: 0,
       onToggleDrawer,
       onOpenAttention: vi.fn(),
-    });
+    }, { onToggleSettings: vi.fn(), settingsOpen: false });
     (topbar().querySelector(".pmk-topbar-comments") as HTMLButtonElement).click();
     expect(onToggleDrawer).toHaveBeenCalledTimes(1);
   });

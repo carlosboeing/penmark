@@ -1,8 +1,16 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import type { ContentWidth, HostToWebview, ThemeMode } from "../core/protocol/messages.js";
-import { resolveTypography, type TypographySettings } from "../core/settings/typography.js";
-import { buildShellHtml, generateNonce, type HighlightIntensity } from "./html.js";
+import type {
+  ContentWidth,
+  HighlightIntensity,
+  HostToWebview,
+  PreviewSettingKey,
+  PreviewSettingValue,
+  PreviewSettingsState,
+  ThemeMode,
+} from "../core/protocol/messages.js";
+import { resolveTypography, type PresetName, type TextSize, type TypographySettings } from "../core/settings/typography.js";
+import { buildShellHtml, generateNonce } from "./html.js";
 import { loadHighlighterIfNeeded } from "./hljsLoader.js";
 import {
   analyzeComments,
@@ -152,18 +160,61 @@ function configuredHighlightIntensity(): HighlightIntensity {
     .get<HighlightIntensity>("comments.highlightIntensity", "medium");
 }
 
+const VALID_SETTING_VALUES = {
+  theme: ["light", "dark", "auto"],
+  preset: ["github", "reading", "compact", "focus", "print", "custom"],
+  textSize: ["small", "medium", "large", "x-large"],
+  contentWidth: ["comfortable", "wide", "full"],
+  "comments.highlightIntensity": ["subtle", "medium", "strong"],
+} as const;
+
+function isStringSettingValue(key: PreviewSettingKey, value: PreviewSettingValue): boolean {
+  if (key === "lineHeight") return false;
+  return (
+    typeof value === "string" &&
+    (VALID_SETTING_VALUES[key] as readonly string[]).includes(value)
+  );
+}
+
+function isLineHeightValue(value: PreviewSettingValue): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 2.5;
+}
+
+export async function handleUpdateSetting(
+  key: PreviewSettingKey,
+  value: PreviewSettingValue,
+): Promise<void> {
+  if (key === "lineHeight") {
+    if (!isLineHeightValue(value)) return;
+  } else if (!isStringSettingValue(key, value)) {
+    return;
+  }
+
+  await vscode.workspace
+    .getConfiguration("penmark")
+    .update(key, value, vscode.ConfigurationTarget.Global);
+}
+
 /** Resolved typography from penmark.* settings (v1.0 polish). */
 function configuredTypography(): TypographySettings {
+  const settings = configuredPreviewSettings();
+  return resolveTypography({
+    ...settings,
+    lineHeight: settings.lineHeight > 0 ? settings.lineHeight : undefined,
+  });
+}
+
+function configuredPreviewSettings(): PreviewSettingsState {
   const cfg = vscode.workspace.getConfiguration("penmark");
   const lineHeight = cfg.get<number>("lineHeight", 0);
-  return resolveTypography({
-    preset: cfg.get<string>("preset"),
-    textSize: cfg.get<string>("textSize"),
-    fontFamily: cfg.get<string>("fontFamily"),
-    headingFontFamily: cfg.get<string>("headingFontFamily"),
-    lineHeight: lineHeight > 0 ? lineHeight : undefined,
-    contentWidth: cfg.get<ContentWidth>("contentWidth"),
-  });
+  return {
+    theme: configuredTheme(),
+    preset: cfg.get<PresetName>("preset", "github"),
+    textSize: cfg.get<TextSize>("textSize", "medium"),
+    contentWidth: configuredContentWidth(),
+    highlightIntensity: configuredHighlightIntensity(),
+    lineHeight,
+  };
 }
 
 /**
@@ -175,6 +226,42 @@ function findEditorForEntry(entry: PanelEntry): vscode.TextEditor | undefined {
   return vscode.window.visibleTextEditors.find(
     (e) => e.document.uri.toString() === entry.document!.uri.toString(),
   );
+}
+
+function findVisibleEditorForDocument(document: vscode.TextDocument): vscode.TextEditor | undefined {
+  return vscode.window.visibleTextEditors.find(
+    (e) => e.document.uri.toString() === document.uri.toString(),
+  );
+}
+
+async function applyDocumentTextEdits(
+  document: vscode.TextDocument,
+  edits: Array<{ start: number; end: number; newText: string }>,
+): Promise<void> {
+  const editor = findVisibleEditorForDocument(document);
+  if (editor) {
+    const applied = await editor.edit(
+      (builder) => {
+        for (const e of edits) {
+          builder.replace(
+            new vscode.Range(document.positionAt(e.start), document.positionAt(e.end)),
+            e.newText,
+          );
+        }
+      },
+      { undoStopBefore: true, undoStopAfter: true },
+    );
+    if (!applied) {
+      throw new Error("Penmark: failed to apply comment edit");
+    }
+    return;
+  }
+
+  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (!applied) {
+    throw new Error("Penmark: failed to apply comment edit");
+  }
 }
 
 /**
@@ -326,11 +413,7 @@ export async function handleAddComment(
     );
     return;
   }
-  const edit = offsetEditsToWorkspaceEdit(document.uri, document, plan.edits);
-  await vscode.workspace.applyEdit(edit);
-  if (typeof document.save === "function") {
-    await document.save();
-  }
+  await applyDocumentTextEdits(document, plan.edits);
 }
 
 /**
@@ -343,11 +426,7 @@ export async function handleResolveComment(
 ): Promise<void> {
   const edits = planResolveComment(document.getText(), id);
   if (edits.length === 0) return;
-  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
-  await vscode.workspace.applyEdit(edit);
-  if (typeof document.save === "function") {
-    await document.save();
-  }
+  await applyDocumentTextEdits(document, edits);
 }
 
 /**
@@ -361,11 +440,7 @@ export async function handleEditComment(
 ): Promise<void> {
   const edits = planEditComment(document.getText(), id, newBody);
   if (!edits || edits.length === 0) return;
-  const edit = offsetEditsToWorkspaceEdit(document.uri, document, edits);
-  await vscode.workspace.applyEdit(edit);
-  if (typeof document.save === "function") {
-    await document.save();
-  }
+  await applyDocumentTextEdits(document, edits);
 }
 
 /**
@@ -456,6 +531,7 @@ async function postRender(entry: PanelEntry, document: vscode.TextDocument): Pro
     configuredMermaidEnabled(),
     analysis,
     configuredTypography(),
+    configuredPreviewSettings(),
   );
   entry.lastRenderMessage = msg;
   entry.renderCount++;
@@ -535,6 +611,18 @@ function setupPanelEntry(
           void vscode.workspace
             .getConfiguration("penmark")
             .update("theme", theme, vscode.ConfigurationTarget.Global);
+        }
+        break;
+      }
+
+      case "updateSetting": {
+        const key = (message as { key?: unknown }).key;
+        const value = (message as { value?: unknown }).value;
+        if (
+          typeof key === "string" &&
+          (typeof value === "string" || typeof value === "number")
+        ) {
+          void handleUpdateSetting(key as PreviewSettingKey, value);
         }
         break;
       }

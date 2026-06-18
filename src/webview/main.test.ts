@@ -80,9 +80,61 @@ describe("main.ts message loop", () => {
       docName: "test.md",
       comments: [],
       attention: 0,
+      settings: {
+        theme: "light",
+        preset: "github",
+        textSize: "medium",
+        contentWidth: "full",
+        highlightIntensity: "medium",
+        lineHeight: 0,
+      },
     });
 
     expect(root!.textContent).toContain("Content");
+  });
+
+  it("opens preview settings and posts setting updates with local class feedback", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Content</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+      settings: {
+        theme: "light",
+        preset: "github",
+        textSize: "medium",
+        contentWidth: "full",
+        highlightIntensity: "medium",
+        lineHeight: 0,
+      },
+    });
+
+    (document.querySelector(".pmk-topbar-settings") as HTMLButtonElement).click();
+    expect(document.querySelector(".pmk-settings-panel")!.getAttribute("aria-hidden")).toBe(
+      "false",
+    );
+
+    clearMessages();
+    (document.querySelector('[data-pmk-setting="contentWidth"][data-value="comfortable"]') as HTMLButtonElement).click();
+    (document.querySelector('[data-pmk-setting="comments.highlightIntensity"][data-value="strong"]') as HTMLButtonElement).click();
+
+    expect(document.body.classList.contains("pmk-content-comfortable")).toBe(true);
+    expect(document.body.classList.contains("pmk-hl-strong")).toBe(true);
+    expect(getMock()._messages).toContainEqual({
+      v: 1,
+      type: "updateSetting",
+      key: "contentWidth",
+      value: "comfortable",
+    });
+    expect(getMock()._messages).toContainEqual({
+      v: 1,
+      type: "updateSetting",
+      key: "comments.highlightIntensity",
+      value: "strong",
+    });
   });
 
   it("a 'render' message sanitizes XSS vectors before inserting into DOM", () => {
@@ -184,6 +236,7 @@ describe("main.ts message loop", () => {
 
     const addBtn = document.querySelector(".pmk-add-comment-btn") as HTMLButtonElement;
     expect(addBtn).not.toBeNull();
+    expect(addBtn.textContent).toBe("Add comment");
 
     addBtn.click();
     const box = document.querySelector(".pmk-commentbox");
@@ -322,7 +375,7 @@ describe("main.ts message loop", () => {
     // The selection affordance now commits the re-anchor.
     const here = document.querySelector(".pmk-reanchor-here") as HTMLButtonElement;
     expect(here).not.toBeNull();
-    expect(here.textContent).toContain("Re-anchor here");
+    expect(here.textContent).toBe("Re-anchor here");
     here.click();
 
     const posted = getMock()._messages;
