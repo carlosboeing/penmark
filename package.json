@@ -235,7 +235,7 @@
     "serialize-javascript": "7.0.5"
   },
   "dependencies": {
-    "dompurify": "3.4.10",
+    "dompurify": "3.4.11",
     "github-markdown-css": "5.9.0",
     "github-slugger": "2.0.0",
     "highlight.js": "11.11.1",
