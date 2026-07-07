@@ -93,7 +93,32 @@ export type HostToWebview =
   | { v: 1; type: "setContentWidth"; contentWidth: ContentWidth }
   | { v: 1; type: "setTypography"; typography: TypographySettings }
   | { v: 1; type: "revealLine"; line: number }
-  | { v: 1; type: "copied" };
+  | { v: 1; type: "copied" }
+  // Export capture (R17): ask the webview to force-render all mermaid diagrams,
+  // strip preview-only chrome from a clone of the rendered DOM, and post the
+  // serialized result back as `exportCaptured` with the same requestId.
+  | { v: 1; type: "exportCapture"; requestId: string };
+
+/**
+ * Serialized preview DOM posted back for an `exportCapture` request (R17).
+ * `html` is the cleaned `#penmark-root` innerHTML — already DOMPurify-sanitized
+ * (it came out of the live preview DOM) with preview-only chrome stripped.
+ */
+export interface ExportCapturedPayload {
+  requestId: string;
+  ok: boolean;
+  /** Present when ok=false: what went wrong (surfaced to the user). */
+  error?: string;
+  html: string;
+  /** Outer HTML of the frontmatter card, when the document has frontmatter. */
+  frontmatterHtml?: string;
+  /** Resolved preview theme at capture time (never "auto"). */
+  theme: "light" | "dark";
+  /** The `pmk-content-*` class active on the body at capture time. */
+  contentWidth: ContentWidth;
+  /** Inline style of #penmark-root (typography CSS custom properties). */
+  rootStyle: string;
+}
 
 /** Messages sent from the webview to the extension host. */
 export type WebviewToHost =
@@ -114,4 +139,5 @@ export type WebviewToHost =
   | { v: 1; type: "editComment"; id: string; body: string }
   | { v: 1; type: "jumpToSource"; id: string }
   | { v: 1; type: "exportReview" }
-  | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean };
+  | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean }
+  | ({ v: 1; type: "exportCaptured" } & ExportCapturedPayload);

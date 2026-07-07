@@ -51,6 +51,7 @@ import { installLinkHandler } from "./links.js";
 import { ensureMermaid, hasMermaid, isMermaidLoaded } from "./mermaidLoader.js";
 import { lineToScrollTop, readBlocks, scrollTopToLine } from "./scrollSync.js";
 import { selectionToSourceRange } from "./selection.js";
+import { captureExport } from "./export.js";
 import { resolveTheme, applyResolvedTheme, observeIdeTheme } from "./theme.js";
 import { installTopbar } from "./topbar.js";
 import { applyTypography } from "./typography.js";
@@ -317,6 +318,14 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
   renderSettingsPanel(next);
 }
 
+/** The content-width preset currently active on <body> (shell or live update). */
+function currentContentWidth(): ContentWidth {
+  const cls = document.body.classList;
+  if (cls.contains("pmk-content-comfortable")) return "comfortable";
+  if (cls.contains("pmk-content-wide")) return "wide";
+  return "full";
+}
+
 // ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
@@ -327,6 +336,17 @@ let _selectionPreviewInstalled = false;
 
 /** Last doc name from a render, so a comments-only message can re-draw the topbar. */
 let _lastDocName = "";
+
+/**
+ * Whether at least one `render` has been processed. Export capture requests
+ * that arrive before the first render are IGNORED (not answered) — the host
+ * re-posts them until a rendered document exists, so an export can never
+ * serialize an empty root (R17).
+ */
+let _hasRendered = false;
+
+/** Export capture requestIds currently being processed (host retries are dropped). */
+const _exportCapturesInFlight = new Set<string>();
 
 /** Build the topbar's comments affordances (drawer toggle + attention chip). */
 function topbarCommentsOpts(
@@ -530,6 +550,7 @@ window.addEventListener("message", (event: MessageEvent) => {
 
       // Apply theme embedded in the render message.
       applyTheme(msg.theme);
+      _hasRendered = true;
 
       // Install/refresh the topbar with the current doc name + comments
       // affordances (drawer toggle + attention chip, R15).
@@ -726,6 +747,54 @@ window.addEventListener("message", (event: MessageEvent) => {
     case "copied": {
       // Host acked a copyCode round-trip — flash the last-clicked button.
       markLastCopied();
+      break;
+    }
+
+    case "exportCapture": {
+      // Serialize the preview for export (R17): force-render all diagrams,
+      // clean a clone, post the snapshot back correlated by requestId. Errors
+      // are reported (ok:false) rather than swallowed — the host surfaces them.
+      const requestId = msg.requestId;
+      // Not rendered yet: stay silent — the host retries until content exists.
+      if (!_hasRendered) break;
+      // The host retries every 500 ms in case a message was dropped pre-attach;
+      // drop retries for a request already being captured.
+      if (_exportCapturesInFlight.has(requestId)) break;
+      _exportCapturesInFlight.add(requestId);
+      void (async () => {
+        const theme = resolvedTheme();
+        const contentWidth = currentContentWidth();
+        try {
+          const root = getRoot();
+          if (!root) throw new Error("preview root not found");
+          const captured = await captureExport(root, theme);
+          vscode.postMessage({
+            v: 1,
+            type: "exportCaptured",
+            requestId,
+            ok: true,
+            html: captured.html,
+            frontmatterHtml: captured.frontmatterHtml,
+            theme,
+            contentWidth,
+            rootStyle: captured.rootStyle,
+          });
+        } catch (err) {
+          vscode.postMessage({
+            v: 1,
+            type: "exportCaptured",
+            requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+            html: "",
+            theme,
+            contentWidth,
+            rootStyle: "",
+          });
+        } finally {
+          _exportCapturesInFlight.delete(requestId);
+        }
+      })();
       break;
     }
   }

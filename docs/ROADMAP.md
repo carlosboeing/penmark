@@ -4,7 +4,8 @@ Forward view of the Penmark project: what's in flight, queued, parked, and recen
 
 ## In flight
 
-- **Codex UI/UX polish (feat/ui-ux-polish-codex)** — independent premium UI pass for comparison: in-preview settings panel, polished review chrome, HSL semantic tokens for Penmark-owned UI, metadata/lightbox refinements, and Playwright visual-regression coverage. PR open for review.
+- **Export to HTML / PDF (feat/export-html-pdf)** — `penmark.exportHtml` / `penmark.exportPdf`: self-contained, JavaScript-free HTML capturing the preview exactly (theme, typography preset, hljs, rendered mermaid SVGs, inlined images), and PDF printed via a system Chromium browser with `@page` setup and page-break discipline ([ADR 0007](adrs/0007-export-via-preview-capture.md)). Revisits the earlier "declined: PDF export" ruling on maintainer directive (2026-07-06) — markdown-native export only, DOCX still declined. Tested at every layer: unit, Playwright preview-vs-export fidelity + PDF print smoke, extension-host journey, plus a manual checklist ([guides/export-smoke-checklist.md](guides/export-smoke-checklist.md)).
+- **Codex UI/UX polish shipped (2026-06-18)** — independent premium UI pass: in-preview settings panel, polished review chrome, HSL semantic tokens for Penmark-owned UI, metadata/lightbox refinements, and Playwright visual-regression coverage. Merged as PR #12 (`feat/ui-ux-polish-codex`, branch deleted); the parallel `feat/ui-ux-polish` branch still holds unmerged commits pending a salvage/discard decision.
 - **v1.0 Polish (feat/v1-polish)** — typography presets/settings, image lightbox, interactive task checkboxes, frontmatter metadata card, keyboard navigation, two-block reconcile (§8.5), and exact selection→source mapping. PR open for review.
 - **v0.5.0 Review MVP shipped (2026-06-14)** — all v0.5 tasks R1–R17 merged per the v0.5 plan; inline comments (anchor format core, select-to-comment, highlights + gutter dots + resolve popover, drawer + needs-attention + attention chip, single-`WorkspaceEdit` add/resolve, reconcile degradation ladder, export-as-prompt) on a local-first VSIX on the `v0.5.0` GitHub Release. **Awaiting Carlos: the v0.5 manual cross-IDE smoke checklist** ([guides/release-smoke-checklist-v0.5.md](guides/release-smoke-checklist-v0.5.md)) — sideload the VSIX into VS Code / Cursor / Antigravity and run the add→resolve→drawer→orphan→export journey (the layer-4 / real-IDE verification deferred by plan D16) before the Review MVP is signed off.
 - **v0.1.0 Reading MVP shipped (2026-06-13)** — Phase 0 + all v0.1 tasks T1–T13 merged per the Phase 0 + v0.1 plan; local-first VSIX on the `v0.1.0` GitHub Release. **Awaiting Carlos: the manual cross-IDE smoke checklist** ([guides/release-smoke-checklist.md](guides/release-smoke-checklist.md)) — sideload the VSIX into VS Code / Cursor / Antigravity and confirm rendering, themes, highlighting, mermaid, copy buttons, and scroll sync before the MVP is signed off.
@@ -12,7 +13,7 @@ Forward view of the Penmark project: what's in flight, queued, parked, and recen
 ## Next actions
 
 - **Carlos:** run [guides/release-smoke-checklist-v0.5.md](guides/release-smoke-checklist-v0.5.md) against the `v0.5.0` VSIX across the three IDEs (add→resolve→drawer→orphan→export); file issues for any breakage. Also covers the still-open v0.1.0 reading-path smoke ([guides/release-smoke-checklist.md](guides/release-smoke-checklist.md)).
-- **Review:** compare the independent `feat/ui-ux-polish-codex` PR against the parallel UI/UX polish branch and choose the preferred direction before merging.
+- **Review:** the Codex polish PR (#12) won the comparison and merged 2026-06-18; decide whether to salvage or discard the remaining unmerged commits on `feat/ui-ux-polish` (webview paint hardening, perf CI tweaks).
 - **Next phase: v1.0 Polish** — in PR (`feat/v1-polish`): settings (fonts, sizes, line spacing, theme presets), image lightbox, interactive task checkboxes, frontmatter metadata card, keyboard navigation, performance pass, two-block reconcile, exact selection mapping.
 
 ## Planned release phases (per design §11)
@@ -47,7 +48,7 @@ Forward view of the Penmark project: what's in flight, queued, parked, and recen
 ## Parked
 
 - **Declined: Word/PPT preview** — scope creep outside the markdown mission (markdown-review tries this; it produced a 3,000-line god class).
-- **Declined: PDF/DOCX export** — vscode-markdown-pdf already owns this niche well; revisit only on strong user demand.
+- **Declined: DOCX export** — scope creep outside the markdown mission. *(PDF/HTML export was originally declined here too; that ruling was revisited on maintainer directive 2026-07-06 and shipped as [ADR 0007](adrs/0007-export-via-preview-capture.md) — see "In flight".)*
 - **Declined: real-time multi-user collaboration** — git is the collaboration layer for this product.
 - **Deferred: WYSIWYG editing** — v2 exploration at most (CustomTextEditor as `option`); the failure mode is markdown-docs (16 MB per tab).
 

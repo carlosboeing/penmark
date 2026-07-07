@@ -19,6 +19,8 @@
   "activationEvents": [
     "onCommand:penmark.openPreview",
     "onCommand:penmark.exportReview",
+    "onCommand:penmark.exportHtml",
+    "onCommand:penmark.exportPdf",
     "onCommand:penmark.openCustomEditor",
     "onWebviewPanel:penmark.preview",
     "onCustomEditor:penmark.previewEditor"
@@ -129,6 +131,20 @@
           "minimum": 1,
           "maximum": 2.5,
           "description": "Line height multiplier (e.g. 1.5). Zero uses the preset default."
+        },
+        "penmark.export.pdfPageSize": {
+          "type": "string",
+          "enum": [
+            "a4",
+            "letter"
+          ],
+          "default": "a4",
+          "description": "Paper size for 'Export as PDF' (and the print stylesheet of exported HTML)."
+        },
+        "penmark.export.chromiumPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a Chromium-based browser executable used for 'Export as PDF'. Empty auto-detects Chrome, Edge, Chromium, or Brave in their standard install locations."
         }
       }
     },
@@ -144,6 +160,16 @@
         "icon": "$(export)"
       },
       {
+        "command": "penmark.exportHtml",
+        "title": "Penmark: Export as HTML",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "penmark.exportPdf",
+        "title": "Penmark: Export as PDF",
+        "icon": "$(file-pdf)"
+      },
+      {
         "command": "penmark.openCustomEditor",
         "title": "Open with Penmark"
       }
@@ -157,6 +183,16 @@
         },
         {
           "command": "penmark.exportReview",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportHtml",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportPdf",
           "when": "resourceLangId == markdown",
           "group": "1_penmark"
         }
@@ -181,6 +217,16 @@
         },
         {
           "command": "penmark.exportReview",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportHtml",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportPdf",
           "when": "resourceLangId == markdown",
           "group": "1_penmark"
         }

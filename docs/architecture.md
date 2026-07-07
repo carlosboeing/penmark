@@ -47,6 +47,10 @@ A single reusable panel, with no `retainContextWhenHidden` — state is restored
 
 Mermaid is lazily imported only when a `mermaid` fence exists, rendered with `securityLevel: strict` and an `IntersectionObserver` for many-diagram documents; a failed diagram shows its source and error without breaking the page. Because mermaid emits styling that a strict nonce CSP would block, Penmark re-applies mermaid's intended inline styles via the CSSOM, scoped to the SVG, through a property allowlist (see the [ADR 0005](adrs/0005-markdown-it-render-pipeline.md) amendment).
 
+## Export (HTML / PDF)
+
+Export snapshots the preview instead of re-rendering ([ADR 0007](adrs/0007-export-via-preview-capture.md)): the host posts `exportCapture`, the webview force-renders every mermaid diagram (bypassing the lazy observer), strips preview chrome and comment-highlight markup from a clone, and posts the sanitized DOM back. The host wraps it into a self-contained, JavaScript-free HTML file — stylesheets inlined, theme and typography pinned, local images embedded as `data:` URIs, a defense-in-depth CSP meta — so the export equals the preview by construction. PDF prints that file with a system-installed Chromium-based browser (`--headless --print-to-pdf`, auto-discovered or `penmark.export.chromiumPath`), with `@page` size from `penmark.export.pdfPageSize` and print CSS that keeps code blocks, tables, and diagrams whole across pages. No print engine is bundled; without a local browser the command degrades to the HTML export.
+
 ## Performance budgets
 
 - Core VSIX under 1 MiB (the mermaid chunk is excluded and lazy).
@@ -73,3 +77,4 @@ These are enforced in CI by a bundle-size gate and a performance test layer.
 | [0004](adrs/0004-name-penmark-and-dual-publishing.md) | Name "Penmark"; distribution and publishing |
 | [0005](adrs/0005-markdown-it-render-pipeline.md) | markdown-it render pipeline and source offsets |
 | [0006](adrs/0006-span-anchor-wrapping-with-degradation-ladder.md) | Span-anchor wrapping pairs and the degradation ladder |
+| [0007](adrs/0007-export-via-preview-capture.md) | HTML/PDF export via preview-DOM capture; PDF via system Chromium |

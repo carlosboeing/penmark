@@ -127,11 +127,14 @@ describe("protocol/messages", () => {
           return msg.type;
         case "copied":
           return msg.type;
+        case "exportCapture":
+          return msg.type;
         default:
           return assertNever(msg);
       }
     };
     expect(handle({ v: 1, type: "comments", comments: [], attention: 0 })).toBe("comments");
+    expect(handle({ v: 1, type: "exportCapture", requestId: "r1" })).toBe("exportCapture");
   });
 
   it("exhaustively narrows every WebviewToHost variant", () => {
@@ -164,10 +167,42 @@ describe("protocol/messages", () => {
           return msg.type;
         case "toggleTaskCheckbox":
           return msg.type;
+        case "exportCaptured":
+          return msg.type;
         default:
           return assertNever(msg);
       }
     };
     expect(handle({ v: 1, type: "exportReview" })).toBe("exportReview");
+    expect(
+      handle({
+        v: 1,
+        type: "exportCaptured",
+        requestId: "r1",
+        ok: true,
+        html: "<p>hi</p>",
+        theme: "light",
+        contentWidth: "full",
+        rootStyle: "",
+      }),
+    ).toBe("exportCaptured");
+  });
+
+  it("exportCaptured carries the capture payload including a failure shape", () => {
+    const failed: WebviewToHost = {
+      v: 1,
+      type: "exportCaptured",
+      requestId: "r2",
+      ok: false,
+      error: "preview root not found",
+      html: "",
+      theme: "dark",
+      contentWidth: "comfortable",
+      rootStyle: "",
+    };
+    if (failed.type === "exportCaptured") {
+      expect(failed.ok).toBe(false);
+      expect(failed.error).toMatch(/root not found/);
+    }
   });
 });

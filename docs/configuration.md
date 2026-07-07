@@ -18,6 +18,8 @@ The preview top bar also includes **Preview settings**, a webview-native panel f
 | `penmark.fontFamily` | string | `""` | CSS `font-family` for body text. Empty uses the preset default. |
 | `penmark.headingFontFamily` | string | `""` | CSS `font-family` for headings. Empty uses the preset default. |
 | `penmark.lineHeight` | number | `0` | Line height multiplier (e.g. `1.5`). `0` uses the preset default. |
+| `penmark.export.pdfPageSize` | `a4` \| `letter` | `a4` | Paper size for **Export as PDF** (and the print stylesheet of exported HTML). |
+| `penmark.export.chromiumPath` | string | `""` | Path to a Chromium-based browser executable used for **Export as PDF**. Empty auto-detects Chrome, Edge, Chromium, or Brave in their standard install locations. |
 
 ### `penmark.contentWidth` values
 

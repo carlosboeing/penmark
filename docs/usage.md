@@ -31,6 +31,15 @@ The review workflow is Penmark's differentiator: comment on rendered prose the w
 4. **Drawer** — open the comments drawer to see every comment with jump-to. Comments orphaned by edits move to a **needs-attention** bucket with re-anchor and delete actions, and an amber attention chip appears in the top bar.
 5. **Export** — run **Penmark: Export Review as Prompt** to copy the open comments (or write them to a file) as a structured, agent-ready prompt.
 
+## Exporting
+
+Penmark exports the rendered document — not the raw markdown — so what you share looks exactly like the preview.
+
+- **Penmark: Export as HTML** writes a single self-contained `.html` file: the preview stylesheets, your typography preset, and the resolved theme are inlined; local images are embedded as `data:` URIs; Mermaid diagrams are included as fully rendered SVG. The file contains no JavaScript and opens identically in any browser.
+- **Penmark: Export as PDF** prints that same document with a Chromium-based browser already on your machine (Chrome, Edge, Chromium, or Brave — auto-detected, or set `penmark.export.chromiumPath`). Page size comes from `penmark.export.pdfPageSize` (A4 default); code blocks, tables, and diagrams are kept whole across page breaks. If no browser is found, Penmark offers the HTML export instead — open it in any browser and print to PDF from there.
+
+Both commands live in the editor title/context menus and the Command Palette. Exports capture the preview, so the preview opens if it is not already open. Review comments are **not** included — the export is the clean document; use **Export Review as Prompt** for the comments.
+
 ## How comments are stored
 
 Comments live **inside the same `.md` file**: invisible HTML-comment anchors (`pmk:` markers) in the text, plus one hidden review block at the end of the document. The file stays clean markdown that GitHub and other tools render without noise, and the comments survive Prettier, markdownlint, and 3-way git merges. Adding and resolving a comment are single, undoable edits.
@@ -43,3 +52,5 @@ The format is specified in [`spec/penmark-format.md`](../spec/penmark-format.md)
 | --- | --- | --- |
 | Penmark: Open Preview to the Side | `penmark.openPreview` | Open the rendered preview beside the editor. |
 | Penmark: Export Review as Prompt | `penmark.exportReview` | Export the open comments as an agent-ready prompt. |
+| Penmark: Export as HTML | `penmark.exportHtml` | Save the rendered document as a self-contained HTML file. |
+| Penmark: Export as PDF | `penmark.exportPdf` | Print the rendered document to PDF via a local Chromium-based browser. |

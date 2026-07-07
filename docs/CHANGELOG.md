@@ -2,7 +2,18 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
-## 2026-06-17 (in flight — feat/ui-ux-polish-codex)
+## 2026-07-07 (in flight — feat/export-html-pdf)
+
+### Export to HTML and PDF
+
+Two new commands export the rendered document with preview-exact fidelity ([ADR 0007](adrs/0007-export-via-preview-capture.md)):
+
+- **Penmark: Export as HTML** (`penmark.exportHtml`) — a single self-contained, JavaScript-free `.html` file: preview stylesheets and typography variables inlined, resolved theme pinned, syntax-highlighted code, mermaid diagrams as fully rendered SVG (below-the-fold diagrams force-rendered at capture), local images embedded as `data:` URIs, plus a defense-in-depth CSP. Review-comment highlights and preview chrome are stripped — the export is the clean document.
+- **Penmark: Export as PDF** (`penmark.exportPdf`) — prints the same document via a system-installed Chromium-based browser (Chrome/Edge/Chromium/Brave auto-discovery, `penmark.export.chromiumPath` override; nothing is bundled). `@page` size from `penmark.export.pdfPageSize` (a4/letter), 18 mm margins, exact color reproduction, and page-break rules that keep code blocks, tables, rows, images, and diagrams whole. Degrades to the HTML export when no browser is found.
+- **Mechanism** — the export captures the preview webview's sanitized DOM (new `exportCapture`/`exportCaptured` protocol messages) rather than re-rendering host-side, so the output equals the preview by construction; a new `renderMermaidAll` bypasses the lazy IntersectionObserver during capture.
+- **Tests** — unit suites for the document builder, capture cleaning, image inlining, and the PDF printer; Playwright preview-vs-export fidelity comparisons (computed styles, geometry, and mermaid SVG identical in light and dark) plus a real `--print-to-pdf` smoke through the production spawn path; an extension-host journey test (command → webview capture → self-contained file, PDF when a browser is present); and a manual cross-IDE checklist ([guides/export-smoke-checklist.md](guides/export-smoke-checklist.md)).
+
+## 2026-06-18 (Codex UI/UX polish — merged as PR #12)
 
 ### Codex UI/UX polish — preview settings and premium review chrome
 

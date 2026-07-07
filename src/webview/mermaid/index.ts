@@ -166,3 +166,27 @@ export function renderMermaid(root: HTMLElement, theme: "light" | "dark"): void 
     observer.observe(el);
   }
 }
+
+/**
+ * Render EVERY .pmk-mermaid container under `root` immediately — no
+ * IntersectionObserver — and resolve when all are done (R17, export capture).
+ * A serialized export must include below-the-fold diagrams the lazy path has
+ * not reached yet. Containers already rendered with the current source+theme
+ * are skipped (renderContainer's marker check), so an up-to-date preview pays
+ * nothing. Failures are contained per diagram (the error view is itself valid
+ * export content), so this never rejects.
+ */
+export async function renderMermaidAll(root: HTMLElement, theme: "light" | "dark"): Promise<void> {
+  const themeChanged = theme !== _currentTheme;
+  initMermaid(theme);
+
+  const containers = root.querySelectorAll<HTMLElement>(".pmk-mermaid");
+  for (const el of containers) {
+    if (themeChanged) {
+      el.removeAttribute(RENDERED_SOURCE_ATTR);
+    }
+    // Stop any pending lazy render on this container — we render it now.
+    _observer?.unobserve(el);
+    await renderContainer(el);
+  }
+}

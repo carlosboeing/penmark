@@ -2,6 +2,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type {
   ContentWidth,
+  ExportCapturedPayload,
   HighlightIntensity,
   HostToWebview,
   PreviewSettingKey,
@@ -481,6 +482,81 @@ export async function handleExportReview(document: vscode.TextDocument): Promise
   void vscode.window.showInformationMessage("Penmark: review copied to clipboard");
 }
 
+// ---------------------------------------------------------------------------
+// Export capture (R17, ADR 0007)
+// ---------------------------------------------------------------------------
+
+/** Pending export captures keyed by requestId; resolved by `exportCaptured`. */
+const pendingExportCaptures = new Map<string, (payload: ExportCapturedPayload) => void>();
+
+/** How long to wait for the webview snapshot (covers many-diagram documents). */
+export const EXPORT_CAPTURE_TIMEOUT_MS = 30_000;
+
+/**
+ * Re-post interval for the capture request. Messages posted before the webview
+ * attaches its listener are dropped by design (the render handshake has the
+ * same property, T5); retrying with the SAME requestId is idempotent — the
+ * webview drops duplicates for an in-flight capture and ignores requests that
+ * arrive before its first render.
+ */
+const EXPORT_CAPTURE_RETRY_MS = 500;
+
+/** The panel entry currently previewing `document`, if any. */
+function findEntryForDocument(document: vscode.TextDocument): PanelEntry | undefined {
+  return [...panels.values()].find(
+    (e) => e.document?.uri.toString() === document.uri.toString(),
+  );
+}
+
+/**
+ * Snapshot the fully rendered preview of `document` for export (R17): reuse
+ * the panel already previewing it (revealed, so a hidden webview is restored)
+ * or open one, post a fresh render, then request the capture and await the
+ * webview's serialized response. Rejects on timeout or when no panel could be
+ * created; a capture that ran but failed resolves with `ok: false` and the
+ * webview's error message.
+ */
+export async function requestExportCapture(
+  context: vscode.ExtensionContext,
+  document: vscode.TextDocument,
+): Promise<ExportCapturedPayload> {
+  let entry = findEntryForDocument(document);
+  if (entry) {
+    // A hidden panel's webview is torn down (no retainContextWhenHidden);
+    // reveal restores it, and the ready handshake re-posts the render.
+    entry.panel.reveal(entry.column, true /* preserveFocus */);
+    void postRender(entry, document);
+  } else {
+    openOrReveal(context, document);
+    entry = findEntryForDocument(document);
+  }
+  if (!entry) {
+    throw new Error("could not open a preview panel for the document");
+  }
+  const target = entry;
+
+  const requestId = generateNonce();
+  return await new Promise<ExportCapturedPayload>((resolve, reject) => {
+    const post = (): void => {
+      void target.panel.webview.postMessage({ v: 1, type: "exportCapture", requestId });
+    };
+    const retry = setInterval(post, EXPORT_CAPTURE_RETRY_MS);
+    const timer = setTimeout(() => {
+      clearInterval(retry);
+      pendingExportCaptures.delete(requestId);
+      reject(new Error("the preview did not respond in time (export capture timeout)"));
+    }, EXPORT_CAPTURE_TIMEOUT_MS);
+
+    pendingExportCaptures.set(requestId, (payload) => {
+      clearTimeout(timer);
+      clearInterval(retry);
+      pendingExportCaptures.delete(requestId);
+      resolve(payload);
+    });
+    post();
+  });
+}
+
 /**
  * Run a document-mutating comment op serialized after any in-flight one on the
  * same panel, so each op reads a document the previous op has finished mutating
@@ -592,6 +668,8 @@ function setupPanelEntry(
       id?: string;
       line?: number;
       checked?: boolean;
+      requestId?: string;
+      ok?: boolean;
     };
     if (message.v !== 1) return;
 
@@ -740,6 +818,16 @@ function setupPanelEntry(
         } catch {
           // Malformed href — swallow silently; we must not crash the host.
         }
+        break;
+      }
+
+      case "exportCaptured": {
+        // Webview answered an export capture (R17) — resolve the pending
+        // request. Unknown/duplicate requestIds (late retries after the first
+        // response won) are dropped silently by design.
+        const { requestId, ok } = message;
+        if (typeof requestId !== "string" || typeof ok !== "boolean") break;
+        pendingExportCaptures.get(requestId)?.(message as unknown as ExportCapturedPayload);
         break;
       }
 

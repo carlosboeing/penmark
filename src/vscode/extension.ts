@@ -49,6 +49,34 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     }),
   );
 
+  // Register the HTML/PDF export commands (R17, ADR 0007). The export module
+  // is imported lazily so its print/inlining machinery never costs activation
+  // time; the actual work snapshots the preview webview.
+  // `targetUri` skips the save dialog — the extension-test seam (same pattern
+  // as handleExportReview's file mode); menus/palette never pass it.
+  const exportCommand =
+    (kind: "html" | "pdf") =>
+    async (uri?: vscode.Uri, targetUri?: vscode.Uri): Promise<vscode.Uri | undefined> => {
+      let doc = vscode.window.activeTextEditor?.document;
+      if (uri && doc?.uri.toString() !== uri.toString()) {
+        doc = await vscode.workspace.openTextDocument(uri);
+      }
+      if (!doc || doc.languageId !== "markdown") {
+        void vscode.window.showInformationMessage(
+          `Penmark: open a Markdown file to export it as ${kind.toUpperCase()}.`,
+        );
+        return undefined;
+      }
+      const mod = await import("./exportDocument.js");
+      return kind === "html"
+        ? mod.handleExportHtml(context, doc, targetUri)
+        : mod.handleExportPdf(context, doc, targetUri);
+    };
+  context.subscriptions.push(
+    vscode.commands.registerCommand("penmark.exportHtml", exportCommand("html")),
+    vscode.commands.registerCommand("penmark.exportPdf", exportCommand("pdf")),
+  );
+
   // Register the document-change listener for debounced re-renders.
   context.subscriptions.push(registerChangeListener());
 

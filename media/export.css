@@ -1,0 +1,97 @@
+/*
+ * Penmark export stylesheet (R17, ADR 0007) — appended after theme-*.css and
+ * penmark.css in exported documents only. Two jobs:
+ *   1. Screen: standalone-file affordances (breathing room where the preview
+ *      topbar used to be, defensive hiding of any preview chrome).
+ *   2. Print/PDF: page-break discipline and exact color reproduction.
+ *
+ * Structure and colors come from penmark.css + the theme token files, so the
+ * export inherits every preview style by construction; nothing here overrides
+ * typography, spacing, or color tokens.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Screen — standalone document
+ * --------------------------------------------------------------------------- */
+
+/* The preview shows content flush under its topbar; the export has no topbar,
+ * so give the document vertical breathing room instead. */
+body.pmk-export #penmark-root {
+  padding-top: 32px;
+  padding-bottom: 64px;
+}
+
+body.pmk-export .pmk-frontmatter-card {
+  margin: 32px auto 0;
+  max-width: inherit;
+}
+
+/* Defense in depth: the capture strips preview chrome before serializing;
+ * if a future class slips through it must never render in an export. */
+body.pmk-export .pmk-copy-btn,
+body.pmk-export .pmk-mermaid-expand,
+body.pmk-export .pmk-gutter-dot,
+body.pmk-export .pmk-hl-preview,
+body.pmk-export .pmk-add-comment-btn {
+  display: none !important;
+}
+
+/* Task-list checkboxes are inert content in an export. */
+body.pmk-export input[type="checkbox"] {
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Print / PDF
+ * --------------------------------------------------------------------------- */
+
+@media print {
+  /* Page geometry comes from @page (size + margin, emitted by the builder);
+   * the content column fills the printable area. */
+  body.pmk-export #penmark-root {
+    max-width: none;
+    padding: 0;
+  }
+
+  body.pmk-export {
+    /* Reproduce backgrounds exactly (code blocks, table headers, diagram
+     * fills, dark theme) instead of the browser's ink-saving defaults. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Never split verbatim or figure-like blocks across pages. */
+  body.pmk-export pre,
+  body.pmk-export table,
+  body.pmk-export blockquote,
+  body.pmk-export img,
+  body.pmk-export .pmk-mermaid,
+  body.pmk-export .pmk-frontmatter-card {
+    break-inside: avoid;
+  }
+
+  body.pmk-export tr {
+    break-inside: avoid;
+  }
+
+  /* Keep headings attached to the content they introduce. */
+  body.pmk-export h1,
+  body.pmk-export h2,
+  body.pmk-export h3,
+  body.pmk-export h4,
+  body.pmk-export h5,
+  body.pmk-export h6 {
+    break-after: avoid-page;
+    break-inside: avoid;
+  }
+
+  /* Long code lines wrap on paper instead of clipping at the page edge. */
+  body.pmk-export pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  body.pmk-export .pmk-frontmatter-card {
+    margin-top: 0;
+  }
+}

@@ -14,4 +14,4 @@
  * ADR 0001: no vscode imports.
  */
 
-export { renderMermaid } from "./mermaid/index.js";
+export { renderMermaid, renderMermaidAll } from "./mermaid/index.js";
