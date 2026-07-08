@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   ensureMermaid,
+  ensureMermaidAll,
   hasMermaid,
   isMermaidLoaded,
   __resetMermaidLoaderForTests,
@@ -49,7 +50,11 @@ describe("mermaid loader gating", () => {
 
   it("imports the chunk once when a container is present and caches it", async () => {
     const renderMermaid = vi.fn();
-    const importer = vi.fn<() => Promise<MermaidModule>>(async () => ({ renderMermaid }));
+    const renderMermaidAll = vi.fn(async () => {});
+    const importer = vi.fn<() => Promise<MermaidModule>>(async () => ({
+      renderMermaid,
+      renderMermaidAll,
+    }));
     const root = makeRoot('<div class="pmk-mermaid" data-pmk-source="graph TD"></div>');
 
     await ensureMermaid(root, "light", importer);
@@ -63,5 +68,24 @@ describe("mermaid loader gating", () => {
     expect(renderMermaid).toHaveBeenCalledTimes(3);
     expect(renderMermaid).toHaveBeenNthCalledWith(1, root, "light");
     expect(renderMermaid).toHaveBeenNthCalledWith(2, root, "dark");
+  });
+
+  it("ensureMermaidAll no-ops without containers and awaits render-all with one", async () => {
+    const renderMermaid = vi.fn();
+    const renderMermaidAll = vi.fn(async () => {});
+    const importer = vi.fn<() => Promise<MermaidModule>>(async () => ({
+      renderMermaid,
+      renderMermaidAll,
+    }));
+
+    await ensureMermaidAll(makeRoot("<p>prose only</p>"), "light", importer);
+    expect(importer).not.toHaveBeenCalled();
+
+    const root = makeRoot('<div class="pmk-mermaid" data-pmk-source="graph TD"></div>');
+    await ensureMermaidAll(root, "dark", importer);
+    expect(renderMermaidAll).toHaveBeenCalledWith(root, "dark");
+    // Shares the cached chunk with ensureMermaid — still a single import.
+    await ensureMermaid(root, "dark", importer);
+    expect(importer).toHaveBeenCalledTimes(1);
   });
 });

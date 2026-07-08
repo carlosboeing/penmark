@@ -17,6 +17,8 @@
 /** The slice of the mermaid chunk's public surface the loader drives. */
 export interface MermaidModule {
   renderMermaid(root: HTMLElement, theme: "light" | "dark"): void;
+  /** Render every diagram immediately and await completion (export capture, R17). */
+  renderMermaidAll(root: HTMLElement, theme: "light" | "dark"): Promise<void>;
 }
 
 /** Default importer — the real dynamic import of the mermaid* chunk. */
@@ -53,6 +55,24 @@ export async function ensureMermaid(
   }
   const mod = await _modulePromise;
   mod.renderMermaid(root, theme);
+}
+
+/**
+ * Force-render EVERY diagram under `root` and resolve when all are done (R17,
+ * export capture). Same lazy-chunk gating as {@link ensureMermaid}; no-ops on
+ * a diagram-free document.
+ */
+export async function ensureMermaidAll(
+  root: HTMLElement,
+  theme: "light" | "dark",
+  importer: () => Promise<MermaidModule> = defaultImport,
+): Promise<void> {
+  if (!hasMermaid(root)) return;
+  if (!_modulePromise) {
+    _modulePromise = importer();
+  }
+  const mod = await _modulePromise;
+  await mod.renderMermaidAll(root, theme);
 }
 
 /** Whether the chunk has been (or is being) loaded. */

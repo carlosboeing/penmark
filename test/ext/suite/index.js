@@ -27,6 +27,7 @@ exports.run = function () {
   mocha.addFile(path.join(__dirname, "activation.test.ts"));
   mocha.addFile(path.join(__dirname, "smoke.test.ts"));
   mocha.addFile(path.join(__dirname, "preview.test.ts"));
+  mocha.addFile(path.join(__dirname, "export.test.ts"));
 
   return new Promise((resolve, reject) => {
     mocha.run((failures) => {

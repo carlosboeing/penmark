@@ -97,17 +97,19 @@ describe("T12 — activation + lazy-activation budgets (design §8)", () => {
     }
 
     // Positive: the only triggers are the lazy command/panel/custom-editor events (design §8).
-    // openPreview + exportReview commands, webview-panel deserializer, and custom editor.
+    // openPreview + export commands, webview-panel deserializer, and custom editor.
     assert.deepStrictEqual(
       [...events].sort(),
       [
         "onCommand:penmark.openPreview",
         "onCommand:penmark.exportReview",
+        "onCommand:penmark.exportHtml",
+        "onCommand:penmark.exportPdf",
         "onCommand:penmark.openCustomEditor",
         "onWebviewPanel:penmark.preview",
         "onCustomEditor:penmark.previewEditor",
       ].sort(),
-      "activationEvents must be exactly the five lazy triggers",
+      "activationEvents must be exactly the seven lazy triggers",
     );
   });
 

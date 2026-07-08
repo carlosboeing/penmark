@@ -38,6 +38,22 @@ jobs:
       - name: Unit tests with coverage
         run: npm run test:unit
 
+      - name: Generate coverage summary
+        if: always()
+        run: |
+          mkdir -p coverage
+          if [ -f coverage/coverage-summary.json ]; then
+            node scripts/coverage-report.mjs coverage/coverage-summary.json > coverage/coverage-report.md
+          else
+            cat > coverage/coverage-report.md <<'EOF'
+          <!-- penmark-coverage-report -->
+          ### Coverage
+
+          Coverage summary was not generated. Check the unit-test logs and the `coverage-report` artifact.
+          EOF
+          fi
+          cat coverage/coverage-report.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v7
@@ -47,24 +63,26 @@ jobs:
           retention-days: 7
 
       # NOTE: on a public repo, PRs from forks run with a read-only GITHUB_TOKEN,
-      # so this step (which needs pull-requests: write) fails for EXTERNAL fork
-      # PRs. PRs from branches in this repo are unaffected. This is expected and
-      # not a code failure; the coverage artifact above is always uploaded.
+      # so this step only comments on same-repository PRs. External fork PRs still
+      # get the job summary and uploaded coverage artifact above.
       - name: Comment coverage on PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # lcov-report emits integer percentages ("100%") — pattern must not require a decimal point.
-          SUMMARY=$(cat coverage/lcov-report/index.html 2>/dev/null \
-            | grep -oE '[0-9]+(\.[0-9]+)?%' | head -4 \
-            | paste -sd ' / ' -)
-          [ -n "$SUMMARY" ] || SUMMARY="see artifact"
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --body "**Coverage** (stmts / branch / funcs / lines): ${SUMMARY}" \
-            --edit-last \
-            || gh pr comment "${{ github.event.pull_request.number }}" \
-            --body "**Coverage** (stmts / branch / funcs / lines): ${SUMMARY}"
+          BODY_FILE="coverage/coverage-report.md"
+          COMMENTS_API="/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          COMMENT_ID=$(gh api "$COMMENTS_API" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- penmark-coverage-report -->"))) | .id' \
+            | tail -n 1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "/repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+              -X PATCH \
+              -f body="$(cat "$BODY_FILE")"
+          else
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file "$BODY_FILE"
+          fi
 
   browser-tests:
     name: Browser tests (visual goldens)

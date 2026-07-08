@@ -2,7 +2,21 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
-## 2026-06-17 (in flight — feat/ui-ux-polish-codex)
+## 2026-07-07 (in flight — feat/export-html-pdf)
+
+### Export to HTML and PDF
+
+Two new commands export the rendered document with preview-exact fidelity ([ADR 0007](adrs/0007-export-via-preview-capture.md)):
+
+- **Export dialog** — the preview topbar gains an **Export** button (the editor/palette commands route to the same dialog): format, frontmatter card (off by default), generated linked table of contents (h1–h3), content width, PDF page size, margin presets (12/18/25 mm), and a header/page-numbers toggle. Defaults configurable via `penmark.export.*` settings.
+- **Penmark: Export as HTML** (`penmark.exportHtml`) — a single self-contained, JavaScript-free `.html` file: preview stylesheets and typography variables inlined, syntax-highlighted code, mermaid diagrams as fully rendered SVG (below-the-fold diagrams force-rendered at capture), local images embedded as `data:` URIs, plus a defense-in-depth CSP. Review-comment highlights and preview chrome are stripped — the export is the clean document. Exports are **always light-themed**; a dark preview's diagrams are re-rendered light for the snapshot and restored after.
+- **Penmark: Export as PDF** (`penmark.exportPdf`) — prints the same document via a system-installed Chromium-based browser (Chrome/Edge/Chromium/Brave auto-discovery, `penmark.export.chromiumPath` override; nothing is bundled), driven over the DevTools pipe for a real title header and "page / total" footer, exact margins, and exact color reproduction; page-break rules keep code blocks, tables, rows, images, and diagrams whole. Falls back to plain `--print-to-pdf` on CDP failure and to the HTML export when no browser is found.
+- **Mechanism** — the export captures the preview webview's sanitized DOM (new `exportCapture`/`exportCaptured`/`exportRequest`/`exportShowOptions` protocol messages) rather than re-rendering host-side, so the output equals the preview by construction; a new `renderMermaidAll` bypasses the lazy IntersectionObserver during capture.
+- **Tests** — unit suites for the document builder, capture cleaning (incl. TOC generation and light-theme restore), the export dialog, image inlining, and both PDF printers (CDP framing + CLI); Playwright preview-vs-export fidelity comparisons (computed styles, geometry, and mermaid SVG identical), dark-preview→light-export with restore, dialog round-trips, and real print smokes through both production paths; extension-host journey tests (defaults + options); and a manual cross-IDE checklist ([guides/export-smoke-checklist.md](guides/export-smoke-checklist.md)).
+- **Hardening** — canceling a palette/menu-triggered export dialog suppresses same-request retry reopens, and HTML destination write failures now surface through the same Penmark error/log path as PDF export failures.
+- **CI coverage reporting** — PR coverage now renders as a compact Markdown table, is also written to the GitHub job summary, and updates the existing coverage bot comment by marker instead of editing the bot's last comment blindly.
+
+## 2026-06-18 (Codex UI/UX polish — merged as PR #12)
 
 ### Codex UI/UX polish — preview settings and premium review chrome
 

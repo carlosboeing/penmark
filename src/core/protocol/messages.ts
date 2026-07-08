@@ -74,6 +74,32 @@ export interface PreviewSettingsState {
   lineHeight: number;
 }
 
+/** Export target format (R17). */
+export type ExportKind = "html" | "pdf";
+
+/** Page-margin preset for PDF export (R17). Millimetre values live host-side. */
+export type PdfMarginPreset = "narrow" | "normal" | "wide";
+
+/**
+ * Per-export options chosen in the export dialog (R17). Exports always render
+ * on the light theme (maintainer decision 2026-07-07) — theme is not an option.
+ * The `pdf*` fields are ignored for HTML exports, except that the `@page`
+ * setup they describe is still emitted so printing the HTML from a browser
+ * approximates the PDF command.
+ */
+export interface ExportOptions {
+  /** Include the frontmatter metadata card. Default false. */
+  includeFrontmatter: boolean;
+  /** Prepend a generated table of contents (h1–h3). Default false. */
+  includeToc: boolean;
+  /** Content column width of the exported document. */
+  width: ContentWidth;
+  pdfPageSize: "a4" | "letter";
+  pdfMargin: PdfMarginPreset;
+  /** Print a running header (title) and footer (page N of M). Default true. */
+  pdfHeaderFooter: boolean;
+}
+
 /** Messages sent from the extension host to the webview. */
 export type HostToWebview =
   | {
@@ -87,13 +113,55 @@ export type HostToWebview =
       typography?: TypographySettings;
       frontmatter?: FrontmatterFields;
       settings?: PreviewSettingsState;
+      /** Host-configured export defaults, pre-filling the export dialog (R17). */
+      exportDefaults?: ExportOptions;
     }
   | { v: 1; type: "comments"; comments: WireComment[]; attention: number }
   | { v: 1; type: "setTheme"; theme: ThemeMode }
   | { v: 1; type: "setContentWidth"; contentWidth: ContentWidth }
   | { v: 1; type: "setTypography"; typography: TypographySettings }
   | { v: 1; type: "revealLine"; line: number }
-  | { v: 1; type: "copied" };
+  | { v: 1; type: "copied" }
+  // Export capture (R17): ask the webview to force-render all mermaid diagrams
+  // (always on the LIGHT theme — exports are light), strip preview-only chrome
+  // from a clone of the rendered DOM, and post the serialized result back as
+  // `exportCaptured` with the same requestId.
+  | {
+      v: 1;
+      type: "exportCapture";
+      requestId: string;
+      includeFrontmatter: boolean;
+      includeToc: boolean;
+    }
+  // Open the export options dialog (palette/menu command path). The topbar
+  // Export button opens the same dialog webview-side without this message.
+  | {
+      v: 1;
+      type: "exportShowOptions";
+      kind: ExportKind;
+      defaults: ExportOptions;
+      requestId?: string;
+    };
+
+/**
+ * Serialized preview DOM posted back for an `exportCapture` request (R17).
+ * `html` is the cleaned `#penmark-root` innerHTML — already DOMPurify-sanitized
+ * (it came out of the live preview DOM) with preview-only chrome stripped, and
+ * always rendered on the light theme.
+ */
+export interface ExportCapturedPayload {
+  requestId: string;
+  ok: boolean;
+  /** Present when ok=false: what went wrong (surfaced to the user). */
+  error?: string;
+  html: string;
+  /** Outer HTML of the frontmatter card (only when requested and present). */
+  frontmatterHtml?: string;
+  /** Generated table of contents markup (only when requested and headings exist). */
+  tocHtml?: string;
+  /** Inline style of #penmark-root (typography CSS custom properties). */
+  rootStyle: string;
+}
 
 /** Messages sent from the webview to the extension host. */
 export type WebviewToHost =
@@ -114,4 +182,7 @@ export type WebviewToHost =
   | { v: 1; type: "editComment"; id: string; body: string }
   | { v: 1; type: "jumpToSource"; id: string }
   | { v: 1; type: "exportReview" }
-  | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean };
+  | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean }
+  | ({ v: 1; type: "exportCaptured" } & ExportCapturedPayload)
+  // Confirmed in the export options dialog — the host runs the export.
+  | { v: 1; type: "exportRequest"; kind: ExportKind; options: ExportOptions };

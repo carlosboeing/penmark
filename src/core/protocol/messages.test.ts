@@ -127,11 +127,24 @@ describe("protocol/messages", () => {
           return msg.type;
         case "copied":
           return msg.type;
+        case "exportCapture":
+          return msg.type;
+        case "exportShowOptions":
+          return msg.type;
         default:
           return assertNever(msg);
       }
     };
     expect(handle({ v: 1, type: "comments", comments: [], attention: 0 })).toBe("comments");
+    expect(
+      handle({
+        v: 1,
+        type: "exportCapture",
+        requestId: "r1",
+        includeFrontmatter: false,
+        includeToc: true,
+      }),
+    ).toBe("exportCapture");
   });
 
   it("exhaustively narrows every WebviewToHost variant", () => {
@@ -164,10 +177,56 @@ describe("protocol/messages", () => {
           return msg.type;
         case "toggleTaskCheckbox":
           return msg.type;
+        case "exportCaptured":
+          return msg.type;
+        case "exportRequest":
+          return msg.type;
         default:
           return assertNever(msg);
       }
     };
     expect(handle({ v: 1, type: "exportReview" })).toBe("exportReview");
+    expect(
+      handle({
+        v: 1,
+        type: "exportCaptured",
+        requestId: "r1",
+        ok: true,
+        html: "<p>hi</p>",
+        tocHtml: '<nav class="pmk-toc"></nav>',
+        rootStyle: "",
+      }),
+    ).toBe("exportCaptured");
+    expect(
+      handle({
+        v: 1,
+        type: "exportRequest",
+        kind: "pdf",
+        options: {
+          includeFrontmatter: false,
+          includeToc: true,
+          width: "comfortable",
+          pdfPageSize: "a4",
+          pdfMargin: "normal",
+          pdfHeaderFooter: true,
+        },
+      }),
+    ).toBe("exportRequest");
+  });
+
+  it("exportCaptured carries the capture payload including a failure shape", () => {
+    const failed: WebviewToHost = {
+      v: 1,
+      type: "exportCaptured",
+      requestId: "r2",
+      ok: false,
+      error: "preview root not found",
+      html: "",
+      rootStyle: "",
+    };
+    if (failed.type === "exportCaptured") {
+      expect(failed.ok).toBe(false);
+      expect(failed.error).toMatch(/root not found/);
+    }
   });
 });

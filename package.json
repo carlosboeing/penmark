@@ -19,6 +19,8 @@
   "activationEvents": [
     "onCommand:penmark.openPreview",
     "onCommand:penmark.exportReview",
+    "onCommand:penmark.exportHtml",
+    "onCommand:penmark.exportPdf",
     "onCommand:penmark.openCustomEditor",
     "onWebviewPanel:penmark.preview",
     "onCustomEditor:penmark.previewEditor"
@@ -129,6 +131,56 @@
           "minimum": 1,
           "maximum": 2.5,
           "description": "Line height multiplier (e.g. 1.5). Zero uses the preset default."
+        },
+        "penmark.export.includeFrontmatter": {
+          "type": "boolean",
+          "default": false,
+          "description": "Default for the export dialog: include the frontmatter metadata card in exports."
+        },
+        "penmark.export.toc": {
+          "type": "boolean",
+          "default": false,
+          "description": "Default for the export dialog: prepend a generated table of contents (headings h1-h3)."
+        },
+        "penmark.export.width": {
+          "type": "string",
+          "enum": [
+            "preview",
+            "comfortable",
+            "wide",
+            "full"
+          ],
+          "default": "preview",
+          "description": "Default content width for exports. 'preview' follows the preview's current width."
+        },
+        "penmark.export.pdfPageSize": {
+          "type": "string",
+          "enum": [
+            "a4",
+            "letter"
+          ],
+          "default": "a4",
+          "description": "Default paper size for 'Export as PDF' (and the print stylesheet of exported HTML)."
+        },
+        "penmark.export.pdfMargin": {
+          "type": "string",
+          "enum": [
+            "narrow",
+            "normal",
+            "wide"
+          ],
+          "default": "normal",
+          "description": "Default page margins for 'Export as PDF' (narrow 12mm, normal 18mm, wide 25mm)."
+        },
+        "penmark.export.pdfHeaderFooter": {
+          "type": "boolean",
+          "default": true,
+          "description": "Default for the export dialog: print a running header (document title) and footer (page numbers) on PDF exports."
+        },
+        "penmark.export.chromiumPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a Chromium-based browser executable used for 'Export as PDF'. Empty auto-detects Chrome, Edge, Chromium, or Brave in their standard install locations."
         }
       }
     },
@@ -144,6 +196,16 @@
         "icon": "$(export)"
       },
       {
+        "command": "penmark.exportHtml",
+        "title": "Penmark: Export as HTML",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "penmark.exportPdf",
+        "title": "Penmark: Export as PDF",
+        "icon": "$(file-pdf)"
+      },
+      {
         "command": "penmark.openCustomEditor",
         "title": "Open with Penmark"
       }
@@ -157,6 +219,16 @@
         },
         {
           "command": "penmark.exportReview",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportHtml",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportPdf",
           "when": "resourceLangId == markdown",
           "group": "1_penmark"
         }
@@ -181,6 +253,16 @@
         },
         {
           "command": "penmark.exportReview",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportHtml",
+          "when": "resourceLangId == markdown",
+          "group": "1_penmark"
+        },
+        {
+          "command": "penmark.exportPdf",
           "when": "resourceLangId == markdown",
           "group": "1_penmark"
         }

@@ -18,6 +18,13 @@ The preview top bar also includes **Preview settings**, a webview-native panel f
 | `penmark.fontFamily` | string | `""` | CSS `font-family` for body text. Empty uses the preset default. |
 | `penmark.headingFontFamily` | string | `""` | CSS `font-family` for headings. Empty uses the preset default. |
 | `penmark.lineHeight` | number | `0` | Line height multiplier (e.g. `1.5`). `0` uses the preset default. |
+| `penmark.export.includeFrontmatter` | boolean | `false` | Export-dialog default: include the frontmatter metadata card. |
+| `penmark.export.toc` | boolean | `false` | Export-dialog default: prepend a generated table of contents (h1–h3). |
+| `penmark.export.width` | `preview` \| `comfortable` \| `wide` \| `full` | `preview` | Export-dialog default content width. `preview` follows the preview's current width. |
+| `penmark.export.pdfPageSize` | `a4` \| `letter` | `a4` | Export-dialog default paper size for PDF (and the print stylesheet of exported HTML). |
+| `penmark.export.pdfMargin` | `narrow` \| `normal` \| `wide` | `normal` | Export-dialog default page margins for PDF (12 / 18 / 25 mm). |
+| `penmark.export.pdfHeaderFooter` | boolean | `true` | Export-dialog default: print a running header (title) and footer (page numbers) on PDFs. |
+| `penmark.export.chromiumPath` | string | `""` | Path to a Chromium-based browser executable used for **Export as PDF**. Empty auto-detects Chrome, Edge, Chromium, or Brave in their standard install locations. |
 
 ### `penmark.contentWidth` values
 

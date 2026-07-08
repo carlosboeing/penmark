@@ -19,6 +19,7 @@
  */
 
 import type {
+  ExportOptions,
   ContentWidth,
   HostToWebview,
   PreviewSettingKey,
@@ -51,8 +52,10 @@ import { installLinkHandler } from "./links.js";
 import { ensureMermaid, hasMermaid, isMermaidLoaded } from "./mermaidLoader.js";
 import { lineToScrollTop, readBlocks, scrollTopToLine } from "./scrollSync.js";
 import { selectionToSourceRange } from "./selection.js";
+import { captureExport } from "./export.js";
+import { ensureExportDialog, isExportDialogOpen, openExportDialog } from "./exportDialog.js";
 import { resolveTheme, applyResolvedTheme, observeIdeTheme } from "./theme.js";
-import { installTopbar } from "./topbar.js";
+import { installTopbar, type TopbarExportOpts } from "./topbar.js";
 import { applyTypography } from "./typography.js";
 import { installImageLightbox } from "./imageLightbox.js";
 import { renderFrontmatterCard } from "./frontmatterCard.js";
@@ -290,7 +293,8 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
       }
       break;
     case "contentWidth":
-      if (value === "comfortable" || value === "wide" || value === "full") next.contentWidth = value;
+      if (value === "comfortable" || value === "wide" || value === "full")
+        next.contentWidth = value;
       break;
     case "comments.highlightIntensity":
       if (value === "subtle" || value === "medium" || value === "strong") {
@@ -303,7 +307,10 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
   }
   _previewSettings = next;
   const root = getRoot();
-  if (root && (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth")) {
+  if (
+    root &&
+    (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth")
+  ) {
     applyTypography(
       root,
       resolveTypography({
@@ -317,6 +324,14 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
   renderSettingsPanel(next);
 }
 
+/** The content-width preset currently active on <body> (shell or live update). */
+function currentContentWidth(): ContentWidth {
+  const cls = document.body.classList;
+  if (cls.contains("pmk-content-comfortable")) return "comfortable";
+  if (cls.contains("pmk-content-wide")) return "wide";
+  return "full";
+}
+
 // ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
@@ -327,6 +342,47 @@ let _selectionPreviewInstalled = false;
 
 /** Last doc name from a render, so a comments-only message can re-draw the topbar. */
 let _lastDocName = "";
+
+/**
+ * Whether at least one `render` has been processed. Export capture requests
+ * that arrive before the first render are IGNORED (not answered) — the host
+ * re-posts them until a rendered document exists, so an export can never
+ * serialize an empty root (R17).
+ */
+let _hasRendered = false;
+
+/** Export capture requestIds currently being processed (host retries are dropped). */
+const _exportCapturesInFlight = new Set<string>();
+
+/** Host-configured export defaults, refreshed with every render (R17). */
+let _exportDefaults: ExportOptions | null = null;
+const _dismissedExportRequestIds = new Set<string>();
+let _activeExportRequestId: string | null = null;
+
+/** Dialog defaults: host settings when known, sensible fallbacks otherwise. */
+function exportDialogDefaults(): ExportOptions {
+  return (
+    _exportDefaults ?? {
+      includeFrontmatter: false,
+      includeToc: false,
+      width: currentContentWidth(),
+      pdfPageSize: "a4",
+      pdfMargin: "normal",
+      pdfHeaderFooter: true,
+    }
+  );
+}
+
+/** Topbar Export button opts — every installTopbar site shares this. */
+function topbarExportOpts(): TopbarExportOpts {
+  return {
+    onOpenExport: () => {
+      _activeExportRequestId = null;
+      ensureExportDialog((m) => vscode.postMessage(m));
+      openExportDialog("html", exportDialogDefaults());
+    },
+  };
+}
 
 /** Build the topbar's comments affordances (drawer toggle + attention chip). */
 function topbarCommentsOpts(
@@ -530,6 +586,10 @@ window.addEventListener("message", (event: MessageEvent) => {
 
       // Apply theme embedded in the render message.
       applyTheme(msg.theme);
+      _hasRendered = true;
+      if (msg.exportDefaults) {
+        _exportDefaults = msg.exportDefaults;
+      }
 
       // Install/refresh the topbar with the current doc name + comments
       // affordances (drawer toggle + attention chip, R15).
@@ -570,10 +630,12 @@ window.addEventListener("message", (event: MessageEvent) => {
                       toggleSettingsPanel();
                     },
                   },
+                  topbarExportOpts(),
                 );
               }
             },
           },
+          topbarExportOpts(),
         );
       }
       ensureSettingsPanel({
@@ -680,6 +742,7 @@ window.addEventListener("message", (event: MessageEvent) => {
               toggleSettingsPanel();
             },
           },
+          topbarExportOpts(),
         );
       }
       break;
@@ -726,6 +789,76 @@ window.addEventListener("message", (event: MessageEvent) => {
     case "copied": {
       // Host acked a copyCode round-trip — flash the last-clicked button.
       markLastCopied();
+      break;
+    }
+
+    case "exportCapture": {
+      // Serialize the preview for export (R17): force-render all diagrams,
+      // clean a clone, post the snapshot back correlated by requestId. Errors
+      // are reported (ok:false) rather than swallowed — the host surfaces them.
+      const requestId = msg.requestId;
+      // Not rendered yet: stay silent — the host retries until content exists.
+      if (!_hasRendered) break;
+      // The host retries every 500 ms in case a message was dropped pre-attach;
+      // drop retries for a request already being captured.
+      if (_exportCapturesInFlight.has(requestId)) break;
+      _exportCapturesInFlight.add(requestId);
+      const captureOptions = {
+        includeFrontmatter: msg.includeFrontmatter,
+        includeToc: msg.includeToc,
+      };
+      void (async () => {
+        try {
+          const root = getRoot();
+          if (!root) throw new Error("preview root not found");
+          const captured = await captureExport(root, resolvedTheme(), captureOptions);
+          vscode.postMessage({
+            v: 1,
+            type: "exportCaptured",
+            requestId,
+            ok: true,
+            html: captured.html,
+            frontmatterHtml: captured.frontmatterHtml,
+            tocHtml: captured.tocHtml,
+            rootStyle: captured.rootStyle,
+          });
+        } catch (err) {
+          vscode.postMessage({
+            v: 1,
+            type: "exportCaptured",
+            requestId,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+            html: "",
+            rootStyle: "",
+          });
+        } finally {
+          _exportCapturesInFlight.delete(requestId);
+        }
+      })();
+      break;
+    }
+
+    case "exportShowOptions": {
+      // Palette/menu command path: the host asks for the dialog with its
+      // freshly-read settings as defaults. The host re-posts this a few times
+      // (fresh webviews drop pre-attach messages) — never clobber an open
+      // dialog the user is already interacting with.
+      const requestId = msg.requestId ?? null;
+      if (requestId && _dismissedExportRequestIds.has(requestId)) break;
+      _exportDefaults = msg.defaults;
+      _activeExportRequestId = requestId;
+      ensureExportDialog(
+        (m) => vscode.postMessage(m),
+        () => {
+          if (_activeExportRequestId) {
+            _dismissedExportRequestIds.add(_activeExportRequestId);
+          }
+        },
+      );
+      if (!isExportDialogOpen()) {
+        openExportDialog(msg.kind, msg.defaults);
+      }
       break;
     }
   }

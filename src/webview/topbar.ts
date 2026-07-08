@@ -30,6 +30,11 @@ export interface TopbarSettingsOpts {
   onToggleSettings: () => void;
 }
 
+export interface TopbarExportOpts {
+  /** Open the export options dialog (R17). */
+  onOpenExport: () => void;
+}
+
 /**
  * Install (or re-install) the topbar into `container`.
  *
@@ -46,6 +51,7 @@ export function installTopbar(
   postMessage: (msg: unknown) => void,
   comments?: TopbarCommentsOpts,
   settings?: TopbarSettingsOpts,
+  exportOpts?: TopbarExportOpts,
 ): void {
   // Clear previous content safely.
   while (container.firstChild) {
@@ -100,6 +106,17 @@ export function installTopbar(
     toggle.setAttribute("aria-expanded", settings.settingsOpen ? "true" : "false");
     toggle.addEventListener("click", () => settings.onToggleSettings());
     container.appendChild(toggle);
+  }
+
+  // Export dialog trigger (R17) — the preview is where the export decision
+  // happens, so the affordance lives here, not only in editor menus.
+  if (exportOpts) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pmk-topbar-btn pmk-topbar-export";
+    btn.textContent = "Export";
+    btn.addEventListener("click", () => exportOpts.onOpenExport());
+    container.appendChild(btn);
   }
 
   // Comments drawer toggle (R15).

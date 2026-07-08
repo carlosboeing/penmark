@@ -36,6 +36,12 @@ It is built to stay out of your way: a slim bundle, lazy activation, incremental
 - Add and resolve are single, undoable edits; comments are stored in the document per the public format spec, so they survive Prettier, markdownlint, and 3-way git merges.
 - Export the review as an agent-ready prompt (to clipboard or a file) for handoff to a coding agent.
 
+**Exporting**
+
+- Export the rendered document as a **self-contained HTML file** — typography preset, highlighted code, rendered Mermaid SVGs, and images all inlined, zero JavaScript, always light for sharing.
+- Export as **PDF** via a Chromium-based browser already on your machine (nothing bundled), with real page numbers, page size and margin options, and page-break handling.
+- An export dialog in the preview topbar: frontmatter card, generated table of contents, width, and PDF page options.
+
 ## Install
 
 Penmark is local-first: it is distributed as a VSIX you sideload, not published to a marketplace.
