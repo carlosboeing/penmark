@@ -5,10 +5,10 @@
  *
  * Runs in the vitest "webview" project (jsdom environment).
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 import { installHighlights } from "./highlights.js";
 import { closeCommentPopover, isPopoverOpen } from "./popover.js";
-import type { WireComment } from "../../core/protocol/messages.js";
+import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
 
 function comment(over: Partial<WireComment> = {}): WireComment {
   return {
@@ -40,14 +40,14 @@ function seedSpan(root: HTMLElement, id: string, state = "intact"): HTMLElement 
 
 describe("installHighlights", () => {
   let root: HTMLElement;
-  let post: ReturnType<typeof vi.fn>;
+  let post: Mock<(msg: WebviewToHost) => void>;
 
   beforeEach(() => {
     document.body.innerHTML = "";
     root = document.createElement("div");
     root.id = "penmark-root";
     document.body.appendChild(root);
-    post = vi.fn();
+    post = vi.fn<(msg: WebviewToHost) => void>();
   });
 
   afterEach(() => {

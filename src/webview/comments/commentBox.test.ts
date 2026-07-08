@@ -4,7 +4,8 @@
  *
  * Runs in the vitest "webview" project (jsdom environment).
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import type { WebviewToHost } from "../../core/protocol/messages.js";
 import {
   openCommentBox,
   closeCommentBox,
@@ -47,11 +48,11 @@ function cancelBtn(): HTMLButtonElement {
 }
 
 describe("openCommentBox", () => {
-  let post: ReturnType<typeof vi.fn>;
+  let post: Mock<(msg: WebviewToHost) => void>;
 
   beforeEach(() => {
     document.body.innerHTML = "";
-    post = vi.fn();
+    post = vi.fn<(msg: WebviewToHost) => void>();
   });
 
   afterEach(() => {
