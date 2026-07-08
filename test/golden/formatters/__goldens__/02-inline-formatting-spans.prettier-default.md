@@ -4,7 +4,7 @@ The pipeline uses **markdown-it** with a curated plugin set. We rely on <!--pmk:
 
 Sanitization happens after rendering: see the [DOMPurify documentation](https://github.com/cure53/DOMPurify) for the API. The <!--pmk:s j2k7s6wn-->sanitizer must preserve `data-pmk-offset` attributes<!--/pmk:s j2k7s6wn--> or scroll sync breaks silently.
 
-Highlighting is lazy. A fence like ```ts only triggers the loader once per session, and *unknown languages* fall back to <!--pmk:s e4g7h2ty-->plain `<code>` output without crashing<!--/pmk:s e4g7h2ty-->, which matters for AI-generated docs that invent language tags.
+Highlighting is lazy. A fence like ```ts only triggers the loader once per session, and _unknown languages_ fall back to <!--pmk:s e4g7h2ty-->plain `<code>` output without crashing<!--/pmk:s e4g7h2ty-->, which matters for AI-generated docs that invent language tags.
 
 <!-- pmk:review v1 -->
 <!--pmk:c b5x4c3mf

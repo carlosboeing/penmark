@@ -18,7 +18,6 @@ monorepo split.
 Third, every block element carries a source position. Selection mapping and
 scroll sync both derive from this one attribute, so it is an acceptance
 criterion rather than an optimization.
-
 <!--pmk:r d3t4y6km c-->
 
 # Risks
