@@ -14,6 +14,7 @@ Two new commands export the rendered document with preview-exact fidelity ([ADR 
 - **Mechanism** — the export captures the preview webview's sanitized DOM (new `exportCapture`/`exportCaptured`/`exportRequest`/`exportShowOptions` protocol messages) rather than re-rendering host-side, so the output equals the preview by construction; a new `renderMermaidAll` bypasses the lazy IntersectionObserver during capture.
 - **Tests** — unit suites for the document builder, capture cleaning (incl. TOC generation and light-theme restore), the export dialog, image inlining, and both PDF printers (CDP framing + CLI); Playwright preview-vs-export fidelity comparisons (computed styles, geometry, and mermaid SVG identical), dark-preview→light-export with restore, dialog round-trips, and real print smokes through both production paths; extension-host journey tests (defaults + options); and a manual cross-IDE checklist ([guides/export-smoke-checklist.md](guides/export-smoke-checklist.md)).
 - **Hardening** — canceling a palette/menu-triggered export dialog suppresses same-request retry reopens, and HTML destination write failures now surface through the same Penmark error/log path as PDF export failures.
+- **CI coverage reporting** — PR coverage now renders as a compact Markdown table, is also written to the GitHub job summary, and updates the existing coverage bot comment by marker instead of editing the bot's last comment blindly.
 
 ## 2026-06-18 (Codex UI/UX polish — merged as PR #12)
 

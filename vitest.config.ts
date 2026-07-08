@@ -73,7 +73,7 @@ export default defineConfig({
         "src/webview/mermaid.ts",
         "src/webview/mermaid/**/*.ts",
       ],
-      reporter: ["text", "lcov"],
+      reporter: ["text", "lcov", "json-summary"],
       thresholds: {
         "src/core/**": { lines: 85 },
         "src/core/comments/**": { lines: 95 }, // v0.5: format correctness is the product's trust foundation
