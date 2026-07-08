@@ -9,7 +9,7 @@
  * in both themes. A functional check confirms Resolve posts resolveComment.
  *
  * Goldens are environment-bound (Chromium + OS + fonts): generate and verify
- * inside mcr.microsoft.com/playwright:v1.60.0-noble so local and CI render
+ * inside mcr.microsoft.com/playwright:v1.61.1-noble so local and CI render
  * pixel-identically (handover: never regenerate on the macOS host).
  */
 import { test, expect } from "@playwright/test";

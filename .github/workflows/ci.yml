@@ -91,7 +91,7 @@ jobs:
     # screenshot goldens (T6). This guarantees pixel-identical Chromium + fonts
     # between local golden generation and CI — see test/browser/theme.spec.ts.
     container:
-      image: mcr.microsoft.com/playwright:v1.60.0-noble
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
     # T12: 1.5× headroom on every perf budget in CI. Consumed by the layer-3
     # perf spec run via npm run test:browser (design §8).
     env:

@@ -9,7 +9,6 @@ audited in the refrence repos.
 
 Orphans are the exception by design. A comment only lands in the orphan bucket
 when its markers were actually destroyed, and even then the
-
 <!--pmk:s y7u4i6op-->advisory quote snapshot keeps enough context<!--/pmk:s y7u4i6op-->
 
 for a human to re-anchor it with one selection.

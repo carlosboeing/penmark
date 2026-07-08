@@ -11,7 +11,6 @@ First, all rendering happens in the extension host. The webview receives sanitiz
 Second, the core engine has zero IDE imports. The same render and comment code must serve a future web app, and a lint-enforced boundary is cheaper than a monorepo split.
 
 Third, every block element carries a source position. Selection mapping and scroll sync both derive from this one attribute, so it is an acceptance criterion rather than an optimization.
-
 <!--pmk:r d3t4y6km c-->
 
 # Risks

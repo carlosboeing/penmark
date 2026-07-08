@@ -7,7 +7,7 @@
  * token CSS or base structure that alters the rendered look will fail here.
  *
  * Goldens are environment-bound (Chromium + OS + fonts). They are generated and
- * verified inside mcr.microsoft.com/playwright:v1.60.0-noble so local runs and
+ * verified inside mcr.microsoft.com/playwright:v1.61.1-noble so local runs and
  * the CI browser job render pixel-identically. See .github/workflows/ci.yml.
  */
 import { test, expect } from "@playwright/test";
