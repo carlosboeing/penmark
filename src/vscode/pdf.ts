@@ -96,6 +96,9 @@ export function buildPrintArgs(
   return [
     "--headless",
     "--disable-gpu",
+    // Tiny /dev/shm mounts (containers, low-memory hosts) starve the print
+    // renderer on multi-page documents — fall back to /tmp (see pdfCdp.ts).
+    "--disable-dev-shm-usage",
     "--no-pdf-header-footer",
     `--print-to-pdf=${pdfPath}`,
     ...extraArgs,

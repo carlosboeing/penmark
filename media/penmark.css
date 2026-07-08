@@ -687,7 +687,9 @@ body.pmk-hl-strong {
   border-radius: 2px;
   cursor: pointer;
   padding: 0 2px;
-  transition: background-color 0.12s ease, background 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    background 0.12s ease;
 }
 #penmark-root .pmk-hl:hover {
   background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.12));
@@ -713,7 +715,9 @@ body.pmk-hl-strong {
   border-radius: 2px;
   background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.4));
   cursor: pointer;
-  transition: outline-width 0.12s ease, background-color 0.12s ease;
+  transition:
+    outline-width 0.12s ease,
+    background-color 0.12s ease;
 }
 #penmark-root [data-pmk-block].pmk-hl-active {
   outline-width: 3px;
@@ -728,7 +732,9 @@ body.pmk-hl-strong {
   border-radius: 2px;
   background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) * 0.3));
   cursor: pointer;
-  transition: outline-width 0.12s ease, background-color 0.12s ease;
+  transition:
+    outline-width 0.12s ease,
+    background-color 0.12s ease;
 }
 #penmark-root .pmk-hl-range.pmk-hl-active {
   outline-width: 3px;
@@ -1446,4 +1452,74 @@ body.pmk-hl-strong {
   background-color: var(--pmk-ui-elevated);
   border: 1px solid var(--pmk-ui-border);
   box-shadow: var(--pmk-comment-popover-shadow);
+}
+
+/* ---------------------------------------------------------------------------
+ * Export options dialog (R17)
+ * Reuses the settings-panel control vocabulary (.pmk-settings-group /
+ * -segmented / -option) so both surfaces read as one design system.
+ * --------------------------------------------------------------------------- */
+
+.pmk-export-dialog {
+  width: 360px;
+  max-width: 90vw;
+  padding: 0;
+  color: var(--pmk-color-fg);
+  background-color: var(--pmk-ui-elevated);
+  border: 1px solid var(--pmk-ui-border);
+  border-radius: 10px;
+  box-shadow: var(--pmk-comment-popover-shadow);
+}
+
+.pmk-export-dialog::backdrop {
+  background-color: var(--pmk-mermaid-backdrop);
+}
+
+.pmk-export-dialog-content {
+  padding: 14px;
+}
+
+.pmk-export-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 7px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.pmk-export-check input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.pmk-export-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pmk-ui-border-muted);
+}
+
+.pmk-export-confirm {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--pmk-color-accent);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 5px 14px;
+}
+
+.pmk-export-confirm:hover {
+  background-color: var(--pmk-color-accent-hover);
+}
+
+.pmk-export-confirm:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 2px;
 }

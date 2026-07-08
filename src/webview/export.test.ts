@@ -1,10 +1,12 @@
 /**
  * jsdom tests for the export capture (R17, ADR 0007): the serialized snapshot
  * must be the preview content MINUS preview-only chrome and review markup,
- * with mermaid output intact and the live DOM untouched.
+ * with mermaid output intact, always light-themed, and the live DOM restored.
  */
 import { describe, it, expect, vi } from "vitest";
-import { captureExport, cleanExportDom } from "./export.js";
+import { buildTocHtml, captureExport, cleanExportDom } from "./export.js";
+
+const NO_OPTS = { includeFrontmatter: false, includeToc: false };
 
 function makeRoot(html: string): HTMLElement {
   const root = document.createElement("div");
@@ -72,6 +74,33 @@ describe("cleanExportDom", () => {
   });
 });
 
+describe("buildTocHtml", () => {
+  it("builds a nested list from h1–h3 ids, skipping deeper levels", () => {
+    const root = makeRoot(
+      `<h1 id="top">Top</h1>` +
+        `<h2 id="one">One</h2>` +
+        `<h3 id="one-a">One A</h3>` +
+        `<h2 id="two">Two <em>styled</em></h2>` +
+        `<h4 id="deep">Too deep</h4>`,
+    );
+    const toc = buildTocHtml(root)!;
+    const nav = document.createElement("div");
+    nav.innerHTML = toc;
+    const links = [...nav.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(links).toEqual(["#top", "#one", "#one-a", "#two"]);
+    // Nesting: One A sits in a list nested under One's item.
+    expect(nav.querySelector('a[href="#one-a"]')?.closest("ol")?.parentElement?.tagName).toBe("LI");
+    // Link text is the heading's plain text (no inline markup).
+    expect(nav.querySelector('a[href="#two"]')?.textContent).toBe("Two styled");
+    expect(toc).not.toContain("#deep");
+    expect(toc).toContain('class="pmk-toc"');
+  });
+
+  it("returns undefined for a document without headings", () => {
+    expect(buildTocHtml(makeRoot("<p>prose only</p>"))).toBeUndefined();
+  });
+});
+
 describe("captureExport", () => {
   it("serializes a cleaned CLONE without mutating the live preview", async () => {
     const root = makeRoot(
@@ -80,7 +109,12 @@ describe("captureExport", () => {
     );
     const before = root.innerHTML;
 
-    const result = await captureExport(root, "light", vi.fn(async () => {}));
+    const result = await captureExport(
+      root,
+      "light",
+      NO_OPTS,
+      vi.fn(async () => {}),
+    );
 
     expect(result.html).not.toContain("pmk-copy-btn");
     expect(result.html).not.toContain("pmk-hl");
@@ -89,19 +123,37 @@ describe("captureExport", () => {
     expect(root.innerHTML).toBe(before);
   });
 
-  it("forces mermaid render-all only when diagrams exist", async () => {
+  it("force-renders diagrams on LIGHT and restores the preview theme after", async () => {
     const ensureAll = vi.fn(async () => {});
+    const ensureLazy = vi.fn(async () => {});
     const prose = makeRoot("<p>prose</p>");
-    await captureExport(prose, "light", ensureAll);
+    await captureExport(prose, "dark", NO_OPTS, ensureAll, ensureLazy);
     expect(ensureAll).not.toHaveBeenCalled();
-
+    expect(ensureLazy).not.toHaveBeenCalled();
     prose.remove();
+
     const withDiagram = makeRoot('<div class="pmk-mermaid" data-pmk-source="graph TD"></div>');
-    await captureExport(withDiagram, "dark", ensureAll);
-    expect(ensureAll).toHaveBeenCalledWith(withDiagram, "dark");
+    await captureExport(withDiagram, "dark", NO_OPTS, ensureAll, ensureLazy);
+    // Snapshot renders light...
+    expect(ensureAll).toHaveBeenCalledWith(withDiagram, "light");
+    // ...and the dark preview is restored afterwards.
+    expect(ensureLazy).toHaveBeenCalledWith(withDiagram, "dark");
   });
 
-  it("includes the frontmatter card forced open, and the root inline style", async () => {
+  it("does not restore when the preview is already light", async () => {
+    const ensureLazy = vi.fn(async () => {});
+    const root = makeRoot('<div class="pmk-mermaid" data-pmk-source="graph TD"></div>');
+    await captureExport(
+      root,
+      "light",
+      NO_OPTS,
+      vi.fn(async () => {}),
+      ensureLazy,
+    );
+    expect(ensureLazy).not.toHaveBeenCalled();
+  });
+
+  it("excludes the frontmatter card by default, includes it forced open on request", async () => {
     const card = document.createElement("details");
     card.id = "pmk-frontmatter-card";
     card.className = "pmk-frontmatter-card";
@@ -111,21 +163,49 @@ describe("captureExport", () => {
     const root = makeRoot("<p>content</p>");
     root.setAttribute("style", "--pmk-text-size-base: 18px;");
 
-    const result = await captureExport(root, "light", vi.fn(async () => {}));
+    const excluded = await captureExport(
+      root,
+      "light",
+      NO_OPTS,
+      vi.fn(async () => {}),
+    );
+    expect(excluded.frontmatterHtml).toBeUndefined();
 
-    expect(result.frontmatterHtml).toContain("pmk-frontmatter-card");
-    expect(result.frontmatterHtml).toContain("open");
+    const included = await captureExport(
+      root,
+      "light",
+      { includeFrontmatter: true, includeToc: false },
+      vi.fn(async () => {}),
+    );
+    expect(included.frontmatterHtml).toContain("pmk-frontmatter-card");
+    expect(included.frontmatterHtml).toContain("open");
     // The LIVE card keeps its collapsed state.
     expect(card.hasAttribute("open")).toBe(false);
-    expect(result.rootStyle).toBe("--pmk-text-size-base: 18px;");
+    expect(included.rootStyle).toBe("--pmk-text-size-base: 18px;");
 
     card.remove();
   });
 
-  it("omits frontmatterHtml when the document has no frontmatter card", async () => {
-    const root = makeRoot("<p>plain</p>");
-    const result = await captureExport(root, "light", vi.fn(async () => {}));
-    expect(result.frontmatterHtml).toBeUndefined();
-    expect(result.rootStyle).toBe("");
+  it("generates the TOC from the CLEANED clone only when requested", async () => {
+    const root = makeRoot(
+      `<h1 id="a">A</h1><h2 id="b">B <span class="pmk-gutter-dot"></span></h2>`,
+    );
+    const off = await captureExport(
+      root,
+      "light",
+      NO_OPTS,
+      vi.fn(async () => {}),
+    );
+    expect(off.tocHtml).toBeUndefined();
+
+    const on = await captureExport(
+      root,
+      "light",
+      { includeFrontmatter: false, includeToc: true },
+      vi.fn(async () => {}),
+    );
+    expect(on.tocHtml).toContain('href="#a"');
+    // Built from the clone AFTER cleaning — chrome never leaks into TOC text.
+    expect(on.tocHtml).not.toContain("pmk-gutter-dot");
   });
 });

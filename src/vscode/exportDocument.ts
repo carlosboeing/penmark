@@ -5,10 +5,12 @@
  *   - previewPanel.requestExportCapture: snapshot the fully rendered preview
  *   - core/export/htmlDocument:          wrap the snapshot into a standalone doc
  *   - exportImages:                      inline local images as data: URIs
- *   - pdf:                               print via a system Chromium browser
+ *   - pdfCdp / pdf:                      print via a system Chromium browser
  *
- * Both handlers accept an optional explicit target so the extension test suite
- * can drive the full journey without the save dialog (same seam pattern as
+ * Exports are configured in the webview's export dialog (topbar Export button,
+ * or `exportShowOptions` for the palette/menu commands); the dialog posts
+ * `exportRequest`, which lands in {@link runExport}. An explicit target +
+ * options bypass the dialog — the extension-test seam (same pattern as
  * handleExportReview). Failures surface as error messages and are logged to
  * the Penmark output channel — never swallowed.
  */
@@ -17,24 +19,20 @@ import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "path";
 import * as vscode from "vscode";
-import { buildExportHtml, type PdfPageSize } from "../core/export/htmlDocument.js";
+import { buildExportHtml } from "../core/export/htmlDocument.js";
+import type { ExportKind, ExportOptions } from "../core/protocol/messages.js";
 import { inlineLocalImages } from "./exportImages.js";
+import { exportDefaultsFromSettings } from "./exportSettings.js";
 import { penmarkOutput } from "./outputChannel.js";
 import { findChromium, printHtmlToPdf } from "./pdf.js";
-import { requestExportCapture } from "./previewPanel.js";
+import { printHtmlToPdfViaCdp } from "./pdfCdp.js";
+import { requestExportCapture, requestExportDialog } from "./previewPanel.js";
 
-/** Stylesheets inlined into every export, in cascade order. */
-const EXPORT_CSS_FILES = ["theme-light.css", "theme-dark.css", "penmark.css", "export.css"];
+/** Stylesheets inlined into every export, in cascade order (always light). */
+const EXPORT_CSS_FILES = ["theme-light.css", "penmark.css", "export.css"];
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-function configuredPageSize(): PdfPageSize {
-  const raw = vscode.workspace
-    .getConfiguration("penmark")
-    .get<string>("export.pdfPageSize", "a4");
-  return raw === "letter" ? "letter" : "a4";
 }
 
 function configuredChromiumPath(): string {
@@ -57,12 +55,21 @@ async function readExportCss(context: vscode.ExtensionContext): Promise<string[]
  * with a user-presentable message when the capture fails; embedding failures
  * for individual images are returned (and logged), not thrown — one broken
  * image must not sink the export.
+ *
+ * @param forPdf  The CDP print run controls page geometry itself, so the PDF
+ *                temp document must NOT carry an `@page` rule (it would
+ *                compound with the print margins).
  */
 export async function buildStandaloneHtml(
   context: vscode.ExtensionContext,
   document: vscode.TextDocument,
+  options: ExportOptions,
+  forPdf: boolean,
 ): Promise<{ html: string; failures: string[] }> {
-  const capture = await requestExportCapture(context, document);
+  const capture = await requestExportCapture(context, document, {
+    includeFrontmatter: options.includeFrontmatter,
+    includeToc: options.includeToc,
+  });
   if (!capture.ok) {
     throw new Error(capture.error ?? "the preview could not capture the document");
   }
@@ -74,11 +81,11 @@ export async function buildStandaloneHtml(
     title: path.basename(document.fileName),
     contentHtml: capture.html,
     frontmatterHtml: capture.frontmatterHtml,
-    theme: capture.theme,
-    contentWidth: capture.contentWidth,
+    tocHtml: capture.tocHtml,
+    width: options.width,
     rootStyle: capture.rootStyle,
     css,
-    pageSize: configuredPageSize(),
+    pageSetup: forPdf ? undefined : { size: options.pdfPageSize, margin: options.pdfMargin },
     generator: `Penmark ${version}`,
   });
 
@@ -119,19 +126,45 @@ function showExportedMessage(target: vscode.Uri, failures: number, openLabel: st
 }
 
 /**
+ * Open the export options dialog in the document's preview (opens the preview
+ * when needed). The dialog's `exportRequest` lands in {@link runExport}.
+ */
+export async function openExportOptions(
+  context: vscode.ExtensionContext,
+  document: vscode.TextDocument,
+  kind: ExportKind,
+): Promise<void> {
+  await requestExportDialog(context, document, kind, exportDefaultsFromSettings());
+}
+
+/** Route a confirmed export (dialog or test seam) to the right handler. */
+export async function runExport(
+  context: vscode.ExtensionContext,
+  document: vscode.TextDocument,
+  kind: ExportKind,
+  options: ExportOptions = exportDefaultsFromSettings(),
+  targetUri?: vscode.Uri,
+): Promise<vscode.Uri | undefined> {
+  return kind === "pdf"
+    ? handleExportPdf(context, document, options, targetUri)
+    : handleExportHtml(context, document, options, targetUri);
+}
+
+/**
  * Export `document` as a standalone HTML file. Returns the written target, or
  * undefined when the user cancelled or the export failed (already surfaced).
  */
 export async function handleExportHtml(
   context: vscode.ExtensionContext,
   document: vscode.TextDocument,
+  options: ExportOptions = exportDefaultsFromSettings(),
   targetUri?: vscode.Uri,
 ): Promise<vscode.Uri | undefined> {
   let built: { html: string; failures: string[] };
   try {
     built = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Penmark: exporting HTML…" },
-      () => buildStandaloneHtml(context, document),
+      () => buildStandaloneHtml(context, document, options, false),
     );
   } catch (err) {
     void vscode.window.showErrorMessage(`Penmark: HTML export failed — ${errMsg(err)}`);
@@ -152,13 +185,15 @@ export async function handleExportHtml(
 }
 
 /**
- * Export `document` as a PDF by printing the standalone HTML with a local
- * Chromium-based browser. Degrades gracefully when no browser is available:
- * offers HTML export instead (PDF is additive, never a hard dependency).
+ * Export `document` as a PDF: CDP print (header/footer, page numbers, exact
+ * margins) with the CLI printer as fallback, via a local Chromium-based
+ * browser. Degrades gracefully when no browser is available: offers HTML
+ * export instead (PDF is additive, never a hard dependency).
  */
 export async function handleExportPdf(
   context: vscode.ExtensionContext,
   document: vscode.TextDocument,
+  options: ExportOptions = exportDefaultsFromSettings(),
   targetUri?: vscode.Uri,
 ): Promise<vscode.Uri | undefined> {
   const explicit = configuredChromiumPath();
@@ -179,7 +214,7 @@ export async function handleExportPdf(
       )
       .then((choice) => {
         if (choice === EXPORT_HTML) {
-          void handleExportHtml(context, document);
+          void handleExportHtml(context, document, options);
         } else if (choice === OPEN_SETTINGS) {
           void vscode.commands.executeCommand(
             "workbench.action.openSettings",
@@ -202,7 +237,7 @@ export async function handleExportPdf(
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Penmark: exporting PDF…" },
       async () => {
-        const built = await buildStandaloneHtml(context, document);
+        const built = await buildStandaloneHtml(context, document, options, true);
         // Print in a scratch directory, then copy through workspace.fs so
         // remote/virtual targets work; the browser only ever sees local files.
         const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "penmark-export-"));
@@ -210,7 +245,22 @@ export async function handleExportPdf(
           const htmlPath = path.join(tmpDir, "document.html");
           const pdfPath = path.join(tmpDir, "document.pdf");
           await fsp.writeFile(htmlPath, built.html, "utf8");
-          await printHtmlToPdf(browser, htmlPath, pdfPath);
+          const printSettings = {
+            pageSize: options.pdfPageSize,
+            margin: options.pdfMargin,
+            headerFooter: options.pdfHeaderFooter,
+            title: path.basename(document.fileName),
+          };
+          try {
+            await printHtmlToPdfViaCdp(browser, htmlPath, pdfPath, printSettings);
+          } catch (cdpErr) {
+            // Fall back to the flag-based printer (no header/footer) so a
+            // quirky browser build still exports; the downgrade is logged.
+            penmarkOutput().appendLine(
+              `[${new Date().toISOString()}] export: CDP print failed (${errMsg(cdpErr)}) — falling back to --print-to-pdf without header/footer`,
+            );
+            await printHtmlToPdf(browser, htmlPath, pdfPath);
+          }
           await vscode.workspace.fs.writeFile(target, await fsp.readFile(pdfPath));
         } finally {
           await fsp.rm(tmpDir, { recursive: true, force: true });

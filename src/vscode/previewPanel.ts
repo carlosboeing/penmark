@@ -3,6 +3,8 @@ import * as vscode from "vscode";
 import type {
   ContentWidth,
   ExportCapturedPayload,
+  ExportKind,
+  ExportOptions,
   HighlightIntensity,
   HostToWebview,
   PreviewSettingKey,
@@ -10,7 +12,12 @@ import type {
   PreviewSettingsState,
   ThemeMode,
 } from "../core/protocol/messages.js";
-import { resolveTypography, type PresetName, type TextSize, type TypographySettings } from "../core/settings/typography.js";
+import {
+  resolveTypography,
+  type PresetName,
+  type TextSize,
+  type TypographySettings,
+} from "../core/settings/typography.js";
 import { buildShellHtml, generateNonce } from "./html.js";
 import { loadHighlighterIfNeeded } from "./hljsLoader.js";
 import {
@@ -23,6 +30,7 @@ import {
   resolveAuthor,
 } from "./comments.js";
 import { buildReviewPrompt } from "../core/comments/exportPrompt.js";
+import { exportDefaultsFromSettings } from "./exportSettings.js";
 import { logReconcileCorruption } from "./outputChannel.js";
 
 // The markdown-it render stack (src/vscode/render.ts → markdown-it + plugins) is
@@ -172,8 +180,7 @@ const VALID_SETTING_VALUES = {
 function isStringSettingValue(key: PreviewSettingKey, value: PreviewSettingValue): boolean {
   if (key === "lineHeight") return false;
   return (
-    typeof value === "string" &&
-    (VALID_SETTING_VALUES[key] as readonly string[]).includes(value)
+    typeof value === "string" && (VALID_SETTING_VALUES[key] as readonly string[]).includes(value)
   );
 }
 
@@ -229,7 +236,9 @@ function findEditorForEntry(entry: PanelEntry): vscode.TextEditor | undefined {
   );
 }
 
-function findVisibleEditorForDocument(document: vscode.TextDocument): vscode.TextEditor | undefined {
+function findVisibleEditorForDocument(
+  document: vscode.TextDocument,
+): vscode.TextEditor | undefined {
   return vscode.window.visibleTextEditors.find(
     (e) => e.document.uri.toString() === document.uri.toString(),
   );
@@ -299,7 +308,8 @@ export function maybePostRevealLine(entry: PanelEntry, line: number): void {
  */
 function attachVisibleRangeListener(entry: PanelEntry): vscode.Disposable {
   return vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-    if (!entry.document || e.textEditor.document.uri.toString() !== entry.document.uri.toString()) return;
+    if (!entry.document || e.textEditor.document.uri.toString() !== entry.document.uri.toString())
+      return;
     const first = e.visibleRanges[0];
     if (!first) return;
     maybePostRevealLine(entry, first.start.line);
@@ -503,23 +513,17 @@ const EXPORT_CAPTURE_RETRY_MS = 500;
 
 /** The panel entry currently previewing `document`, if any. */
 function findEntryForDocument(document: vscode.TextDocument): PanelEntry | undefined {
-  return [...panels.values()].find(
-    (e) => e.document?.uri.toString() === document.uri.toString(),
-  );
+  return [...panels.values()].find((e) => e.document?.uri.toString() === document.uri.toString());
 }
 
 /**
- * Snapshot the fully rendered preview of `document` for export (R17): reuse
- * the panel already previewing it (revealed, so a hidden webview is restored)
- * or open one, post a fresh render, then request the capture and await the
- * webview's serialized response. Rejects on timeout or when no panel could be
- * created; a capture that ran but failed resolves with `ok: false` and the
- * webview's error message.
+ * Reuse the panel already previewing `document` (revealed, so a hidden
+ * webview is restored) or open one. Throws when no panel could be created.
  */
-export async function requestExportCapture(
+function ensureExportPanel(
   context: vscode.ExtensionContext,
   document: vscode.TextDocument,
-): Promise<ExportCapturedPayload> {
+): PanelEntry {
   let entry = findEntryForDocument(document);
   if (entry) {
     // A hidden panel's webview is torn down (no retainContextWhenHidden);
@@ -533,12 +537,67 @@ export async function requestExportCapture(
   if (!entry) {
     throw new Error("could not open a preview panel for the document");
   }
-  const target = entry;
+  return entry;
+}
+
+/**
+ * The handler `exportRequest` messages are routed to. Registered by
+ * extension.ts (exportDocument.ts imports this module — a direct import here
+ * would be a cycle).
+ */
+let _exportRequestHandler:
+  | ((document: vscode.TextDocument, kind: ExportKind, options: ExportOptions) => Promise<void>)
+  | null = null;
+
+export function setExportRequestHandler(handler: typeof _exportRequestHandler): void {
+  _exportRequestHandler = handler;
+}
+
+/**
+ * Open the export options dialog in the preview of `document` (R17). The
+ * message is re-posted a few times because a freshly created webview drops
+ * messages until its listener attaches; the webview ignores re-posts while
+ * the dialog is already open, so retries never clobber user input.
+ */
+export async function requestExportDialog(
+  context: vscode.ExtensionContext,
+  document: vscode.TextDocument,
+  kind: ExportKind,
+  defaults: ExportOptions,
+): Promise<void> {
+  const entry = ensureExportPanel(context, document);
+  const msg = { v: 1, type: "exportShowOptions", kind, defaults } as const;
+  for (let i = 0; i < 4; i++) {
+    void entry.panel.webview.postMessage(msg);
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
+
+/**
+ * Snapshot the fully rendered preview of `document` for export (R17): reuse
+ * the panel already previewing it (revealed, so a hidden webview is restored)
+ * or open one, post a fresh render, then request the capture and await the
+ * webview's serialized response. Rejects on timeout or when no panel could be
+ * created; a capture that ran but failed resolves with `ok: false` and the
+ * webview's error message.
+ */
+export async function requestExportCapture(
+  context: vscode.ExtensionContext,
+  document: vscode.TextDocument,
+  options: { includeFrontmatter: boolean; includeToc: boolean },
+): Promise<ExportCapturedPayload> {
+  const target = ensureExportPanel(context, document);
 
   const requestId = generateNonce();
   return await new Promise<ExportCapturedPayload>((resolve, reject) => {
     const post = (): void => {
-      void target.panel.webview.postMessage({ v: 1, type: "exportCapture", requestId });
+      void target.panel.webview.postMessage({
+        v: 1,
+        type: "exportCapture",
+        requestId,
+        includeFrontmatter: options.includeFrontmatter,
+        includeToc: options.includeToc,
+      });
     };
     const retry = setInterval(post, EXPORT_CAPTURE_RETRY_MS);
     const timer = setTimeout(() => {
@@ -609,6 +668,7 @@ async function postRender(entry: PanelEntry, document: vscode.TextDocument): Pro
     configuredTypography(),
     configuredPreviewSettings(),
   );
+  msg.exportDefaults = exportDefaultsFromSettings();
   entry.lastRenderMessage = msg;
   entry.renderCount++;
   _totalRenderCount++;
@@ -670,6 +730,8 @@ function setupPanelEntry(
       checked?: boolean;
       requestId?: string;
       ok?: boolean;
+      kind?: string;
+      options?: unknown;
     };
     if (message.v !== 1) return;
 
@@ -696,10 +758,7 @@ function setupPanelEntry(
       case "updateSetting": {
         const key = (message as { key?: unknown }).key;
         const value = (message as { value?: unknown }).value;
-        if (
-          typeof key === "string" &&
-          (typeof value === "string" || typeof value === "number")
-        ) {
+        if (typeof key === "string" && (typeof value === "string" || typeof value === "number")) {
           void handleUpdateSetting(key as PreviewSettingKey, value);
         }
         break;
@@ -785,15 +844,13 @@ function setupPanelEntry(
         if (rc) {
           const start = rc.extent ? rc.extent.start : rc.entry.rawStart;
           const end = rc.extent ? rc.extent.end : rc.entry.rawEnd;
-          void vscode.window
-            .showTextDocument(doc, { preserveFocus: false })
-            .then((editor) => {
-              const startPos = doc.positionAt(start);
-              const endPos = doc.positionAt(end);
-              const range = new vscode.Range(startPos, endPos);
-              editor.selection = new vscode.Selection(startPos, endPos);
-              editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-            });
+          void vscode.window.showTextDocument(doc, { preserveFocus: false }).then((editor) => {
+            const startPos = doc.positionAt(start);
+            const endPos = doc.positionAt(end);
+            const range = new vscode.Range(startPos, endPos);
+            editor.selection = new vscode.Selection(startPos, endPos);
+            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+          });
         }
         break;
       }
@@ -818,6 +875,21 @@ function setupPanelEntry(
         } catch {
           // Malformed href — swallow silently; we must not crash the host.
         }
+        break;
+      }
+
+      case "exportRequest": {
+        // The export dialog confirmed (R17) — run the export for the document
+        // this panel is previewing, via the handler extension.ts registered.
+        const doc = entry.document;
+        const kind = message.kind;
+        const options = message.options;
+        if (!doc || !_exportRequestHandler) break;
+        if (kind !== "html" && kind !== "pdf") break;
+        if (typeof options !== "object" || options === null) break;
+        void _exportRequestHandler(doc, kind, options as ExportOptions).catch((err: unknown) => {
+          console.error("Penmark: export failed", err);
+        });
         break;
       }
 
@@ -898,7 +970,7 @@ export async function registerCustomEditorPreview(
 
   const distUri = vscode.Uri.joinPath(context.extensionUri, "dist");
   const workspaceRoots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri);
-  
+
   panel.webview.options = {
     enableScripts: true,
     localResourceRoots: [distUri, ...workspaceRoots],

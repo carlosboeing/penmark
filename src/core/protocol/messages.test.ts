@@ -129,12 +129,22 @@ describe("protocol/messages", () => {
           return msg.type;
         case "exportCapture":
           return msg.type;
+        case "exportShowOptions":
+          return msg.type;
         default:
           return assertNever(msg);
       }
     };
     expect(handle({ v: 1, type: "comments", comments: [], attention: 0 })).toBe("comments");
-    expect(handle({ v: 1, type: "exportCapture", requestId: "r1" })).toBe("exportCapture");
+    expect(
+      handle({
+        v: 1,
+        type: "exportCapture",
+        requestId: "r1",
+        includeFrontmatter: false,
+        includeToc: true,
+      }),
+    ).toBe("exportCapture");
   });
 
   it("exhaustively narrows every WebviewToHost variant", () => {
@@ -169,6 +179,8 @@ describe("protocol/messages", () => {
           return msg.type;
         case "exportCaptured":
           return msg.type;
+        case "exportRequest":
+          return msg.type;
         default:
           return assertNever(msg);
       }
@@ -181,11 +193,25 @@ describe("protocol/messages", () => {
         requestId: "r1",
         ok: true,
         html: "<p>hi</p>",
-        theme: "light",
-        contentWidth: "full",
+        tocHtml: '<nav class="pmk-toc"></nav>',
         rootStyle: "",
       }),
     ).toBe("exportCaptured");
+    expect(
+      handle({
+        v: 1,
+        type: "exportRequest",
+        kind: "pdf",
+        options: {
+          includeFrontmatter: false,
+          includeToc: true,
+          width: "comfortable",
+          pdfPageSize: "a4",
+          pdfMargin: "normal",
+          pdfHeaderFooter: true,
+        },
+      }),
+    ).toBe("exportRequest");
   });
 
   it("exportCaptured carries the capture payload including a failure shape", () => {
@@ -196,8 +222,6 @@ describe("protocol/messages", () => {
       ok: false,
       error: "preview root not found",
       html: "",
-      theme: "dark",
-      contentWidth: "comfortable",
       rootStyle: "",
     };
     if (failed.type === "exportCaptured") {

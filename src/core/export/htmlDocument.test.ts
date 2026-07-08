@@ -1,7 +1,8 @@
 /**
  * Unit tests for the standalone export document builder (R17, ADR 0007).
  * Pure string assembly — asserted on structure, escaping, and the security
- * posture (CSP meta, no scripts introduced by the wrapper).
+ * posture (CSP meta, no scripts introduced by the wrapper). Exports are
+ * always light-themed.
  */
 import { describe, it, expect } from "vitest";
 import { buildExportHtml, escapeHtml } from "./htmlDocument.js";
@@ -9,8 +10,7 @@ import { buildExportHtml, escapeHtml } from "./htmlDocument.js";
 const BASE = {
   title: "doc.md",
   contentHtml: "<h1>Hello</h1>\n<p>World</p>",
-  theme: "light" as const,
-  contentWidth: "full" as const,
+  width: "full" as const,
   css: ["body { margin: 0; }", "#penmark-root { padding: 0; }"],
 };
 
@@ -32,11 +32,12 @@ describe("buildExportHtml", () => {
     expect(html).toContain("<title>doc.md</title>");
   });
 
-  it("pins the captured theme and content width as body classes + data-theme", () => {
-    const html = buildExportHtml({ ...BASE, theme: "dark", contentWidth: "comfortable" });
+  it("always pins the light theme and applies the width option as a body class", () => {
+    const html = buildExportHtml({ ...BASE, width: "comfortable" });
     expect(html).toMatch(
-      /<body class="theme-dark pmk-content-comfortable pmk-export" data-theme="dark">/,
+      /<body class="theme-light pmk-content-comfortable pmk-export" data-theme="light">/,
     );
+    expect(buildExportHtml(BASE)).toContain("pmk-content-full");
   });
 
   it("inlines every stylesheet in order", () => {
@@ -56,11 +57,17 @@ describe("buildExportHtml", () => {
     expect(html).not.toContain("<script");
   });
 
-  it("emits @page size and margin when a page size is given", () => {
-    expect(buildExportHtml({ ...BASE, pageSize: "a4" })).toContain("@page { size: A4; margin:");
-    expect(buildExportHtml({ ...BASE, pageSize: "letter" })).toContain(
-      "@page { size: letter; margin:",
+  it("emits @page size and preset margins only when pageSetup is given", () => {
+    expect(buildExportHtml({ ...BASE, pageSetup: { size: "a4", margin: "normal" } })).toContain(
+      "@page { size: A4; margin: 18mm 16mm; }",
     );
+    expect(buildExportHtml({ ...BASE, pageSetup: { size: "letter", margin: "narrow" } })).toContain(
+      "@page { size: letter; margin: 12mm 12mm; }",
+    );
+    expect(buildExportHtml({ ...BASE, pageSetup: { size: "a4", margin: "wide" } })).toContain(
+      "margin: 25mm 22mm",
+    );
+    // The CDP-printed PDF path controls page geometry itself — no @page.
     expect(buildExportHtml(BASE)).not.toContain("@page");
   });
 
@@ -94,5 +101,19 @@ describe("buildExportHtml", () => {
     const root = html.indexOf('id="penmark-root"');
     expect(card).toBeGreaterThan(-1);
     expect(card).toBeLessThan(root);
+  });
+
+  it("places the table of contents inside the root, before the content", () => {
+    const html = buildExportHtml({
+      ...BASE,
+      tocHtml: '<nav class="pmk-toc"><ol><li><a href="#hello">Hello</a></li></ol></nav>',
+    });
+    const root = html.indexOf('id="penmark-root"');
+    const toc = html.indexOf('class="pmk-toc"');
+    const content = html.indexOf("<h1>Hello</h1>");
+    expect(toc).toBeGreaterThan(root);
+    expect(content).toBeGreaterThan(toc);
+    // Omitted entirely when not requested.
+    expect(buildExportHtml(BASE)).not.toContain("pmk-toc");
   });
 });

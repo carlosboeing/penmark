@@ -93,6 +93,44 @@ describe("R17 — export as HTML / PDF", function (this: { timeout(ms: number): 
     // Review/preview artifacts stripped from content.
     assert.ok(!html.includes("data-pmk-offset"), "machine offsets must be stripped");
     assert.ok(!html.includes('class="pmk-copy-btn"'), "copy buttons must be stripped");
+
+    // Defaults: always light, frontmatter card and TOC excluded.
+    assert.ok(html.includes('data-theme="light"'), "exports are always light-themed");
+    // The class NAME appears in the inlined stylesheets — assert on the element.
+    assert.ok(!html.includes('id="pmk-frontmatter-card"'), "frontmatter is excluded by default");
+    assert.ok(!html.includes('class="pmk-toc"'), "TOC is excluded by default");
+  });
+
+  it("(b2) export options: frontmatter card, TOC, and width flow through", async () => {
+    const { mdUri, dir } = writeShowcaseDir();
+    const doc = await vscode.workspace.openTextDocument(mdUri);
+    await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const target = vscode.Uri.file(path.join(dir, "showcase-full.html"));
+    const result = await vscode.commands.executeCommand<vscode.Uri | undefined>(
+      "penmark.exportHtml",
+      mdUri,
+      target,
+      {
+        includeFrontmatter: true,
+        includeToc: true,
+        width: "comfortable",
+        pdfPageSize: "letter",
+        pdfMargin: "wide",
+        pdfHeaderFooter: true,
+      },
+    );
+
+    assert.ok(result, "the command must return the written target URI");
+    const html = fs.readFileSync(target.fsPath, "utf8");
+    assert.ok(html.includes('id="pmk-frontmatter-card"'), "frontmatter card included on request");
+    assert.ok(html.includes('class="pmk-toc"'), "generated TOC included on request");
+    assert.ok(html.includes("pmk-content-comfortable"), "width option becomes the body class");
+    assert.ok(
+      html.includes("@page { size: letter; margin: 25mm 22mm; }"),
+      "page setup follows the pdf options for browser printing",
+    );
   });
 
   it("(c) exportPdf prints a valid PDF via a system browser (skips when none installed)", async function (this: {

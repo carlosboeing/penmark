@@ -91,7 +91,53 @@ body.pmk-export input[type="checkbox"] {
     overflow-wrap: anywhere;
   }
 
+  /* Print with concrete, embeddable monospace fonts. The screen stack leads
+   * with the ui-monospace keyword, which fontconfig on some Linux setups
+   * (e.g. CJK-configured desktops, the Playwright CI image) resolves to a
+   * TTC collection font Chromium's print compositor cannot embed — printing
+   * then fails outright. Menlo/Consolas/Liberation/DejaVu cover macOS,
+   * Windows, and Linux with fonts that embed cleanly. */
+  /* #penmark-root beats penmark.css's own `#penmark-root code` rule. */
+  body.pmk-export #penmark-root code,
+  body.pmk-export #penmark-root pre,
+  body.pmk-export #penmark-root samp,
+  body.pmk-export #penmark-root kbd {
+    font-family: SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+  }
+
   body.pmk-export .pmk-frontmatter-card {
     margin-top: 0;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * Table of contents (export option)
+ * --------------------------------------------------------------------------- */
+
+body.pmk-export .pmk-toc {
+  margin: 0 0 32px;
+  padding: 14px 18px;
+  border: 1px solid var(--pmk-color-border-muted);
+  border-radius: 8px;
+  background-color: var(--pmk-color-bg-muted);
+  break-inside: avoid;
+}
+
+body.pmk-export .pmk-toc-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pmk-color-fg-muted);
+}
+
+body.pmk-export .pmk-toc ol {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+body.pmk-export .pmk-toc li {
+  margin: 2px 0;
+  font-size: 0.95em;
 }
