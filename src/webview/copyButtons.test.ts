@@ -3,8 +3,9 @@
  *
  * Runs in the vitest "webview" project (jsdom environment).
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { installCopyButtons, markLastCopied } from "./copyButtons.js";
+import type { WebviewToHost } from "../core/protocol/messages.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,13 +28,13 @@ function seedCodeBlock(root: HTMLElement, code: string): HTMLPreElement {
 
 describe("installCopyButtons", () => {
   let root: HTMLElement;
-  let post: ReturnType<typeof vi.fn>;
+  let post: Mock<(msg: WebviewToHost) => void>;
 
   beforeEach(() => {
     document.body.innerHTML = "";
     root = document.createElement("div");
     document.body.appendChild(root);
-    post = vi.fn();
+    post = vi.fn<(msg: WebviewToHost) => void>();
   });
 
   it("adds exactly one copy button to every pre > code", () => {

@@ -4,8 +4,8 @@
  *
  * Runs in the vitest "webview" project (jsdom environment).
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { WireComment } from "../../core/protocol/messages.js";
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
 import {
   ensureDrawer,
   renderDrawer,
@@ -91,13 +91,13 @@ describe("bucketComments", () => {
 });
 
 describe("drawer", () => {
-  let post: ReturnType<typeof vi.fn>;
-  let onReanchor: ReturnType<typeof vi.fn>;
+  let post: Mock<(msg: WebviewToHost) => void>;
+  let onReanchor: Mock<(id: string, quote: string, body: string) => void>;
 
   beforeEach(() => {
     document.body.innerHTML = "";
-    post = vi.fn();
-    onReanchor = vi.fn();
+    post = vi.fn<(msg: WebviewToHost) => void>();
+    onReanchor = vi.fn<(id: string, quote: string, body: string) => void>();
     ensureDrawer({ post, onReanchor });
   });
 
