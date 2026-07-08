@@ -47,6 +47,13 @@ export const Uri = {
   file(p: string): { fsPath: string; scheme: string; toString: () => string } {
     return { fsPath: p, scheme: "file", toString: () => `file://${p}` };
   },
+  joinPath(
+    base: { fsPath: string },
+    ...segments: string[]
+  ): { fsPath: string; scheme: string; toString: () => string } {
+    const joined = [base.fsPath.replace(/\/$/, ""), ...segments].join("/");
+    return { fsPath: joined, scheme: "file", toString: () => `file://${joined}` };
+  },
 };
 
 /** Clipboard seam: tests read `env.clipboard._text`. */
@@ -61,6 +68,7 @@ export const env = {
 };
 
 export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;
+export const ProgressLocation = { Notification: 15 } as const;
 
 /**
  * Configuration store the host mock reads. Tests set values via
@@ -96,6 +104,9 @@ export const workspace = {
   },
   /** Minimal FileSystem: records writeFile so tests can assert the file path/content. */
   fs: {
+    readFile(): Promise<Uint8Array> {
+      return Promise.resolve(new TextEncoder().encode(""));
+    },
     writeFile(uri: { fsPath: string }, content: Uint8Array): Promise<void> {
       workspace._writtenFiles.set(uri.fsPath, new TextDecoder().decode(content));
       return Promise.resolve();
@@ -151,6 +162,13 @@ export const window = {
   showInformationMessage(message: string): Promise<undefined> {
     this._infos.push(message);
     return Promise.resolve(undefined);
+  },
+  showErrorMessage(message: string): Promise<undefined> {
+    this._warnings.push(message);
+    return Promise.resolve(undefined);
+  },
+  withProgress<T>(_options: unknown, task: () => Thenable<T> | Promise<T> | T): Promise<T> {
+    return Promise.resolve(task());
   },
   /** The next showQuickPick return value; set by tests via __setQuickPickChoice. */
   _quickPickChoice: undefined as string | undefined,

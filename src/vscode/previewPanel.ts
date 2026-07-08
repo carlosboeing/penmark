@@ -566,7 +566,8 @@ export async function requestExportDialog(
   defaults: ExportOptions,
 ): Promise<void> {
   const entry = ensureExportPanel(context, document);
-  const msg = { v: 1, type: "exportShowOptions", kind, defaults } as const;
+  const requestId = generateNonce();
+  const msg = { v: 1, type: "exportShowOptions", kind, defaults, requestId } as const;
   for (let i = 0; i < 4; i++) {
     void entry.panel.webview.postMessage(msg);
     await new Promise((r) => setTimeout(r, 400));

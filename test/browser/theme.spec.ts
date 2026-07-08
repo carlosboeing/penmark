@@ -53,6 +53,7 @@ async function renderShowcase(
 
 for (const theme of ["light", "dark"] as const) {
   test(`theme golden — ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 760 });
     await page.goto("/");
 
     // Wait for the webview bundle to attach and post 'ready'.
@@ -69,7 +70,6 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("#penmark-topbar")).toContainText("showcase.md");
 
     await expect(page).toHaveScreenshot(`theme-${theme}.png`, {
-      fullPage: true,
       animations: "disabled",
     });
   });

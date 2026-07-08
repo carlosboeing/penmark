@@ -356,6 +356,8 @@ const _exportCapturesInFlight = new Set<string>();
 
 /** Host-configured export defaults, refreshed with every render (R17). */
 let _exportDefaults: ExportOptions | null = null;
+const _dismissedExportRequestIds = new Set<string>();
+let _activeExportRequestId: string | null = null;
 
 /** Dialog defaults: host settings when known, sensible fallbacks otherwise. */
 function exportDialogDefaults(): ExportOptions {
@@ -375,6 +377,7 @@ function exportDialogDefaults(): ExportOptions {
 function topbarExportOpts(): TopbarExportOpts {
   return {
     onOpenExport: () => {
+      _activeExportRequestId = null;
       ensureExportDialog((m) => vscode.postMessage(m));
       openExportDialog("html", exportDialogDefaults());
     },
@@ -841,8 +844,18 @@ window.addEventListener("message", (event: MessageEvent) => {
       // freshly-read settings as defaults. The host re-posts this a few times
       // (fresh webviews drop pre-attach messages) — never clobber an open
       // dialog the user is already interacting with.
+      const requestId = msg.requestId ?? null;
+      if (requestId && _dismissedExportRequestIds.has(requestId)) break;
       _exportDefaults = msg.defaults;
-      ensureExportDialog((m) => vscode.postMessage(m));
+      _activeExportRequestId = requestId;
+      ensureExportDialog(
+        (m) => vscode.postMessage(m),
+        () => {
+          if (_activeExportRequestId) {
+            _dismissedExportRequestIds.add(_activeExportRequestId);
+          }
+        },
+      );
       if (!isExportDialogOpen()) {
         openExportDialog(msg.kind, msg.defaults);
       }

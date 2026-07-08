@@ -179,9 +179,17 @@ export async function handleExportHtml(
     }));
   if (!target) return undefined;
 
-  await vscode.workspace.fs.writeFile(target, Buffer.from(built.html, "utf8"));
-  showExportedMessage(target, built.failures.length, "Open in Browser");
-  return target;
+  try {
+    await vscode.workspace.fs.writeFile(target, Buffer.from(built.html, "utf8"));
+    showExportedMessage(target, built.failures.length, "Open in Browser");
+    return target;
+  } catch (err) {
+    penmarkOutput().appendLine(
+      `[${new Date().toISOString()}] export: HTML export failed — ${errMsg(err)}`,
+    );
+    void vscode.window.showErrorMessage(`Penmark: HTML export failed — ${errMsg(err)}`);
+    return undefined;
+  }
 }
 
 /**

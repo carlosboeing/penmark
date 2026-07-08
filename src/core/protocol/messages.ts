@@ -135,7 +135,13 @@ export type HostToWebview =
     }
   // Open the export options dialog (palette/menu command path). The topbar
   // Export button opens the same dialog webview-side without this message.
-  | { v: 1; type: "exportShowOptions"; kind: ExportKind; defaults: ExportOptions };
+  | {
+      v: 1;
+      type: "exportShowOptions";
+      kind: ExportKind;
+      defaults: ExportOptions;
+      requestId?: string;
+    };
 
 /**
  * Serialized preview DOM posted back for an `exportCapture` request (R17).

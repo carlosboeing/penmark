@@ -420,6 +420,34 @@ test("exportShowOptions opens the dialog with host defaults (palette path)", asy
   );
 });
 
+test("canceling an exportShowOptions dialog suppresses retried reopen attempts", async ({
+  page,
+}) => {
+  await waitReady(page);
+  await renderShowcase(page, "light");
+
+  const dialog = page.locator("dialog.pmk-export-dialog");
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate((defaults) => {
+      (window as Window & { __harness?: Harness }).__harness!.injectMessage({
+        v: 1,
+        type: "exportShowOptions",
+        kind: "html",
+        defaults,
+        requestId: "cancel-retry",
+      });
+    }, DIALOG_DEFAULTS);
+    if (i === 0) {
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await page.waitForTimeout(100);
+  }
+
+  await expect(dialog).toBeHidden();
+});
+
 test("exported file is self-contained, script-free, and honors content options", async ({
   page,
 }) => {

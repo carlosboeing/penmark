@@ -18,6 +18,7 @@ interface DialogInternals {
   el: HTMLDialogElement;
   content: HTMLElement;
   post: PostMessage;
+  onDismiss?: () => void;
 }
 
 let _dialog: DialogInternals | null = null;
@@ -29,15 +30,19 @@ export function isExportDialogOpen(): boolean {
 }
 
 /** Create (once) the dialog shell and remember the post channel. */
-export function ensureExportDialog(post: PostMessage): HTMLDialogElement {
+export function ensureExportDialog(post: PostMessage, onDismiss?: () => void): HTMLDialogElement {
   if (_dialog && document.body.contains(_dialog.el)) {
     _dialog.post = post;
+    _dialog.onDismiss = onDismiss;
     return _dialog.el;
   }
 
   const el = document.createElement("dialog");
   el.className = "pmk-export-dialog";
   el.setAttribute("aria-label", "Export options");
+  el.addEventListener("cancel", () => {
+    _dialog?.onDismiss?.();
+  });
 
   const head = document.createElement("div");
   head.className = "pmk-settings-head";
@@ -52,7 +57,7 @@ export function ensureExportDialog(post: PostMessage): HTMLDialogElement {
   el.append(head, content);
   document.body.appendChild(el);
 
-  _dialog = { el, content, post };
+  _dialog = { el, content, post, onDismiss };
   return el;
 }
 
@@ -66,7 +71,12 @@ export function openExportDialog(kind: ExportKind, defaults: ExportOptions): voi
   }
 }
 
-export function closeExportDialog(): void {
+export function closeExportDialog(
+  reason: "cancel" | "confirmed" | "programmatic" = "programmatic",
+): void {
+  if (reason === "cancel") {
+    _dialog?.onDismiss?.();
+  }
   _dialog?.el.close();
   _draft = null;
 }
@@ -212,14 +222,14 @@ function renderContent(): void {
   cancel.type = "button";
   cancel.className = "pmk-settings-option";
   cancel.textContent = "Cancel";
-  cancel.addEventListener("click", () => closeExportDialog());
+  cancel.addEventListener("click", () => closeExportDialog("cancel"));
   const confirm = document.createElement("button");
   confirm.type = "button";
   confirm.className = "pmk-export-confirm";
   confirm.textContent = draft.kind === "pdf" ? "Export PDF" : "Export HTML";
   confirm.addEventListener("click", () => {
     _dialog?.post({ v: 1, type: "exportRequest", kind: draft.kind, options: { ...options } });
-    closeExportDialog();
+    closeExportDialog("confirmed");
   });
   actions.append(cancel, confirm);
   _dialog.content.appendChild(actions);
