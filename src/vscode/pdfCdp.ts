@@ -217,6 +217,29 @@ export interface CdpPrintOptions {
   spawnFn?: typeof nodeSpawn;
 }
 
+/** Arguments for an isolated, credential-free Chromium CDP print process. */
+export function buildCdpLaunchArgs(profileDir: string, extraArgs: string[] = []): string[] {
+  return [
+    "--headless",
+    // The temporary profile never stores credentials. Avoid a macOS Keychain
+    // access prompt for Chromium's unused password store.
+    "--password-store=basic",
+    "--use-mock-keychain",
+    "--disable-gpu",
+    // Containers and low-memory Linux hosts mount a tiny /dev/shm; Chromium's
+    // renderer starves on multi-page prints and printToPDF fails or hangs.
+    // Falling back to /tmp (what Playwright's own launcher does) is reliable
+    // everywhere at a negligible speed cost.
+    "--disable-dev-shm-usage",
+    "--no-first-run",
+    "--no-default-browser-check",
+    `--user-data-dir=${profileDir}`,
+    "--remote-debugging-pipe",
+    ...extraArgs,
+    "about:blank",
+  ];
+}
+
 /**
  * Print `htmlPath` to `pdfPath` via CDP with full header/footer and margin
  * control. Throws on any failure — the caller falls back to the CLI printer.
@@ -234,21 +257,7 @@ export async function printHtmlToPdfViaCdp(
   // An isolated profile dir keeps the run reproducible and lets several
   // exports run concurrently; removed afterwards.
   const profileDir = await mkdtemp(join(tmpdir(), "penmark-cdp-"));
-  const args = [
-    "--headless",
-    "--disable-gpu",
-    // Containers and low-memory Linux hosts mount a tiny /dev/shm; Chromium's
-    // renderer starves on multi-page prints and printToPDF fails or hangs.
-    // Falling back to /tmp (what Playwright's own launcher does) is reliable
-    // everywhere at a negligible speed cost.
-    "--disable-dev-shm-usage",
-    "--no-first-run",
-    "--no-default-browser-check",
-    `--user-data-dir=${profileDir}`,
-    "--remote-debugging-pipe",
-    ...(opts.extraArgs ?? []),
-    "about:blank",
-  ];
+  const args = buildCdpLaunchArgs(profileDir, opts.extraArgs);
 
   const child = spawnFn(executable, args, {
     // fd 3 = CDP input (we write), fd 4 = CDP output (we read).
