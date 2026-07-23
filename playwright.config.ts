@@ -25,7 +25,14 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: {
+          // Chrome for Testing has no credentials to read in this suite. Avoid
+          // macOS prompting for its unused Chromium Safe Storage keychain item.
+          args: ["--password-store=basic", "--use-mock-keychain"],
+        },
+      },
     },
   ],
   webServer: {

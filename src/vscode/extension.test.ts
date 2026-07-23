@@ -21,6 +21,16 @@ beforeEach(() => {
 });
 
 describe("activate — custom editor native Find", () => {
+  it("registers the stable in-preview find command", () => {
+    const subscriptions: vscode.Disposable[] = [];
+
+    activate({ subscriptions } as unknown as vscode.ExtensionContext);
+
+    expect(seam.commands._registrations.map((registration) => registration.command)).toContain(
+      "penmark.find",
+    );
+  });
+
   it("enables native Find without retaining hidden custom-editor webviews", () => {
     const subscriptions: vscode.Disposable[] = [];
 

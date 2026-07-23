@@ -55,6 +55,8 @@ describe("buildPrintArgs", () => {
   it("prints headless without header/footer, file URL last", () => {
     const args = buildPrintArgs("/tmp/in.html", "/tmp/out.pdf", ["--no-sandbox"]);
     expect(args).toContain("--headless");
+    expect(args).toContain("--password-store=basic");
+    expect(args).toContain("--use-mock-keychain");
     expect(args).toContain("--no-pdf-header-footer");
     expect(args).toContain("--print-to-pdf=/tmp/out.pdf");
     expect(args).toContain("--no-sandbox");

@@ -94,6 +94,55 @@ describe("main.ts message loop", () => {
     expect(root!.textContent).toContain("Content");
   });
 
+  it("opens in-preview find from the host command and reapplies it after a render", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Needle and needle</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+
+    injectMessage({ v: 1, type: "openFind" });
+    const input = document.querySelector<HTMLInputElement>(".pmk-find-input")!;
+    expect(document.querySelector(".pmk-find-surface")?.getAttribute("aria-hidden")).toBe("false");
+    input.value = "needle";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelectorAll(".pmk-search-hit")).toHaveLength(2);
+
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Needle only</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    expect(document.querySelectorAll(".pmk-search-hit")).toHaveLength(1);
+  });
+
+  it("updates the Search button state after Escape closes the find surface", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Needle</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    injectMessage({ v: 1, type: "openFind" });
+    const input = document.querySelector<HTMLInputElement>(".pmk-find-input")!;
+    expect(document.querySelector(".pmk-topbar-find")?.getAttribute("aria-pressed")).toBe("true");
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+    expect(document.querySelector(".pmk-topbar-find")?.getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("derives reading metadata from rendered root text after each render", () => {
     injectMessage({
       v: 1,

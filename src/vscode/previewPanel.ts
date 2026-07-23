@@ -80,6 +80,12 @@ export interface PanelEntry {
   suppressVisibleRangeUntil: number;
   /** Last time a `revealLine` was posted to this panel, for throttling. */
   lastRevealLinePostedAt: number;
+  /** Whether this panel's current webview instance has attached its listener. */
+  webviewReady: boolean;
+  /** A find command awaiting the current webview's ready handshake. */
+  pendingOpenFind: boolean;
+  /** Monotonic recency token updated when this panel gains focus. */
+  focusOrder: number;
   /**
    * Serialization chain for document-mutating comment ops (add/resolve). Each op
    * reads the live document text and applies a WorkspaceEdit; running two at once
@@ -100,6 +106,9 @@ export interface PanelEntry {
 
 /** Active panels keyed by the ViewColumn they occupy. */
 const panels = new Map<vscode.ViewColumn | string, PanelEntry>();
+
+/** Monotonic focus order, used when no preview panel is currently active. */
+let _focusOrder = 0;
 
 /** Accumulated render count across all panels, reset by the test seam. */
 let _totalRenderCount = 0;
@@ -726,8 +735,22 @@ function setupPanelEntry(
     lastRevealLineMessage: undefined,
     suppressVisibleRangeUntil: 0,
     lastRevealLinePostedAt: 0,
+    webviewReady: false,
+    pendingOpenFind: false,
+    focusOrder: ++_focusOrder,
   };
   panels.set(key, entry);
+
+  // A webview is discarded when the panel becomes hidden (retainContextWhenHidden
+  // is false), NOT when it merely loses focus — a preview stays visible while the
+  // editor beside it is focused. Track readiness off `visible` so a focus change
+  // in a split view keeps the live listener; a genuinely hidden panel reloads on
+  // its next reveal and re-attaches via a fresh `ready`. Focus order still tracks
+  // `active` so the last-focused preview wins when none is currently active.
+  (panel as Partial<vscode.WebviewPanel>).onDidChangeViewState?.(() => {
+    if (panel.active) entry.focusOrder = ++_focusOrder;
+    if (!panel.visible) entry.webviewReady = false;
+  });
 
   // Initial render
   if (document) {
@@ -758,11 +781,16 @@ function setupPanelEntry(
 
     switch (message.type) {
       case "ready":
+        entry.webviewReady = true;
         // Webview has attached its listener — re-post the current render so the
         // initial postRender (which may have been dropped before the listener
         // was attached) is guaranteed to arrive.
         if (entry.document) {
           void postRender(entry, entry.document);
+        }
+        if (entry.pendingOpenFind) {
+          entry.pendingOpenFind = false;
+          void entry.panel.webview.postMessage({ v: 1, type: "openFind" } satisfies HostToWebview);
         }
         break;
 
@@ -1080,6 +1108,36 @@ export function openPreview(context: vscode.ExtensionContext): void {
     return;
   }
   openOrReveal(context, activeEditor.document);
+}
+
+/** Open the webview-owned search surface in the active (or last-focused) preview. */
+export function openFind(): void {
+  const entries = [...panels.values()];
+  const entry = entries.find((candidate) => candidate.panel.active)
+    ?? entries.reduce<PanelEntry | undefined>(
+      (latest, candidate) => !latest || candidate.focusOrder > latest.focusOrder ? candidate : latest,
+      undefined,
+    );
+  if (!entry) {
+    void vscode.window.showInformationMessage("Penmark: open a preview to search it.");
+    return;
+  }
+  entry.pendingOpenFind = true;
+  // "Hidden" means not visible — its webview context was torn down — not merely
+  // unfocused. Reveal unconditionally so the preview is focused and can take the
+  // keystrokes typed into the search box.
+  const wasHidden = !entry.panel.visible;
+  if (wasHidden) {
+    // Revealing a hidden panel reloads its webview; the fresh frame attaches its
+    // listener and acknowledges with `ready`, which flushes the pending command.
+    entry.webviewReady = false;
+  }
+  entry.panel.reveal(entry.column, false);
+  if (!wasHidden && entry.webviewReady) {
+    // Already visible with a live listener — deliver immediately.
+    entry.pendingOpenFind = false;
+    void entry.panel.webview.postMessage({ v: 1, type: "openFind" } satisfies HostToWebview);
+  }
 }
 
 // ---------------------------------------------------------------------------

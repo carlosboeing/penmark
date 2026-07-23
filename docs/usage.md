@@ -18,7 +18,7 @@ A preview panel opens beside the editor.
 - **Preview settings panel** — use **Preview settings** in the top bar to adjust theme, typography preset, text size, content width, code wrapping, and comment-highlight intensity without leaving the preview; an **Open all Penmark settings** link at the bottom reaches less-common options like font family and line height. The panel writes the same `penmark.*` settings documented in [configuration.md](configuration.md).
 - **Themes** — light, dark, or auto (follows the IDE), set from the settings panel or by `penmark.theme`. See [configuration.md](configuration.md).
 - **Syntax highlighting** — code blocks are highlighted (highlight.js, loaded only when a language-tagged block exists), with a one-click **Copy** button. Toggle live wrapping of long code lines with `penmark.codeBlockWrap`.
-- **Native Find** — `Ctrl/Cmd+F` opens the IDE's built-in Find widget scoped to the preview when it has focus.
+- **Search the preview** — click **Search** in the top bar or run **Penmark: Search Preview**. It finds and highlights rendered text without changing your selection or Markdown, shows a match count, supports case-sensitive search, and cycles matches with Enter / Shift+Enter. `Esc` closes it and returns focus to the control that opened it. Search is capped at 500 matches for responsiveness; a `+` after the count means there may be more. In stock VS Code, `Ctrl/Cmd+F` still opens the native Find widget; use Penmark Search in Cursor and Antigravity, where native Find is incomplete.
 - **Reading metadata** — a compact word-count and reading-time line sits beside the document title.
 - **Mermaid diagrams and images** — Mermaid diagrams render lazily; click a diagram or preview image to open a lightbox with zoom controls. Toggle Mermaid rendering with `penmark.mermaid.enabled`.
 - **Scroll sync** — the editor and preview scroll together in both directions; toggle with `penmark.scrollSync`.
@@ -65,6 +65,7 @@ The format is specified in [`spec/penmark-format.md`](../spec/penmark-format.md)
 | Command | ID | Description |
 | --- | --- | --- |
 | Penmark: Open Preview to the Side | `penmark.openPreview` | Open the rendered preview beside the editor. |
+| Penmark: Search Preview | `penmark.find` | Open the in-preview search bar for the active Penmark preview. |
 | Penmark: Export Review as Prompt | `penmark.exportReview` | Export the open comments as an agent-ready prompt. |
 | Penmark: Export as HTML | `penmark.exportHtml` | Open the export dialog for a self-contained HTML file. |
 | Penmark: Export as PDF | `penmark.exportPdf` | Open the export dialog for a PDF printed via a local Chromium-based browser. |

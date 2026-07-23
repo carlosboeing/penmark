@@ -27,7 +27,7 @@ src/
     comments/  format parser/serializer, anchor placement, reconcile, IDs
     protocol/  versioned message types shared with the webview
   vscode/      activation, commands, preview panel manager, WorkspaceEdit ops, settings, watchers
-  webview/     separate esbuild entry: highlights, comment box, drawer, mermaid loader, lightbox, theme
+  webview/     separate esbuild entry: highlights, comment box, drawer, find fallback, mermaid loader, lightbox, theme
 ```
 
 ## Data flow
@@ -48,6 +48,8 @@ A single reusable panel, with no `retainContextWhenHidden` — state is restored
 Settings and Comments are two on-demand side panels that share the same persistent preview root — opening or closing either never re-renders the document, only toggles body-state attributes (`data-pmk-settings-open` / `data-pmk-drawer-open`) that drive layout purely through CSS. Only one panel is open at a time. Geometry is responsive: at 1050px or wider an open Comments panel reserves 342px of layout space beside the document — Settings always overlays, at any width; below 1050px both panels overlay without reserving space; below 700px the open panel takes `calc(100vw - 24px)`.
 
 A small surface coordinator in `src/webview/keyboard.ts` tracks every open Penmark-owned panel/popover as a stack (`registerPenmarkSurface`/`closeTopmostPenmarkSurface`), so `Esc` always closes only the topmost surface and restores focus to the control that opened it — resolving the opener even after the topbar is rebuilt (`data-pmk-topbar-control` matching). Native VS Code dialogs and the browser's own Find widget (`enableFindWidget: true` on both preview entry paths) are outside this stack and keep their own authoritative cancellation.
+
+Native Find works in stock VS Code but is incomplete in Cursor and Antigravity, so Penmark also provides a webview-native Search surface ([ADR 0008](adrs/0008-in-preview-find-fallback.md)). The top-bar control and `penmark.find` command open a transient text-node highlighter under the preview root. It leaves selection and persisted Markdown unchanged, does not decorate across comment-anchor wrappers, clears its marks before morphdom reconciles, then reapplies an open query. Work is bounded at 500 matches, 10,000 text nodes, or 1,000,000 text characters; a capped result shows `N+` and is logged.
 
 The Settings panel itself is narrowed to the six settings most relevant while previewing (theme, preset, text size, content width, code wrapping, comment-highlight intensity); everything else — including line height — is one click away via a fixed **Open all Penmark settings** link: the host runs `workbench.action.openSettings` filtered to `penmark` and ignores any webview-supplied data (no product URI scheme involved, so it works identically in VS Code, Cursor, and Antigravity). A `readingMetrics` helper renders a compact word-count/reading-time line beside the document title.
 
@@ -88,3 +90,4 @@ These are enforced in CI by a bundle-size gate and a performance test layer.
 | [0005](adrs/0005-markdown-it-render-pipeline.md) | markdown-it render pipeline and source offsets |
 | [0006](adrs/0006-span-anchor-wrapping-with-degradation-ladder.md) | Span-anchor wrapping pairs and the degradation ladder |
 | [0007](adrs/0007-export-via-preview-capture.md) | HTML/PDF export via preview-DOM capture; PDF via system Chromium |
+| [0008](adrs/0008-in-preview-find-fallback.md) | In-preview Find fallback for editor forks |

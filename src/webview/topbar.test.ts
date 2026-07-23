@@ -59,6 +59,14 @@ describe("installTopbar", () => {
     expect(css).toMatch(/\.pmk-topbar-reading-meta\s*\{[\s\S]*color:\s*var\(--pmk-color-fg-subtle\)/);
   });
 
+  it("defines themed styles for the in-preview search surface and its hits", () => {
+    const css = readFileSync(resolve(process.cwd(), "media/penmark.css"), "utf8");
+
+    expect(css).toMatch(/\.pmk-find-surface\s*\{/);
+    expect(css).toMatch(/#penmark-root\s+\.pmk-search-hit\s*\{/);
+    expect(css).toMatch(/\.pmk-search-hit-current\s*\{/);
+  });
+
   it("renders one native theme button that announces and cycles all three modes", () => {
     const onThemeSelected = makeThemeSelected();
     installTopbar(
@@ -114,6 +122,20 @@ describe("installTopbar", () => {
     expect(toggle.hasAttribute("aria-pressed")).toBe(false);
     toggle.click();
     expect(onToggleSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a Search control that reports its active state and opens the find surface", () => {
+    const onOpenFind = vi.fn();
+    installTopbar(topbar(), "test.md", makeThemeSelected(), undefined, undefined, undefined, "auto", undefined, {
+      open: true,
+      onOpenFind,
+    });
+
+    const search = topbar().querySelector(".pmk-topbar-find") as HTMLButtonElement;
+    expect(search.getAttribute("aria-label")).toBe("Search document");
+    expect(search.getAttribute("aria-pressed")).toBe("true");
+    search.click();
+    expect(onOpenFind).toHaveBeenCalledOnce();
   });
 
   it("uses aria-hidden bundled SVGs while button names remain independent of labels", () => {

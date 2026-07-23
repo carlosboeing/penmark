@@ -6,7 +6,7 @@
  */
 import { PassThrough } from "node:stream";
 import { describe, it, expect } from "vitest";
-import { buildPrintToPdfParams, CdpConnection } from "./pdfCdp.js";
+import { buildCdpLaunchArgs, buildPrintToPdfParams, CdpConnection } from "./pdfCdp.js";
 
 function makePipe(): {
   cdp: CdpConnection;
@@ -118,5 +118,17 @@ describe("buildPrintToPdfParams", () => {
     expect(off["displayHeaderFooter"]).toBe(false);
     expect(off["headerTemplate"]).toBeUndefined();
     expect(off["marginTop"]).toBeCloseTo(0.71);
+  });
+});
+
+describe("buildCdpLaunchArgs", () => {
+  it("uses an isolated profile without accessing the OS password store", () => {
+    const args = buildCdpLaunchArgs("/tmp/penmark-cdp", ["--no-sandbox"]);
+    expect(args).toContain("--password-store=basic");
+    expect(args).toContain("--use-mock-keychain");
+    expect(args).toContain("--user-data-dir=/tmp/penmark-cdp");
+    expect(args).toContain("--remote-debugging-pipe");
+    expect(args).toContain("--no-sandbox");
+    expect(args.at(-1)).toBe("about:blank");
   });
 });

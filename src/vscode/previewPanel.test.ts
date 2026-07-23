@@ -6,6 +6,7 @@ import {
   handleEditComment,
   handleExportReview,
   handleUpdateSetting,
+  openFind,
   openPreview,
   PreviewPanelSerializer,
   previewManager,
@@ -111,6 +112,148 @@ describe("openPreview — native Find", () => {
 
     seam.window._createdWebviewPanels[0]?.dispose();
     expect(previewManager.panelCount()).toBe(0);
+  });
+});
+
+describe("openFind — webview readiness", () => {
+  /**
+   * A webview panel whose `active` (focus) and `visible` (context-alive) state
+   * can be driven independently — the distinction the find-delivery logic turns
+   * on. `reveal()` brings the panel forward and focuses it, matching VS Code.
+   */
+  function makeFindPanel(initial: { active: boolean; visible: boolean }): {
+    panel: vscode.WebviewPanel;
+    posted: unknown[];
+    reveals: () => number;
+    sendReady: () => void;
+    changeViewState: (next: { active?: boolean; visible?: boolean }) => void;
+    dispose: () => void;
+  } {
+    const state = { active: initial.active, visible: initial.visible };
+    let receiveMessage: ((message: unknown) => void) | undefined;
+    let viewStateListener: (() => void) | undefined;
+    let disposePanel: (() => void) | undefined;
+    let reveals = 0;
+    const posted: unknown[] = [];
+    const disposable = { dispose(): void {} };
+    const panel = {
+      get active(): boolean {
+        return state.active;
+      },
+      get visible(): boolean {
+        return state.visible;
+      },
+      viewColumn: vscode.ViewColumn.One,
+      reveal(): void {
+        reveals++;
+        state.visible = true;
+        state.active = true;
+      },
+      webview: {
+        cspSource: "test-csp",
+        html: "",
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        postMessage: async (message: unknown) => {
+          posted.push(message);
+          return true;
+        },
+        onDidReceiveMessage(callback: (message: unknown) => void): vscode.Disposable {
+          receiveMessage = callback;
+          return disposable;
+        },
+      },
+      onDidChangeViewState(callback: () => void): vscode.Disposable {
+        viewStateListener = callback;
+        return disposable;
+      },
+      onDidDispose(callback: () => void): vscode.Disposable {
+        disposePanel = callback;
+        return disposable;
+      },
+    } as unknown as vscode.WebviewPanel;
+
+    return {
+      panel,
+      posted,
+      reveals: () => reveals,
+      sendReady: () => receiveMessage?.({ v: 1, type: "ready" }),
+      changeViewState: (next) => {
+        if (next.active !== undefined) state.active = next.active;
+        if (next.visible !== undefined) state.visible = next.visible;
+        viewStateListener?.();
+      },
+      dispose: () => disposePanel?.(),
+    };
+  }
+
+  async function register(panel: vscode.WebviewPanel): Promise<void> {
+    await new PreviewPanelSerializer({ extensionUri: vscode.Uri.file("/extension") } as vscode.ExtensionContext)
+      .deserializeWebviewPanel(panel, undefined);
+  }
+
+  it("delivers immediately when the target preview is visible and ready", async () => {
+    const h = makeFindPanel({ active: true, visible: true });
+    await register(h.panel);
+    h.sendReady();
+
+    openFind();
+
+    expect(h.reveals()).toBe(1);
+    expect(h.posted).toEqual([{ v: 1, type: "openFind" }]);
+    h.dispose();
+  });
+
+  it("stays reliable when the preview is visible but unfocused, and never re-opens spuriously", async () => {
+    // Split-view review: the preview is visible beside a focused editor. This is
+    // the primary workflow the find fallback targets, and the case the earlier
+    // `panel.active`-based logic broke (stuck pending flag -> spurious reopen).
+    const h = makeFindPanel({ active: true, visible: true });
+    await register(h.panel);
+    h.sendReady(); // webview attaches its listener
+
+    // User clicks into the editor: the preview loses focus but stays visible, so
+    // its webview context is never torn down.
+    h.changeViewState({ active: false, visible: true });
+
+    openFind();
+    // The live listener is preserved, so the command is delivered at once.
+    expect(h.posted).toEqual([{ v: 1, type: "openFind" }]);
+
+    // A later, unrelated reload must NOT replay a stale pending command.
+    h.sendReady();
+    expect(h.posted).toEqual([{ v: 1, type: "openFind" }]);
+    h.dispose();
+  });
+
+  it("waits for the ready handshake when the visible preview has not acknowledged yet", async () => {
+    const h = makeFindPanel({ active: true, visible: true });
+    await register(h.panel);
+
+    openFind();
+    expect(h.posted).toEqual([]); // not ready yet — queued
+
+    h.sendReady();
+    expect(h.posted).toEqual([{ v: 1, type: "openFind" }]);
+
+    // The handshake is one-shot: a second ready must not repeat the command.
+    h.sendReady();
+    expect(h.posted).toEqual([{ v: 1, type: "openFind" }]);
+    h.dispose();
+  });
+
+  it("reveals and delivers after reload when the preview was hidden", async () => {
+    const h = makeFindPanel({ active: false, visible: false });
+    await register(h.panel);
+
+    openFind();
+    // Revealing a hidden panel reloads it; nothing is posted to the dead frame.
+    expect(h.reveals()).toBe(1);
+    expect(h.posted).toEqual([]);
+
+    // The reloaded webview attaches and acknowledges — now the command flushes.
+    h.sendReady();
+    expect(h.posted).toEqual([{ v: 1, type: "openFind" }]);
+    h.dispose();
   });
 });
 

@@ -180,6 +180,84 @@ body {
   text-align: center;
 }
 
+/* In-preview search lives outside the morphdom root. It is deliberately a
+ * compact surface rather than a modal, so it keeps the document readable. */
+.pmk-find-surface {
+  position: fixed;
+  top: 48px;
+  right: 12px;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 24px);
+  padding: 7px;
+  background-color: var(--pmk-ui-elevated);
+  color: var(--pmk-color-fg);
+  border: 1px solid var(--pmk-ui-border);
+  border-radius: 7px;
+  box-shadow: var(--pmk-comment-popover-shadow);
+}
+
+.pmk-find-surface[aria-hidden="true"] {
+  display: none;
+}
+
+.pmk-find-input {
+  width: min(240px, 45vw);
+  min-height: 28px;
+  color: var(--pmk-color-fg);
+  background-color: var(--pmk-color-bg);
+  border: 1px solid var(--pmk-ui-border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.pmk-find-surface button {
+  appearance: none;
+  min-height: 28px;
+  color: var(--pmk-color-fg);
+  background-color: var(--pmk-copy-btn-bg);
+  border: 1px solid var(--pmk-copy-btn-border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pmk-find-surface button:hover {
+  background-color: var(--pmk-copy-btn-hover-bg);
+}
+
+.pmk-find-input:focus-visible,
+.pmk-find-surface button:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 1px;
+}
+
+.pmk-find-count {
+  min-width: 46px;
+  color: var(--pmk-color-fg-muted);
+  font-size: 11px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#penmark-root .pmk-search-hit {
+  color: inherit;
+  background-color: color-mix(in srgb, var(--pmk-color-accent) 25%, transparent);
+  border-radius: 2px;
+  padding: 0;
+}
+
+#penmark-root .pmk-search-hit-current {
+  background-color: color-mix(in srgb, var(--pmk-color-accent) 50%, transparent);
+  outline: 1px solid var(--pmk-color-accent);
+}
+
 @media (max-width: 700px) {
   #penmark-topbar {
     gap: 4px;

@@ -61,6 +61,7 @@ import { resolveTheme, applyResolvedTheme, observeIdeTheme } from "./theme.js";
 import { installTopbar, type TopbarExportOpts } from "./topbar.js";
 import { applyTypography } from "./typography.js";
 import { installImageLightbox } from "./imageLightbox.js";
+import { ensureFindSurface, type FindSurface } from "./findSurface.js";
 import { renderFrontmatterCard } from "./frontmatterCard.js";
 import { installKeyboardNav } from "./keyboard.js";
 import {
@@ -116,6 +117,12 @@ if (_initialRoot) {
 let _lastComments: WireComment[] = [];
 let _lastAttention = 0;
 let _previewSettings: PreviewSettingsState | null = null;
+let _findSurface: FindSurface | null = null;
+
+function findSurface(): FindSurface {
+  _findSurface = ensureFindSurface(getRoot);
+  return _findSurface;
+}
 installKeyboardNav(() => _lastComments, {
   toggle: toggleCommentsSurface,
   isOpen: isDrawerOpen,
@@ -462,6 +469,14 @@ function refreshTopbar(): void {
     topbarExportOpts(),
     _previewSettings?.theme ?? "auto",
     _lastReadingMeta,
+    {
+      open: _findSurface?.isOpen() ?? false,
+      onOpenFind: () => {
+        const opener = document.querySelector<HTMLElement>("[data-pmk-topbar-control='find']");
+        findSurface().open(opener);
+        refreshTopbar();
+      },
+    },
   );
   const active = document.activeElement;
   if (
@@ -487,6 +502,10 @@ new MutationObserver(syncTopbarPanelState).observe(document.body, {
   attributes: true,
   attributeFilter: ["data-pmk-settings-open", "data-pmk-drawer-open"],
 });
+
+// Find owns its own Escape lifecycle through the shared surface coordinator.
+// Refresh after every close so the topbar's aria-pressed state remains truthful.
+document.addEventListener("pmk-find-closed", refreshTopbar);
 
 /** Persist the in-progress comment body across reloads via getState/setState. */
 const commentDraftStore: CommentDraftStore = {
@@ -713,6 +732,10 @@ window.addEventListener("message", (event: MessageEvent) => {
       closeCommentBox(false);
       getOrCreateOverlay().replaceChildren();
 
+      // Search marks are transient decorations, never part of the morphdom
+      // input. Remove them before reconciliation, then reapply below.
+      _findSurface?.clearForRender();
+
       // Render sanitized HTML using morphdom (D5, D6).
       renderInto(root, msg.html);
       _lastReadingMeta = readingMetrics(root.textContent ?? "").label;
@@ -735,6 +758,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       // host always sends comments; default to [] so a partial message (older
       // build / harness fixture) cannot crash the whole message handler.
       installHighlights(root, msg.comments ?? [], (m) => vscode.postMessage(m));
+      _findSurface?.refresh();
 
       // Comments drawer (R15): ensure the panel exists, then re-render the open
       // + needs-attention lists. The panel lives in <body> (outside the morphed
@@ -786,6 +810,12 @@ window.addEventListener("message", (event: MessageEvent) => {
       });
       drawer.id = "penmark-comments-drawer";
       renderDrawer(msg.comments ?? []);
+      refreshTopbar();
+      break;
+    }
+
+    case "openFind": {
+      findSurface().open(document.querySelector("[data-pmk-topbar-control='find']"));
       refreshTopbar();
       break;
     }

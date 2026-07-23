@@ -124,6 +124,7 @@ export type HostToWebview =
   | { v: 1; type: "setCodeBlockWrap"; codeBlockWrap: boolean }
   | { v: 1; type: "setTypography"; typography: TypographySettings }
   | { v: 1; type: "revealLine"; line: number }
+  | { v: 1; type: "openFind" }
   | { v: 1; type: "copied" }
   // Export capture (R17): ask the webview to force-render all mermaid diagrams
   // (always on the LIGHT theme — exports are light), strip preview-only chrome

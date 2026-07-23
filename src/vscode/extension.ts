@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import {
   handleExportReview,
   setExportRequestHandler,
+  openFind,
   openPreview,
   PreviewPanelSerializer,
   registerChangeListener,
@@ -19,6 +20,9 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   context.subscriptions.push(
     vscode.commands.registerCommand("penmark.openPreview", () => {
       openPreview(context);
+    }),
+    vscode.commands.registerCommand("penmark.find", () => {
+      openFind();
     }),
   );
 
