@@ -791,9 +791,12 @@ function setupPanelEntry(
 
       case "openPenmarkSettings": {
         // Open the native settings UI filtered to penmark.*. The target is
-        // FIXED — any URI-like fields on the message are ignored, so a
-        // compromised webview cannot redirect the user to an arbitrary target.
-        void vscode.env.openExternal(vscode.Uri.parse("vscode://settings/penmark"));
+        // FIXED — any fields on the message are ignored, so a compromised
+        // webview cannot redirect the user to an arbitrary target. Uses the
+        // openSettings command rather than a vscode:// URI because the product
+        // URI scheme differs per IDE (cursor://, …); the command works
+        // identically in VS Code, Cursor, and Antigravity.
+        void vscode.commands.executeCommand("workbench.action.openSettings", "penmark");
         break;
       }
 

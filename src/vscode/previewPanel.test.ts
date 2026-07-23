@@ -452,7 +452,7 @@ describe("handleUpdateSetting — preview settings panel host wiring", () => {
 });
 
 describe("openPenmarkSettings — host wiring", () => {
-  it("opens the fixed penmark settings URI and ignores webview-provided URI data", async () => {
+  it("runs the fixed openSettings command and ignores webview-provided URI data", async () => {
     let receiveMessage: ((message: unknown) => void) | undefined;
     let disposePanel: (() => void) | undefined;
     const disposable = { dispose(): void {} };
@@ -489,17 +489,17 @@ describe("openPenmarkSettings — host wiring", () => {
       extensionUri: vscode.Uri.file("/extension"),
     } as vscode.ExtensionContext;
 
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand");
     const openExternal = vi.spyOn(vscode.env, "openExternal");
     try {
       await new PreviewPanelSerializer(context).deserializeWebviewPanel(panel, undefined);
       expect(receiveMessage).toBeTypeOf("function");
 
-      const settingsUri = vscode.Uri.parse("vscode://settings/penmark");
       receiveMessage!({ v: 1, type: "openPenmarkSettings" });
-      expect(openExternal).toHaveBeenCalledTimes(1);
-      expect(openExternal).toHaveBeenCalledWith(settingsUri);
+      expect(executeCommand).toHaveBeenCalledTimes(1);
+      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "penmark");
 
-      openExternal.mockClear();
+      executeCommand.mockClear();
       // Nearby URI-like fields must not redirect the fixed target, and a wrong
       // protocol version must be ignored entirely.
       receiveMessage!({
@@ -511,11 +511,13 @@ describe("openPenmarkSettings — host wiring", () => {
       });
       receiveMessage!({ v: 2, type: "openPenmarkSettings" });
 
-      expect(openExternal).toHaveBeenCalledTimes(1);
-      expect(openExternal).toHaveBeenCalledWith(settingsUri);
-      expect(openExternal).not.toHaveBeenCalledWith(vscode.Uri.parse("https://evil.example"));
-      expect(openExternal).not.toHaveBeenCalledWith(vscode.Uri.parse("vscode://settings/evil"));
+      expect(executeCommand).toHaveBeenCalledTimes(1);
+      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "penmark");
+      // No URI is ever built or opened for this message — the settings hand-off
+      // must not depend on a product-specific vscode:// scheme.
+      expect(openExternal).not.toHaveBeenCalled();
     } finally {
+      executeCommand.mockRestore();
       openExternal.mockRestore();
       disposePanel?.();
       workspace.onDidChangeConfiguration = originalConfigListener;

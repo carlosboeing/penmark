@@ -174,9 +174,9 @@ export type WebviewToHost =
   | { v: 1; type: "openLink"; href: string }
   | { v: 1; type: "themeSelected"; theme: ThemeMode }
   | { v: 1; type: "updateSetting"; key: PreviewSettingKey; value: PreviewSettingValue }
-  // Open the full VS Code settings UI filtered to the penmark.* section. Carries
-  // no payload: the host targets a fixed URI and ignores any webview-provided
-  // URI data, so a compromised webview cannot redirect the user elsewhere.
+  // Open the full native settings UI filtered to the penmark.* section. Carries
+  // no payload: the host runs a fixed openSettings command and ignores any
+  // webview-provided data, so a compromised webview cannot redirect the user.
   | { v: 1; type: "openPenmarkSettings" }
   | {
       v: 1;

@@ -174,6 +174,10 @@ export const commands = {
     this._registrations.push({ command, callback });
     return { dispose(): void {} };
   },
+  // Execution is irrelevant to the seam; tests spy on the call itself.
+  executeCommand(): Promise<unknown> {
+    return Promise.resolve(undefined);
+  },
 };
 
 export const window = {
