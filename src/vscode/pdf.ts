@@ -95,8 +95,10 @@ export function buildPrintArgs(
 ): string[] {
   return [
     "--headless",
-    // PDF printing uses a temporary, credential-free browser profile. Avoid a
-    // macOS Keychain access prompt for Chromium's unused password store.
+    // This fallback path uses the browser's default profile, but PDF printing
+    // never reads stored credentials. Force the basic password store so Chromium
+    // does not prompt for the macOS Keychain to unlock its unused Safe Storage
+    // item. (The CDP path in pdfCdp.ts isolates a temporary profile as well.)
     "--password-store=basic",
     "--use-mock-keychain",
     "--disable-gpu",
