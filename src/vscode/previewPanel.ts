@@ -741,12 +741,15 @@ function setupPanelEntry(
   };
   panels.set(key, entry);
 
-  // A hidden webview may be discarded because retainContextWhenHidden is false.
-  // Treat its next reveal as a fresh listener lifecycle and route commands only
-  // after it sends `ready` again.
+  // A webview is discarded when the panel becomes hidden (retainContextWhenHidden
+  // is false), NOT when it merely loses focus — a preview stays visible while the
+  // editor beside it is focused. Track readiness off `visible` so a focus change
+  // in a split view keeps the live listener; a genuinely hidden panel reloads on
+  // its next reveal and re-attaches via a fresh `ready`. Focus order still tracks
+  // `active` so the last-focused preview wins when none is currently active.
   (panel as Partial<vscode.WebviewPanel>).onDidChangeViewState?.(() => {
     if (panel.active) entry.focusOrder = ++_focusOrder;
-    else entry.webviewReady = false;
+    if (!panel.visible) entry.webviewReady = false;
   });
 
   // Initial render
@@ -1120,20 +1123,20 @@ export function openFind(): void {
     return;
   }
   entry.pendingOpenFind = true;
-  const wasHidden = !entry.panel.active;
+  // "Hidden" means not visible — its webview context was torn down — not merely
+  // unfocused. Reveal unconditionally so the preview is focused and can take the
+  // keystrokes typed into the search box.
+  const wasHidden = !entry.panel.visible;
   if (wasHidden) {
-    // A hidden panel does not retain its webview context. Reveal it first so
-    // the restored frame can attach its listener and acknowledge with `ready`.
+    // Revealing a hidden panel reloads its webview; the fresh frame attaches its
+    // listener and acknowledges with `ready`, which flushes the pending command.
     entry.webviewReady = false;
-    entry.panel.reveal(entry.column, false);
   }
-  if (entry.webviewReady || wasHidden) {
+  entry.panel.reveal(entry.column, false);
+  if (!wasHidden && entry.webviewReady) {
+    // Already visible with a live listener — deliver immediately.
     entry.pendingOpenFind = false;
     void entry.panel.webview.postMessage({ v: 1, type: "openFind" } satisfies HostToWebview);
-    // A restored webview can retain its listener (and needs no new `ready`),
-    // while a recreated one drops this first post and re-sends `ready` below.
-    // Keep the latter pending so its new listener receives the command.
-    if (wasHidden) entry.pendingOpenFind = true;
   }
 }
 
