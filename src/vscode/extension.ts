@@ -112,6 +112,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
       new PenmarkCustomEditorProvider(context),
       {
         webviewOptions: {
+          enableFindWidget: true,
           retainContextWhenHidden: false, // In alignment with ADR 0001
         },
         supportsMultipleEditorsPerDocument: true,

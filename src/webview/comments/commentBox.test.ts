@@ -47,6 +47,10 @@ function cancelBtn(): HTMLButtonElement {
   return document.querySelector(".pmk-commentbox button:not(.primary)") as HTMLButtonElement;
 }
 
+function validationError(): HTMLElement {
+  return document.querySelector(".pmk-commentbox-error") as HTMLElement;
+}
+
 describe("openCommentBox", () => {
   let post: Mock<(msg: WebviewToHost) => void>;
 
@@ -84,14 +88,162 @@ describe("openCommentBox", () => {
     expect(isCommentBoxOpen()).toBe(false);
   });
 
-  it("does not post when the body is empty or whitespace", () => {
+  it("preserves intentional leading and trailing whitespace in a non-empty body", () => {
     openCommentBox(anchorEl(), RANGE, QUOTE, post);
+    textarea().value = "  preserve this spacing  \n";
+    textarea().dispatchEvent(new Event("input", { bubbles: true }));
+    submitBtn().click();
+
+    expect(post).toHaveBeenCalledWith({
+      v: 1,
+      type: "addComment",
+      range: RANGE,
+      quote: QUOTE,
+      body: "  preserve this spacing  \n",
+    });
+  });
+
+  it("does not post when the body is empty or whitespace", () => {
+    const store = memStore("   ");
+    openCommentBox(anchorEl(), RANGE, QUOTE, post, store);
     textarea().value = "   ";
     textarea().dispatchEvent(new Event("input", { bubbles: true }));
     submitBtn().click();
 
     expect(post).not.toHaveBeenCalled();
     expect(isCommentBoxOpen()).toBe(true); // stays open for the user to fix
+    expect(textarea()).toBe(document.activeElement);
+    expect(textarea().getAttribute("aria-invalid")).toBe("true");
+    expect(textarea().getAttribute("aria-describedby")).toBe(validationError().id);
+    expect(validationError().getAttribute("role")).toBe("status");
+    expect(validationError().getAttribute("aria-live")).toBe("polite");
+    expect(validationError().textContent).toBe("Enter a comment before submitting.");
+    expect(store.value).toBe("   ");
+  });
+
+  it.each([
+    ["Cmd+Enter", { metaKey: true }],
+    ["Ctrl+Enter", { ctrlKey: true }],
+  ])("submits exactly once with %s, prevents a newline, clears the draft, and closes", (_name, modifier) => {
+    const store = memStore();
+    openCommentBox(anchorEl(), RANGE, QUOTE, post, store);
+    textarea().value = "keyboard comment";
+    textarea().dispatchEvent(new Event("input", { bubbles: true }));
+
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      ...modifier,
+    });
+    textarea().dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith({
+      v: 1,
+      type: "addComment",
+      range: RANGE,
+      quote: QUOTE,
+      body: "keyboard comment",
+    });
+    expect(store.value).toBeUndefined();
+    expect(isCommentBoxOpen()).toBe(false);
+  });
+
+  it("leaves bare Enter to the textarea", () => {
+    openCommentBox(anchorEl(), RANGE, QUOTE, post);
+    textarea().value = "first line";
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+
+    textarea().dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(post).not.toHaveBeenCalled();
+    expect(isCommentBoxOpen()).toBe(true);
+  });
+
+  it("validates whitespace submitted with the keyboard without closing or discarding the draft", () => {
+    const store = memStore("   ");
+    openCommentBox(anchorEl(), RANGE, QUOTE, post, store);
+
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    textarea().dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(post).not.toHaveBeenCalled();
+    expect(isCommentBoxOpen()).toBe(true);
+    expect(textarea()).toBe(document.activeElement);
+    expect(validationError().textContent).toBe("Enter a comment before submitting.");
+    expect(store.value).toBe("   ");
+  });
+
+  it("clears stale validation when input becomes non-whitespace", () => {
+    openCommentBox(anchorEl(), RANGE, QUOTE, post);
+    textarea().value = "   ";
+    submitBtn().click();
+
+    textarea().value = "now valid";
+    textarea().dispatchEvent(new Event("input", { bubbles: true }));
+
+    expect(textarea().hasAttribute("aria-invalid")).toBe(false);
+    expect(textarea().hasAttribute("aria-describedby")).toBe(false);
+    expect(validationError().hidden).toBe(true);
+    expect(validationError().textContent).toBe("");
+  });
+
+  it("keeps validation visible while edited input remains whitespace-only", () => {
+    openCommentBox(anchorEl(), RANGE, QUOTE, post);
+    textarea().value = " ";
+    submitBtn().click();
+
+    textarea().value = "\t  \n";
+    textarea().dispatchEvent(new Event("input", { bubbles: true }));
+
+    expect(textarea().getAttribute("aria-invalid")).toBe("true");
+    expect(textarea().getAttribute("aria-describedby")).toBe(validationError().id);
+    expect(validationError().hidden).toBe(false);
+    expect(validationError().textContent).toBe("Enter a comment before submitting.");
+  });
+
+  it.each([
+    ["IME composition", { isComposing: true }],
+    ["a repeated keydown", { repeat: true }],
+  ])("ignores Cmd/Ctrl+Enter during %s", (_name, state) => {
+    openCommentBox(anchorEl(), RANGE, QUOTE, post);
+    textarea().value = "not ready";
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+      ...state,
+    });
+
+    textarea().dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(post).not.toHaveBeenCalled();
+    expect(isCommentBoxOpen()).toBe(true);
+  });
+
+  it("shows the keyboard shortcut beside the action without changing the button name", () => {
+    openCommentBox(anchorEl(), RANGE, QUOTE, post);
+
+    const shortcut = document.querySelector(".pmk-commentbox-shortcut") as HTMLElement;
+    expect(submitBtn().textContent).toBe("Comment");
+    expect(shortcut.textContent).toBe("Cmd/Ctrl+Enter");
+    expect(shortcut.getAttribute("aria-hidden")).toBe("true");
+    expect(shortcut.parentElement).toBe(submitBtn().parentElement);
   });
 
   it("Cancel closes without posting", () => {

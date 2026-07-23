@@ -15,11 +15,14 @@ A preview panel opens beside the editor.
 ## Reading
 
 - **GitHub-flavored markdown** — tables, task lists, footnotes, strikethrough, autolinks, and GitHub-compatible heading anchors.
-- **Preview settings panel** — use **Preview settings** in the top bar to adjust theme, typography preset, text size, content width, comment-highlight intensity, and line height without leaving the preview. The panel writes the same `penmark.*` settings documented in [configuration.md](configuration.md).
+- **Preview settings panel** — use **Preview settings** in the top bar to adjust theme, typography preset, text size, content width, code wrapping, and comment-highlight intensity without leaving the preview; an **Open all Penmark settings** link at the bottom reaches less-common options like font family and line height. The panel writes the same `penmark.*` settings documented in [configuration.md](configuration.md).
 - **Themes** — light, dark, or auto (follows the IDE), set from the settings panel or by `penmark.theme`. See [configuration.md](configuration.md).
-- **Syntax highlighting** — code blocks are highlighted (highlight.js, loaded only when a language-tagged block exists), with a one-click **Copy** button.
+- **Syntax highlighting** — code blocks are highlighted (highlight.js, loaded only when a language-tagged block exists), with a one-click **Copy** button. Toggle live wrapping of long code lines with `penmark.codeBlockWrap`.
+- **Native Find** — `Ctrl/Cmd+F` opens the IDE's built-in Find widget scoped to the preview when it has focus.
+- **Reading metadata** — a compact word-count and reading-time line sits beside the document title.
 - **Mermaid diagrams and images** — Mermaid diagrams render lazily; click a diagram or preview image to open a lightbox with zoom controls. Toggle Mermaid rendering with `penmark.mermaid.enabled`.
 - **Scroll sync** — the editor and preview scroll together in both directions; toggle with `penmark.scrollSync`.
+- **Responsive panels** — Settings and Comments share one persistent preview surface: at 1050px or wider the Comments panel reserves space beside the document (Settings always overlays); narrower than that both overlay; below 700px the open panel takes near the full width. Only one panel is open at a time, and closing one returns focus to the button that opened it. If your OS is set to reduce motion, Penmark's own panel and highlight transitions skip animation.
 
 ## Reviewing
 

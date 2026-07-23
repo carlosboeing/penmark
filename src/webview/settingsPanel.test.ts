@@ -3,6 +3,7 @@ import {
   ensureSettingsPanel,
   renderSettingsPanel,
   toggleSettingsPanel,
+  openSettingsPanel,
   closeSettingsPanel,
   isSettingsPanelOpen,
 } from "./settingsPanel.js";
@@ -13,9 +14,20 @@ const SETTINGS: PreviewSettingsState = {
   preset: "github",
   textSize: "medium",
   contentWidth: "full",
+  codeBlockWrap: true,
   highlightIntensity: "medium",
   lineHeight: 0,
 };
+
+/** Ordered, de-duplicated list of the setting group keys the panel renders. */
+function renderedSettingKeys(): string[] {
+  const keys: string[] = [];
+  for (const el of document.querySelectorAll<HTMLElement>("[data-pmk-setting]")) {
+    const key = el.dataset.pmkSetting;
+    if (key && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
 
 describe("settingsPanel", () => {
   beforeEach(() => {
@@ -37,6 +49,32 @@ describe("settingsPanel", () => {
         .querySelector('[data-pmk-setting="preset"][data-value="github"]')
         ?.getAttribute("aria-pressed"),
     ).toBe("true");
+  });
+
+  it("renders exactly the narrowed set of setting groups in order", () => {
+    ensureSettingsPanel({ post: vi.fn(), applyLocal: vi.fn() });
+    renderSettingsPanel(SETTINGS);
+
+    expect(renderedSettingKeys()).toEqual([
+      "theme",
+      "preset",
+      "textSize",
+      "contentWidth",
+      "codeBlockWrap",
+      "comments.highlightIntensity",
+    ]);
+  });
+
+  it("offers a single button that opens all Penmark settings via a fixed host action", () => {
+    const post = vi.fn();
+    ensureSettingsPanel({ post, applyLocal: vi.fn() });
+    renderSettingsPanel(SETTINGS);
+
+    const openAll = document.querySelector<HTMLButtonElement>(".pmk-settings-open-all");
+    expect(openAll).not.toBeNull();
+    openAll!.click();
+
+    expect(post).toHaveBeenCalledWith({ v: 1, type: "openPenmarkSettings" });
   });
 
   it("posts updateSetting and applies local feedback when a control changes", () => {
@@ -65,26 +103,72 @@ describe("settingsPanel", () => {
     expect(applyLocal).toHaveBeenCalledWith("comments.highlightIntensity", "strong");
   });
 
-  it("keeps line height numeric and closes on request", () => {
+  it("emits code-block wrapping as a boolean the host will accept", () => {
+    const post = vi.fn();
+    const applyLocal = vi.fn();
+    ensureSettingsPanel({ post, applyLocal });
+    renderSettingsPanel(SETTINGS);
+    toggleSettingsPanel();
+
+    (document.querySelector('[data-pmk-setting="codeBlockWrap"][data-value="false"]') as HTMLButtonElement).click();
+
+    expect(post).toHaveBeenCalledWith({
+      v: 1,
+      type: "updateSetting",
+      key: "codeBlockWrap",
+      value: false,
+    });
+    expect(applyLocal).toHaveBeenCalledWith("codeBlockWrap", false);
+  });
+
+  it("omits the webview line-height control and closes on request", () => {
     const post = vi.fn();
     ensureSettingsPanel({ post, applyLocal: vi.fn() });
     renderSettingsPanel({ ...SETTINGS, lineHeight: 1.65 });
     toggleSettingsPanel();
 
-    const input = document.querySelector(".pmk-settings-line-height") as HTMLInputElement;
-    expect(input.value).toBe("1.65");
-    input.value = "1.8";
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-
-    expect(post).toHaveBeenCalledWith({
-      v: 1,
-      type: "updateSetting",
-      key: "lineHeight",
-      value: 1.8,
-    });
+    expect(document.querySelector(".pmk-settings-line-height")).toBeNull();
+    expect(renderedSettingKeys()).not.toContain("lineHeight");
 
     closeSettingsPanel();
     expect(isSettingsPanelOpen()).toBe(false);
     expect(document.querySelector(".pmk-settings-panel")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("moves focus to its close control and restores the opener", () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    ensureSettingsPanel({ post: vi.fn(), applyLocal: vi.fn() });
+
+    openSettingsPanel();
+    const close = document.querySelector(".pmk-settings-close");
+    expect(document.activeElement).toBe(close);
+
+    closeSettingsPanel();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("restores a focused option after rerender without stealing external focus", () => {
+    ensureSettingsPanel({ post: vi.fn(), applyLocal: vi.fn() });
+    renderSettingsPanel(SETTINGS);
+    openSettingsPanel();
+    const option = document.querySelector<HTMLButtonElement>(
+      '[data-pmk-setting="preset"][data-value="github"]',
+    )!;
+    option.focus();
+
+    renderSettingsPanel(SETTINGS);
+    const replacement = document.querySelector<HTMLButtonElement>(
+      '[data-pmk-setting="preset"][data-value="github"]',
+    )!;
+    expect(replacement).not.toBe(option);
+    expect(document.activeElement).toBe(replacement);
+
+    const external = document.createElement("button");
+    document.body.appendChild(external);
+    external.focus();
+    renderSettingsPanel(SETTINGS);
+    expect(document.activeElement).toBe(external);
   });
 });

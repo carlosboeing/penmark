@@ -20,17 +20,26 @@
  */
 
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
+import { registerPenmarkSurface } from "../keyboard.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
 interface OpenPopover {
   el: HTMLElement;
   commentId: string;
-  onKeydown: (e: KeyboardEvent) => void;
   onMousedown: (e: MouseEvent) => void;
+  unregister: (restoreFocus?: boolean) => void;
 }
 
 let _open: OpenPopover | null = null;
+
+function commentElements(id: string): HTMLElement[] {
+  const root = document.getElementById("penmark-root");
+  if (!root) return [];
+  return Array.from(root.querySelectorAll<HTMLElement>("[data-pmk-id]")).filter(
+    (element) => element.getAttribute("data-pmk-id") === id,
+  );
+}
 
 /** Whether a comment popover is currently open. */
 export function isPopoverOpen(): boolean {
@@ -43,10 +52,10 @@ export function getActiveCommentId(): string | null {
 }
 
 /** Close the open popover (if any) and detach its document listeners. */
-export function closeCommentPopover(): void {
+export function closeCommentPopover(restoreFocus = true): void {
   if (!_open) return;
-  document.removeEventListener("keydown", _open.onKeydown);
   document.removeEventListener("mousedown", _open.onMousedown, true);
+  _open.unregister(restoreFocus);
   _open.el.remove();
   _open = null;
 
@@ -72,7 +81,9 @@ export function openCommentPopover(
   postMessage: PostMessage,
   editMode = false,
 ): void {
-  closeCommentPopover();
+  const active = document.activeElement;
+  const opener = active instanceof HTMLElement && active !== document.body ? active : anchor;
+  closeCommentPopover(false);
 
   const el = document.createElement("div");
   el.className = "pmk-popover";
@@ -192,24 +203,19 @@ export function openCommentPopover(
 
   document.body.appendChild(el);
   positionOver(el, anchor);
+  const firstControl = el.querySelector<HTMLElement>("textarea, button, input, select, a[href]");
+  firstControl?.focus();
 
   // Apply active styling to the new active highlights
-  document
-    .querySelectorAll(`#penmark-root [data-pmk-id="${comment.id}"]`)
-    .forEach((x) => x.classList.add("pmk-hl-active"));
+  commentElements(comment.id).forEach((x) => x.classList.add("pmk-hl-active"));
 
-  // Esc closes.
-  const onKeydown = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") closeCommentPopover();
-  };
   // Outside-click closes (capture phase so it sees the click before re-render).
   const onMousedown = (e: MouseEvent): void => {
     if (!el.contains(e.target as Node)) closeCommentPopover();
   };
-  document.addEventListener("keydown", onKeydown);
   document.addEventListener("mousedown", onMousedown, true);
-
-  _open = { el, commentId: comment.id, onKeydown, onMousedown };
+  const unregister = registerPenmarkSurface(el, opener, () => closeCommentPopover());
+  _open = { el, commentId: comment.id, onMousedown, unregister };
 }
 
 /** Position `el` just below the anchor's left edge, kept within the viewport. */

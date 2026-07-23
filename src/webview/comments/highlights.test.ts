@@ -6,7 +6,7 @@
  * Runs in the vitest "webview" project (jsdom environment).
  */
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
-import { installHighlights } from "./highlights.js";
+import { installHighlights, scrollToCommentId } from "./highlights.js";
 import { closeCommentPopover, isPopoverOpen } from "./popover.js";
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
 
@@ -93,6 +93,76 @@ describe("installHighlights", () => {
     expect(document.querySelector(".pmk-popover")!.textContent).toContain("the body text");
   });
 
+  it("exposes comment anchors as named keyboard buttons", () => {
+    const mark = seedSpan(root, "abcdefgh");
+    installHighlights(root, [comment({ author: "carlos" })], post);
+
+    expect(mark.getAttribute("role")).toBe("button");
+    expect(mark.getAttribute("aria-label")).toBe("Open comment by carlos");
+    expect(mark.tabIndex).toBe(0);
+  });
+
+  it.each(["Enter", " "])("opens the popover with %s", (key) => {
+    const mark = seedSpan(root, "abcdefgh");
+    installHighlights(root, [comment()], post);
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+
+    mark.dispatchEvent(event);
+
+    expect(isPopoverOpen()).toBe(true);
+    expect(event.defaultPrevented).toBe(key === " ");
+  });
+
+  it("does not hijack keyboard activation from a link inside a highlight", () => {
+    const mark = seedSpan(root, "abcdefgh");
+    const link = document.createElement("a");
+    link.href = "#section";
+    link.textContent = "linked words";
+    mark.replaceChildren(link);
+    installHighlights(root, [comment()], post);
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+
+    link.dispatchEvent(event);
+
+    expect(isPopoverOpen()).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it.each([
+    ["button", () => document.createElement("button")],
+    ["input", () => document.createElement("input")],
+    ["select", () => document.createElement("select")],
+    ["textarea", () => document.createElement("textarea")],
+    ["contenteditable", () => {
+      const el = document.createElement("span");
+      el.setAttribute("contenteditable", "true");
+      return el;
+    }],
+    ["tabindex", () => {
+      const el = document.createElement("span");
+      el.tabIndex = 0;
+      return el;
+    }],
+  ])("does not hijack nested %s controls", (_name, createControl) => {
+    const mark = seedSpan(root, "abcdefgh");
+    const control = createControl();
+    control.textContent = "native control";
+    mark.replaceChildren(control);
+    installHighlights(root, [comment()], post);
+
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    control.dispatchEvent(click);
+    const key = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    control.dispatchEvent(key);
+
+    expect(click.defaultPrevented).toBe(false);
+    expect(key.defaultPrevented).toBe(false);
+    expect(isPopoverOpen()).toBe(false);
+
+    root.querySelector<HTMLButtonElement>(".pmk-highlight-action")!.click();
+    expect(isPopoverOpen()).toBe(true);
+  });
+
   it("wires a block anchor element ([data-pmk-block]) to its popover and a dot", () => {
     const table = document.createElement("table");
     table.setAttribute("data-pmk-id", "blk12345");
@@ -105,8 +175,66 @@ describe("installHighlights", () => {
     expect(
       table.querySelector(".pmk-gutter-dot") ?? root.querySelector(".pmk-gutter-dot"),
     ).not.toBeNull();
-    table.click();
+    expect(table.getAttribute("role")).toBeNull();
+    expect(table.getAttribute("tabindex")).toBeNull();
+    const action = root.querySelector<HTMLButtonElement>(".pmk-highlight-action")!;
+    expect(action.getAttribute("aria-label")).toBe("Open comment by carlos");
+    action.click();
     expect(document.querySelector(".pmk-popover")!.textContent).toContain("block note");
+  });
+
+  it("preserves range semantics and gives the range a native keyboard action", () => {
+    const range = document.createElement("div");
+    range.className = "pmk-hl-range";
+    range.setAttribute("data-pmk-id", "range001");
+    range.setAttribute("data-pmk-state", "intact");
+    range.append(document.createElement("p"));
+    root.appendChild(range);
+
+    installHighlights(root, [comment({ id: "range001" })], post);
+
+    expect(range.getAttribute("role")).toBeNull();
+    expect(range.getAttribute("tabindex")).toBeNull();
+    const action = root.querySelector<HTMLButtonElement>(".pmk-highlight-action")!;
+    expect(action.tagName).toBe("BUTTON");
+    action.focus();
+    action.click();
+    expect(isPopoverOpen()).toBe(true);
+  });
+
+  it("uses the current structural comment after a subsequent install", () => {
+    const table = document.createElement("table");
+    table.setAttribute("data-pmk-id", "blk12345");
+    table.setAttribute("data-pmk-state", "intact");
+    table.setAttribute("data-pmk-block", "");
+    root.appendChild(table);
+    installHighlights(root, [comment({ id: "blk12345", body: "old body" })], post);
+
+    installHighlights(
+      root,
+      [comment({ id: "blk12345", author: "updated", body: "edited body" })],
+      post,
+    );
+    const action = root.querySelector<HTMLButtonElement>(".pmk-highlight-action")!;
+    expect(action.getAttribute("aria-label")).toBe("Open comment by updated");
+    action.click();
+
+    expect(document.querySelector(".pmk-popover")?.textContent).toContain("edited body");
+    expect(document.querySelector(".pmk-popover")?.textContent).not.toContain("old body");
+  });
+
+  it("removes a structural action when its comment leaves the current map", () => {
+    const table = document.createElement("table");
+    table.setAttribute("data-pmk-id", "blk12345");
+    table.setAttribute("data-pmk-state", "intact");
+    table.setAttribute("data-pmk-block", "");
+    root.appendChild(table);
+    installHighlights(root, [comment({ id: "blk12345" })], post);
+    expect(root.querySelector(".pmk-highlight-action")).not.toBeNull();
+
+    installHighlights(root, [], post);
+
+    expect(root.querySelector(".pmk-highlight-action")).toBeNull();
   });
 
   it("is idempotent — re-install does not duplicate dots or stack popovers", () => {
@@ -133,9 +261,26 @@ describe("installHighlights", () => {
     root.appendChild(p);
 
     installHighlights(root, [comment()], post);
+    expect(mark.getAttribute("role")).toBeNull();
+    expect(mark.getAttribute("tabindex")).toBeNull();
     link.click();
 
     expect(isPopoverOpen()).toBe(false);
+    const action = root.querySelector<HTMLButtonElement>(".pmk-highlight-action")!;
+    action.click();
+    expect(isPopoverOpen()).toBe(true);
+  });
+
+  it("scrolls to comment IDs containing CSS selector metacharacters", () => {
+    const hostileId = 'comment"\\]';
+    const mark = seedSpan(root, hostileId);
+    const scroll = vi.fn();
+    mark.scrollIntoView = scroll;
+
+    scrollToCommentId(hostileId);
+
+    expect(scroll).toHaveBeenCalledOnce();
+    expect(mark.classList.contains("pmk-hl-active")).toBe(true);
   });
 
   it("ignores a highlight whose id is unknown to the comments array", () => {

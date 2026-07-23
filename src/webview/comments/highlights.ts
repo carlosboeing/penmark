@@ -21,6 +21,7 @@
 
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
 import { openCommentPopover, getActiveCommentId } from "./popover.js";
+import { prefersReducedMotion } from "../motion.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -38,6 +39,59 @@ const SPAN_HOSTILE_HOSTS: ReadonlySet<string> = new Set([
 
 const _delegatedRoots = new WeakSet<HTMLElement>();
 const _commentsByRoot = new WeakMap<HTMLElement, WireComment[]>();
+const _postByRoot = new WeakMap<HTMLElement, PostMessage>();
+const INTERACTIVE_DESCENDANT_SELECTOR =
+  'a, button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [tabindex]';
+
+function elementsWithCommentId(root: ParentNode, id: string): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>("[data-pmk-id]")).filter(
+    (element) => element.getAttribute("data-pmk-id") === id,
+  );
+}
+
+function usesDirectKeyboardAction(el: HTMLElement): boolean {
+  return (
+    el.matches("mark.pmk-hl, span.pmk-hl") &&
+    !el.querySelector(INTERACTIVE_DESCENDANT_SELECTOR)
+  );
+}
+
+function startsInInteractiveDescendant(target: HTMLElement, highlight: HTMLElement): boolean {
+  const interactive = target.closest<HTMLElement>(INTERACTIVE_DESCENDANT_SELECTOR);
+  return interactive !== null && interactive !== highlight && highlight.contains(interactive);
+}
+
+function addSeparateAction(
+  root: HTMLElement,
+  anchor: HTMLElement,
+  comment: WireComment,
+): void {
+  const existing = Array.from(root.querySelectorAll<HTMLElement>(".pmk-highlight-action")).find(
+    (candidate) => candidate.dataset.pmkCommentAction === comment.id,
+  );
+  if (existing) {
+    existing.setAttribute("aria-label", `Open comment by ${comment.author}`);
+    return;
+  }
+  const action = document.createElement("button");
+  action.type = "button";
+  action.className = anchor.matches("mark.pmk-hl, span.pmk-hl")
+    ? "pmk-gutter-dot pmk-highlight-action pmk-visually-hidden"
+    : "pmk-gutter-dot pmk-highlight-action pmk-structural-highlight-action";
+  action.dataset.pmkCommentAction = comment.id;
+  action.setAttribute("aria-label", `Open comment by ${comment.author}`);
+  action.addEventListener("focus", () => anchor.classList.add("pmk-hl-keyboard-focus"));
+  action.addEventListener("blur", () => anchor.classList.remove("pmk-hl-keyboard-focus"));
+  action.addEventListener("click", () => {
+    const current = (_commentsByRoot.get(root) ?? []).find((candidate) => candidate.id === comment.id);
+    const currentAnchor = elementsWithCommentId(root, comment.id)[0];
+    const currentPost = _postByRoot.get(root);
+    if (current && currentAnchor && currentPost) {
+      openCommentPopover(currentAnchor, current, currentPost);
+    }
+  });
+  anchor.parentElement?.insertBefore(action, anchor);
+}
 
 /**
  * Install gutter dots + click-to-open-popover on every live highlight in `root`,
@@ -51,9 +105,14 @@ export function installHighlights(
   postMessage: PostMessage,
 ): void {
   _commentsByRoot.set(root, comments);
+  _postByRoot.set(root, postMessage);
 
   const byId = new Map<string, WireComment>();
   for (const c of comments) byId.set(c.id, c);
+  for (const action of root.querySelectorAll<HTMLElement>(".pmk-highlight-action")) {
+    const id = action.dataset.pmkCommentAction;
+    if (!id || !byId.has(id)) action.remove();
+  }
 
   const activeId = getActiveCommentId();
 
@@ -63,7 +122,21 @@ export function installHighlights(
     const comment = byId.get(id);
     if (!comment) continue;
 
-    addGutterDot(blockHostOf(el, root));
+    const directAction = usesDirectKeyboardAction(el);
+    const blockHost = blockHostOf(el, root);
+    if (directAction) {
+      addGutterDot(blockHost);
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", `Open comment by ${comment.author}`);
+      el.tabIndex = 0;
+    } else {
+      blockHost.classList.add("pmk-anchor");
+      if (el.matches("mark.pmk-hl, span.pmk-hl")) addGutterDot(blockHost);
+      el.removeAttribute("role");
+      el.removeAttribute("aria-label");
+      el.removeAttribute("tabindex");
+      addSeparateAction(root, el, comment);
+    }
 
     if (activeId === id) {
       el.classList.add("pmk-hl-active");
@@ -75,11 +148,10 @@ export function installHighlights(
   if (!_delegatedRoots.has(root)) {
     _delegatedRoots.add(root);
     root.addEventListener("click", (e) => {
-      // Let clicks on a link inside the highlight follow the link.
-      if ((e.target as HTMLElement).closest("a")) return;
-
-      const highlightEl = (e.target as HTMLElement).closest<HTMLElement>("[data-pmk-id]");
+      const target = e.target as HTMLElement;
+      const highlightEl = target.closest<HTMLElement>("[data-pmk-id]");
       if (!highlightEl || !root.contains(highlightEl)) return;
+      if (startsInInteractiveDescendant(target, highlightEl)) return;
 
       const id = highlightEl.getAttribute("data-pmk-id");
       if (!id) return;
@@ -88,6 +160,18 @@ export function installHighlights(
       const comment = currentComments.find((c) => c.id === id);
       if (!comment) return;
 
+      openCommentPopover(highlightEl, comment, postMessage);
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const target = e.target as HTMLElement;
+      const highlightEl = target.closest<HTMLElement>("[data-pmk-id]");
+      if (!highlightEl || !root.contains(highlightEl)) return;
+      if (startsInInteractiveDescendant(target, highlightEl)) return;
+      const id = highlightEl.getAttribute("data-pmk-id");
+      const comment = (_commentsByRoot.get(root) ?? []).find((c) => c.id === id);
+      if (!comment) return;
+      if (e.key === " ") e.preventDefault();
       openCommentPopover(highlightEl, comment, postMessage);
     });
   }
@@ -130,8 +214,8 @@ function addGutterDot(host: HTMLElement): void {
 export function scrollToCommentId(id: string): void {
   const root = document.getElementById("penmark-root");
   if (!root) return;
-  const el = root.querySelector<HTMLElement>(`[data-pmk-id="${id}"]`);
+  const el = elementsWithCommentId(root, id)[0];
   if (!el) return;
-  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   el.classList.add("pmk-hl-active");
 }

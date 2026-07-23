@@ -2,7 +2,9 @@
 
 Penmark is configured through standard editor settings (the Settings UI, or `settings.json`). All settings live under the `penmark.*` namespace. They can be set at user or workspace scope, and apply to the preview the next time it is opened.
 
-The preview top bar also includes **Preview settings**, a webview-native panel for the most common reading controls. Changes made there are persisted to the same `penmark.*` settings and reflected in the open preview immediately where possible.
+The preview top bar also includes **Preview settings**, a webview-native panel for the most common reading controls (theme, typography preset, text size, content width, code wrapping, comment-highlight intensity). Changes made there are persisted to the same `penmark.*` settings and reflected in the open preview immediately where possible. An **Open all Penmark settings** link at the bottom of the panel opens the full Settings UI filtered to `penmark.*` for less-common options like font family and line height.
+
+The panel and the comments drawer are adaptive side surfaces: at 1050px or wider the open Comments drawer reserves 342px of layout space beside the document (Settings always overlays, at any width); below 1050px both panels overlay the content; below 700px the open panel takes near the full viewport width. Only one panel is open at a time, and the document root persists across every open/close — no re-render. `Esc` closes the topmost open panel and returns focus to the control that opened it; if your OS is set to reduce motion, Penmark's own panel, control, and highlight transitions (and the comment-jump scroll) skip animation — native Find and dialogs are unaffected.
 
 ## Settings
 
@@ -12,6 +14,7 @@ The preview top bar also includes **Preview settings**, a webview-native panel f
 | `penmark.scrollSync` | boolean | `true` | Synchronise the preview scroll position with the editor cursor (both directions). |
 | `penmark.mermaid.enabled` | boolean | `true` | Render Mermaid diagrams in the preview. |
 | `penmark.contentWidth` | `comfortable` \| `wide` \| `full` | `full` | How wide the content column may grow. All options stay responsive and shrink to fit a narrow pane; this only caps the maximum width. |
+| `penmark.codeBlockWrap` | boolean | `true` | Visually wrap long lines in fenced code blocks. Disable to preserve horizontal layout and scrolling. |
 | `penmark.comments.highlightIntensity` | `subtle` \| `medium` \| `strong` | `medium` | How strongly commented spans are tinted. Highlights are always shown when comments exist; this only sets the intensity. Applied when the preview is (re)opened. |
 | `penmark.preset` | `github` \| `reading` \| `compact` \| `focus` \| `print` \| `custom` | `github` | Typography preset bundling font, size, line height, and content width. |
 | `penmark.textSize` | `small` \| `medium` \| `large` \| `x-large` | `medium` | Body text size; heading sizes scale proportionally. |
@@ -75,4 +78,4 @@ When the preview panel has focus:
 
 Workspace settings (`.vscode/settings.json`) override user settings, so you can pin a per-project preview style.
 
-Theme, content width, typography preset, text size, line height, and highlight intensity are exposed in the preview settings panel for quick adjustment. Settings changed outside the preview generally take effect when the preview is next opened. If a change does not appear, close and reopen the Penmark preview.
+Theme, content width, typography preset, text size, code wrapping, and highlight intensity are exposed in the preview settings panel for quick adjustment; line height and other less-common options are one click away via the panel's "Open all Penmark settings" link. Settings changed outside the preview generally take effect when the preview is next opened. If a change does not appear, close and reopen the Penmark preview.

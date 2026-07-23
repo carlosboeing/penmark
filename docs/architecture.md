@@ -43,6 +43,16 @@ src/
 
 A single reusable panel, with no `retainContextWhenHidden` — state is restored via `getState`/`setState`. The CSP is `default-src 'none'`; script and style by nonce only; images from workspace roots and `data:` only. `localResourceRoots` is limited to the extension bundle and the workspace folder. No network access, no telemetry, all assets bundled (no CDN).
 
+## Adaptive review surface
+
+Settings and Comments are two on-demand side panels that share the same persistent preview root — opening or closing either never re-renders the document, only toggles body-state attributes (`data-pmk-settings-open` / `data-pmk-drawer-open`) that drive layout purely through CSS. Only one panel is open at a time. Geometry is responsive: at 1050px or wider an open Comments panel reserves 342px of layout space beside the document — Settings always overlays, at any width; below 1050px both panels overlay without reserving space; below 700px the open panel takes `calc(100vw - 24px)`.
+
+A small surface coordinator in `src/webview/keyboard.ts` tracks every open Penmark-owned panel/popover as a stack (`registerPenmarkSurface`/`closeTopmostPenmarkSurface`), so `Esc` always closes only the topmost surface and restores focus to the control that opened it — resolving the opener even after the topbar is rebuilt (`data-pmk-topbar-control` matching). Native VS Code dialogs and the browser's own Find widget (`enableFindWidget: true` on both preview entry paths) are outside this stack and keep their own authoritative cancellation.
+
+The Settings panel itself is narrowed to the six settings most relevant while previewing (theme, preset, text size, content width, code wrapping, comment-highlight intensity); everything else — including line height — is one click away via a fixed **Open all Penmark settings** link: the host runs `workbench.action.openSettings` filtered to `penmark` and ignores any webview-supplied data (no product URI scheme involved, so it works identically in VS Code, Cursor, and Antigravity). A `readingMetrics` helper renders a compact word-count/reading-time line beside the document title.
+
+`prefers-reduced-motion: reduce` (via `src/webview/motion.ts`) zeroes Penmark-owned panel, control, and comment-highlight transition durations and switches the comment-jump `scrollIntoView` from `smooth` to `auto`; it does not affect native Find or dialog motion.
+
 ## Mermaid
 
 Mermaid is lazily imported only when a `mermaid` fence exists, rendered with `securityLevel: strict` and an `IntersectionObserver` for many-diagram documents; a failed diagram shows its source and error without breaking the page. Because mermaid emits styling that a strict nonce CSP would block, Penmark re-applies mermaid's intended inline styles via the CSSOM, scoped to the SVG, through a property allowlist (see the [ADR 0005](adrs/0005-markdown-it-render-pipeline.md) amendment).

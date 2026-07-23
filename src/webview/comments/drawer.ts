@@ -22,6 +22,8 @@
 
 import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js";
 import { openCommentPopover } from "./popover.js";
+import { registerPenmarkSurface } from "../keyboard.js";
+import { prefersReducedMotion } from "../motion.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -44,7 +46,9 @@ interface DrawerInternals {
   panel: HTMLElement;
   content: HTMLElement;
   cfg: DrawerConfig;
-  onKeydown: (e: KeyboardEvent) => void;
+  announcement: HTMLElement;
+  unregister: ((restoreFocus?: boolean) => void) | null;
+  lastSummary: string | null;
 }
 
 let _d: DrawerInternals | null = null;
@@ -94,12 +98,20 @@ function applyOpenState(): void {
 }
 
 export function openDrawer(): void {
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   _open = true;
   applyOpenState();
   _d?.cfg.store?.set(true);
+  if (_d) {
+    _d.unregister?.(false);
+    _d.unregister = registerPenmarkSurface(_d.panel, opener, () => closeDrawer());
+    _d.panel.querySelector<HTMLElement>(".pmk-drawer-close")?.focus();
+  }
 }
 
-export function closeDrawer(): void {
+export function closeDrawer(restoreFocus = true): void {
+  _d?.unregister?.(restoreFocus);
+  if (_d) _d.unregister = null;
   _open = false;
   applyOpenState();
   _d?.cfg.store?.set(false);
@@ -133,7 +145,8 @@ export function ensureDrawer(cfg: DrawerConfig): HTMLElement {
     return _d.panel;
   }
   if (_d) {
-    document.removeEventListener("keydown", _d.onKeydown);
+    _d.unregister?.(false);
+    _d.announcement.remove();
     _d = null;
   }
 
@@ -157,28 +170,31 @@ export function ensureDrawer(cfg: DrawerConfig): HTMLElement {
   const content = document.createElement("div");
   content.className = "pmk-drawer-content";
 
+  const announcement = document.createElement("div");
+  announcement.className = "pmk-drawer-announcement pmk-visually-hidden";
+  announcement.setAttribute("role", "status");
+  announcement.setAttribute("aria-live", "polite");
+  announcement.setAttribute("aria-atomic", "true");
+
   panel.append(head, content);
-  document.body.appendChild(panel);
+  document.body.append(announcement, panel);
 
-  const onKeydown = (e: KeyboardEvent): void => {
-    if (e.key === "Escape" && _open) {
-      e.stopPropagation();
-      closeDrawer();
-    }
-  };
-  document.addEventListener("keydown", onKeydown);
-
-  _d = { panel, content, cfg, onKeydown };
+  _d = { panel, content, announcement, cfg, unregister: null, lastSummary: null };
   _open = cfg.store?.get() ?? false;
   applyOpenState();
+  if (_open) {
+    _d.unregister = registerPenmarkSurface(panel, null, () => closeDrawer());
+    close.focus();
+  }
   return panel;
 }
 
 /** Remove the drawer and its listeners; reset module state (tests / teardown). */
 export function destroyDrawer(): void {
   if (!_d) return;
-  document.removeEventListener("keydown", _d.onKeydown);
+  _d.unregister?.(false);
   _d.panel.remove();
+  _d.announcement.remove();
   _d = null;
   _open = false;
 }
@@ -212,9 +228,20 @@ function actionButton(label: string, cls: string, onClick: () => void): HTMLButt
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = `pmk-drawer-action ${cls}`;
+  btn.dataset.pmkDrawerAction = cls;
   btn.textContent = label;
   btn.addEventListener("click", onClick);
   return btn;
+}
+
+function highlightForComment(id: string): HTMLElement | null {
+  const root = document.getElementById("penmark-root");
+  if (!root) return null;
+  return (
+    Array.from(root.querySelectorAll<HTMLElement>("[data-pmk-id]")).find(
+      (element) => element.getAttribute("data-pmk-id") === id,
+    ) ?? null
+  );
 }
 
 function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElement {
@@ -247,20 +274,22 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   } else {
     actions.append(
       actionButton("Open", "jump", () => {
-        const target = document.querySelector(
-          `#penmark-root [data-pmk-id="${c.id}"]`
-        ) as HTMLElement;
+        const target = highlightForComment(c.id);
         if (target) {
-          target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+          target.scrollIntoView?.({
+            block: "center",
+            behavior: prefersReducedMotion() ? "auto" : "smooth",
+          });
           openCommentPopover(target, c, cfg.post);
         }
       }),
       actionButton("Edit", "edit", () => {
-        const target = document.querySelector(
-          `#penmark-root [data-pmk-id="${c.id}"]`
-        ) as HTMLElement;
+        const target = highlightForComment(c.id);
         if (target) {
-          target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+          target.scrollIntoView?.({
+            block: "center",
+            behavior: prefersReducedMotion() ? "auto" : "smooth",
+          });
           openCommentPopover(target, c, cfg.post, true);
         }
       }),
@@ -277,9 +306,25 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
 export function renderDrawer(comments: WireComment[]): void {
   if (!_d) return;
   const { cfg, content } = _d;
+  const active = document.activeElement;
+  const focused =
+    active instanceof HTMLElement && content.contains(active)
+      ? {
+          commentId: active.closest<HTMLElement>(".pmk-drawer-card")?.dataset.pmkId ?? null,
+          action: active.dataset.pmkDrawerAction ?? null,
+          card: active.classList.contains("pmk-drawer-card"),
+        }
+      : null;
   content.replaceChildren();
 
   const { open, attention } = bucketComments(comments);
+  const summary = `${open.length} open comment${open.length === 1 ? "" : "s"}, ${attention.length} need attention`;
+  if (_d.lastSummary === null) {
+    _d.announcement.textContent = "";
+  } else if (_d.lastSummary !== summary) {
+    _d.announcement.textContent = summary;
+  }
+  _d.lastSummary = summary;
 
   const openSec = document.createElement("div");
   openSec.className = "pmk-drawer-section open";
@@ -310,6 +355,21 @@ export function renderDrawer(comments: WireComment[]): void {
     attSec.appendChild(attHead);
     for (const c of attention) attSec.appendChild(card(c, true, cfg));
     content.appendChild(attSec);
+  }
+
+  if (
+    focused &&
+    (document.activeElement === document.body || document.activeElement === document.documentElement)
+  ) {
+    const replacementCard = Array.from(
+      content.querySelectorAll<HTMLElement>(".pmk-drawer-card"),
+    ).find((candidate) => candidate.dataset.pmkId === focused.commentId);
+    const replacement = focused.card
+      ? replacementCard
+      : Array.from(
+          replacementCard?.querySelectorAll<HTMLElement>("[data-pmk-drawer-action]") ?? [],
+        ).find((candidate) => candidate.dataset.pmkDrawerAction === focused.action);
+    (replacement ?? _d.panel.querySelector<HTMLElement>(".pmk-drawer-close"))?.focus();
   }
 }
 

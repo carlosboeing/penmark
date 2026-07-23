@@ -76,6 +76,12 @@
           "default": "full",
           "description": "How wide the preview content column may grow. All options are responsive — the column always shrinks to fit a narrow or split-screen pane; this only caps how wide it gets on a large pane."
         },
+        "penmark.codeBlockWrap": {
+          "type": "boolean",
+          "default": true,
+          "title": "Wrap long code lines",
+          "description": "Visually wrap long lines in fenced code blocks. Disable to preserve horizontal layout and scrolling."
+        },
         "penmark.comments.highlightIntensity": {
           "type": "string",
           "enum": [

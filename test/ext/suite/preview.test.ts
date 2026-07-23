@@ -411,6 +411,12 @@ describe("T4 — webview preview panel", () => {
   });
 
   it("can open a document using the custom editor", async () => {
+    const [major, minor] = vscode.version.split(".").map(Number);
+    assert.ok(
+      major! > 1 || (major === 1 && minor! >= 105),
+      `custom editor native Find requires VS Code 1.105.0 or newer; got ${vscode.version}`,
+    );
+
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "penmark-custom-")));
     const filePath = path.join(dir, "custom-test.md");
     fs.writeFileSync(filePath, "# Custom Editor Test\n", "utf8");

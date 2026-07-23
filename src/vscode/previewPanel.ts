@@ -158,6 +158,10 @@ function configuredContentWidth(): ContentWidth {
   return vscode.workspace.getConfiguration("penmark").get<ContentWidth>("contentWidth", "full");
 }
 
+function configuredCodeBlockWrap(): boolean {
+  return vscode.workspace.getConfiguration("penmark").get<boolean>("codeBlockWrap", true);
+}
+
 /**
  * Configured comment highlight intensity (penmark.comments.highlightIntensity,
  * default "medium"). Applied as a `pmk-hl-*` body class on the shell at panel
@@ -178,7 +182,7 @@ const VALID_SETTING_VALUES = {
 } as const;
 
 function isStringSettingValue(key: PreviewSettingKey, value: PreviewSettingValue): boolean {
-  if (key === "lineHeight") return false;
+  if (key === "lineHeight" || key === "codeBlockWrap") return false;
   return (
     typeof value === "string" && (VALID_SETTING_VALUES[key] as readonly string[]).includes(value)
   );
@@ -192,7 +196,9 @@ export async function handleUpdateSetting(
   key: PreviewSettingKey,
   value: PreviewSettingValue,
 ): Promise<void> {
-  if (key === "lineHeight") {
+  if (key === "codeBlockWrap") {
+    if (typeof value !== "boolean") return;
+  } else if (key === "lineHeight") {
     if (!isLineHeightValue(value)) return;
   } else if (!isStringSettingValue(key, value)) {
     return;
@@ -220,6 +226,7 @@ function configuredPreviewSettings(): PreviewSettingsState {
     preset: cfg.get<PresetName>("preset", "github"),
     textSize: cfg.get<TextSize>("textSize", "medium"),
     contentWidth: configuredContentWidth(),
+    codeBlockWrap: configuredCodeBlockWrap(),
     highlightIntensity: configuredHighlightIntensity(),
     lineHeight,
   };
@@ -317,44 +324,57 @@ function attachVisibleRangeListener(entry: PanelEntry): vscode.Disposable {
 }
 
 /**
- * Register an onDidChangeConfiguration listener that pushes live updates to
- * `entry`'s panel: `setTheme` when `penmark.theme` changes, `setContentWidth`
- * when `penmark.contentWidth` changes. The returned disposable MUST be disposed
- * on panel close — otherwise it leaks and fires on a disposed webview.
+ * Push targeted live updates to `entry`'s panel when preview theme, content
+ * width, code wrapping, or typography configuration changes.
  */
+export function pushConfiguredPreviewUpdates(
+  entry: PanelEntry,
+  affectsConfiguration: (section: string) => boolean,
+): void {
+  if (affectsConfiguration("penmark.theme")) {
+    const msg: Extract<HostToWebview, { type: "setTheme" }> = {
+      v: 1,
+      type: "setTheme",
+      theme: configuredTheme(),
+    };
+    entry.lastSetThemeMessage = msg;
+    void entry.panel.webview.postMessage(msg);
+  }
+  if (affectsConfiguration("penmark.contentWidth")) {
+    const msg: Extract<HostToWebview, { type: "setContentWidth" }> = {
+      v: 1,
+      type: "setContentWidth",
+      contentWidth: configuredContentWidth(),
+    };
+    void entry.panel.webview.postMessage(msg);
+  }
+  if (affectsConfiguration("penmark.codeBlockWrap")) {
+    const msg: Extract<HostToWebview, { type: "setCodeBlockWrap" }> = {
+      v: 1,
+      type: "setCodeBlockWrap",
+      codeBlockWrap: configuredCodeBlockWrap(),
+    };
+    void entry.panel.webview.postMessage(msg);
+  }
+  if (
+    affectsConfiguration("penmark.preset") ||
+    affectsConfiguration("penmark.textSize") ||
+    affectsConfiguration("penmark.fontFamily") ||
+    affectsConfiguration("penmark.headingFontFamily") ||
+    affectsConfiguration("penmark.lineHeight")
+  ) {
+    const msg: Extract<HostToWebview, { type: "setTypography" }> = {
+      v: 1,
+      type: "setTypography",
+      typography: configuredTypography(),
+    };
+    void entry.panel.webview.postMessage(msg);
+  }
+}
+
 function attachConfigListener(entry: PanelEntry): vscode.Disposable {
   return vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration("penmark.theme")) {
-      const msg: Extract<HostToWebview, { type: "setTheme" }> = {
-        v: 1,
-        type: "setTheme",
-        theme: configuredTheme(),
-      };
-      entry.lastSetThemeMessage = msg;
-      void entry.panel.webview.postMessage(msg);
-    }
-    if (e.affectsConfiguration("penmark.contentWidth")) {
-      const msg: Extract<HostToWebview, { type: "setContentWidth" }> = {
-        v: 1,
-        type: "setContentWidth",
-        contentWidth: configuredContentWidth(),
-      };
-      void entry.panel.webview.postMessage(msg);
-    }
-    if (
-      e.affectsConfiguration("penmark.preset") ||
-      e.affectsConfiguration("penmark.textSize") ||
-      e.affectsConfiguration("penmark.fontFamily") ||
-      e.affectsConfiguration("penmark.headingFontFamily") ||
-      e.affectsConfiguration("penmark.lineHeight")
-    ) {
-      const msg: Extract<HostToWebview, { type: "setTypography" }> = {
-        v: 1,
-        type: "setTypography",
-        typography: configuredTypography(),
-      };
-      void entry.panel.webview.postMessage(msg);
-    }
+    pushConfiguredPreviewUpdates(entry, (section) => e.affectsConfiguration(section));
   });
 }
 
@@ -759,9 +779,24 @@ function setupPanelEntry(
       case "updateSetting": {
         const key = (message as { key?: unknown }).key;
         const value = (message as { value?: unknown }).value;
-        if (typeof key === "string" && (typeof value === "string" || typeof value === "number")) {
+        if (
+          typeof key === "string" &&
+          ((key === "codeBlockWrap" && typeof value === "boolean") ||
+            (key !== "codeBlockWrap" && (typeof value === "string" || typeof value === "number")))
+        ) {
           void handleUpdateSetting(key as PreviewSettingKey, value);
         }
+        break;
+      }
+
+      case "openPenmarkSettings": {
+        // Open the native settings UI filtered to penmark.*. The target is
+        // FIXED — any fields on the message are ignored, so a compromised
+        // webview cannot redirect the user to an arbitrary target. Uses the
+        // openSettings command rather than a vscode:// URI because the product
+        // URI scheme differs per IDE (cursor://, …); the command works
+        // identically in VS Code, Cursor, and Antigravity.
+        void vscode.commands.executeCommand("workbench.action.openSettings", "penmark");
         break;
       }
 
@@ -916,7 +951,8 @@ function setupPanelEntry(
     }
   });
 
-  // Observe penmark.theme config changes and push setTheme to this panel.
+  // Observe preview theme, content width, code wrapping, and typography config
+  // changes and push targeted updates to this panel.
   const configListener = attachConfigListener(entry);
 
   // Observe editor scroll and push revealLine to this panel (T10, scroll sync).
@@ -952,6 +988,7 @@ function openOrReveal(context: vscode.ExtensionContext, document: vscode.TextDoc
     "Penmark Preview",
     { viewColumn: targetColumn, preserveFocus: true },
     {
+      enableFindWidget: true,
       enableScripts: true,
       localResourceRoots,
     },

@@ -2,6 +2,21 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-07-23 (feat/adaptive-review-ui)
+
+### Adaptive review surface — responsive panels, native Find, live code wrapping, reading metadata
+
+Settings and Comments become one adaptive, persistent-root surface instead of two independent overlays:
+
+- **Responsive panels** — Settings and Comments share the incremental preview root (no re-render on open/close). At 1050px or wider the Comments panel reserves 342px of layout space beside the document (Settings always overlays); below 1050px both panels overlay; below 700px the open panel takes `calc(100vw - 24px)`. Only one panel is open at a time.
+- **Surface lifecycle coordinator** — a small stack in `keyboard.ts` (`registerPenmarkSurface`/`closeTopmostPenmarkSurface`) ensures `Esc` always closes only the topmost Penmark-owned surface and restores focus to its opener, even after the topbar is rebuilt. Native VS Code dialogs and Find keep their own authoritative cancellation.
+- **Narrowed settings panel** — the in-preview panel keeps the six settings most relevant while reading (theme, preset, text size, content width, code wrapping, comment-highlight intensity); an **Open all Penmark settings** link opens the full Settings UI for line height and other options (via the fixed `workbench.action.openSettings` command filtered to `penmark`, ignoring any webview-supplied data — no product URI scheme, so it works in VS Code, Cursor, and Antigravity alike).
+- **Live code wrapping** — `penmark.codeBlockWrap` (default on) toggles wrapping of long fenced-code lines from the settings panel or full settings.
+- **Native Find** — `enableFindWidget: true` on both preview entry paths; `Ctrl/Cmd+F` opens the IDE's Find widget scoped to the preview.
+- **Reading metadata** — a compact word-count/reading-time line beside the document title.
+- **Reduced motion** — `prefers-reduced-motion: reduce` zeroes Penmark-owned panel/control/highlight transition durations and switches comment-jump scrolling from smooth to instant; native Find and dialog motion are unaffected.
+- **Tests** — unit coverage for the settings/protocol narrowing, panel geometry, and motion-preference gating; three representative Playwright visual-regression states (wide settings, mid-width comments under reduced motion, narrow comments) replacing an exhaustive state matrix; two Mermaid goldens re-recorded for the approved responsive-width change.
+
 ## 2026-07-07 (in flight — feat/export-html-pdf)
 
 ### Export to HTML and PDF

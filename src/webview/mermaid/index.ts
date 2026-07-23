@@ -118,7 +118,7 @@ function addExpandButton(el: HTMLElement): void {
   btn.setAttribute("aria-label", "Expand diagram");
   btn.addEventListener("click", () => {
     const current = el.querySelector("svg");
-    if (current) openLightbox(current, _currentTheme);
+    if (current) openLightbox(current, _currentTheme, btn);
   });
   el.appendChild(btn);
 }

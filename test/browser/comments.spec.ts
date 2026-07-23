@@ -76,6 +76,43 @@ async function renderDoc(
   await expect(page.locator("mark.pmk-hl")).toBeVisible();
 }
 
+test("comment navigation and highlights respect reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await renderDoc(page, "light");
+
+  // Comment highlight transitions collapse to zero under reduced motion.
+  const highlightZero = await page.evaluate(() => {
+    const el = document.querySelector(".pmk-hl");
+    return el
+      ? getComputedStyle(el)
+          .transitionDuration.split(",")
+          .every((d) => parseFloat(d) === 0)
+      : null;
+  });
+  expect(highlightZero).toBe(true);
+
+  // Spy on comment-jump scrolling: reduced motion jumps instantly ("auto").
+  await page.evaluate(() => {
+    (window as unknown as { __scroll: unknown[] }).__scroll = [];
+    Element.prototype.scrollIntoView = function (arg?: unknown): void {
+      (window as unknown as { __scroll: unknown[] }).__scroll.push(arg);
+    };
+  });
+  await page.locator("body").press("n");
+  const reduced = await page.evaluate(
+    () => (window as unknown as { __scroll: Array<Record<string, unknown>> }).__scroll.at(-1),
+  );
+  expect(reduced).toMatchObject({ behavior: "auto" });
+
+  // Normal motion keeps the smooth comment jump.
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.locator("body").press("n");
+  const normal = await page.evaluate(
+    () => (window as unknown as { __scroll: Array<Record<string, unknown>> }).__scroll.at(-1),
+  );
+  expect(normal).toMatchObject({ behavior: "smooth" });
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`comment highlights golden — ${theme}`, async ({ page }) => {
     await renderDoc(page, theme);
@@ -117,6 +154,107 @@ test("Resolve in the popover posts resolveComment with the comment id", async ({
   });
   expect(posted).toContainEqual({ v: 1, type: "resolveComment", id: "span1234" });
   await expect(page.locator(".pmk-popover")).toHaveCount(0);
+});
+
+test("comment anchors are keyboard complete and restore focus when the popover closes", async ({
+  page,
+}) => {
+  await renderDoc(page, "light");
+  const anchor = page.locator("mark.pmk-hl");
+
+  await expect(anchor).toHaveAttribute("role", "button");
+  await expect(anchor).toHaveAttribute("aria-label", "Open comment by carlos");
+  await anchor.focus();
+  await expect(anchor).toBeFocused();
+  expect(
+    await anchor.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const probe = document.createElement("span");
+      probe.style.color = "var(--pmk-ui-focus)";
+      document.body.appendChild(probe);
+      const focusColor = getComputedStyle(probe).color;
+      probe.remove();
+      return {
+        usesFocusToken: style.outlineColor === focusColor,
+        width: style.outlineWidth,
+      };
+    }),
+  ).toEqual({ usesFocusToken: true, width: "2px" });
+
+  await anchor.press("Space");
+  const popover = page.locator(".pmk-popover");
+  await expect(popover).toBeVisible();
+  await expect(popover.getByRole("button", { name: "Edit" })).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(popover).toHaveCount(0);
+  await expect(anchor).toBeFocused();
+});
+
+test("structural, range, and linked highlights retain semantics with native comment actions", async ({
+  page,
+}) => {
+  await renderDoc(page, "light");
+  const table = page.locator('table[data-pmk-id="blok1234"]');
+  await expect(table).not.toHaveAttribute("role", "button");
+  const tableAction = page.locator('[data-pmk-comment-action="blok1234"]');
+  await expect(tableAction).toHaveAttribute("aria-label", "Open comment by claude-code");
+  await tableAction.focus();
+  await expect(table).toHaveClass(/pmk-hl-keyboard-focus/);
+  await tableAction.press("Enter");
+  await expect(page.locator(".pmk-popover")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await tableAction.click();
+  await expect(page.locator(".pmk-popover")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const comments = [
+    { ...COMMENTS[0], id: "link1234", quote: "linked text" },
+    { ...COMMENTS[0], id: "table999", quote: "Structural table" },
+    { ...COMMENTS[1], id: "range123", quote: "Range content" },
+  ];
+  await page.evaluate((comments) => {
+    (window as Window & { __harness?: Harness }).__harness!.injectMessage({
+      v: 1,
+      type: "render",
+      html: '<p><mark class="pmk-hl" data-pmk-id="link1234" data-pmk-state="intact"><a href="#target">linked text</a><button type="button">Nested control</button></mark></p><table data-pmk-id="table999" data-pmk-state="intact" data-pmk-block=""><tbody><tr><td>Structural table</td></tr></tbody></table><div class="pmk-hl-range" data-pmk-id="range123" data-pmk-state="intact"><p>Range content</p><p>Second range line</p></div>',
+      theme: "light",
+      docName: "semantics.md",
+      comments,
+      attention: 0,
+    });
+  }, comments);
+  const linked = page.locator('mark[data-pmk-id="link1234"]');
+  await expect(linked).not.toHaveAttribute("role", "button");
+  await expect(linked.getByRole("link", { name: "linked text" })).toBeVisible();
+  const nestedControl = linked.getByRole("button", { name: "Nested control" });
+  await nestedControl.press("Space");
+  await expect(page.locator(".pmk-popover")).toHaveCount(0);
+  const range = page.locator('#penmark-root [data-pmk-id="range123"]');
+  await expect(range).not.toHaveAttribute("role", "button");
+  const structuralGeometry = await page.evaluate(() =>
+    ["table999", "range123"].map((id) => {
+      const anchor = Array.from(
+        document.querySelectorAll<HTMLElement>("#penmark-root [data-pmk-id]"),
+      ).find((element) => element.dataset.pmkId === id)!;
+      const action = Array.from(
+        document.querySelectorAll<HTMLElement>("#penmark-root [data-pmk-comment-action]"),
+      ).find((element) => element.dataset.pmkCommentAction === id)!;
+      return {
+        anchorTop: anchor.getBoundingClientRect().top,
+        actionTop: action.getBoundingClientRect().top,
+      };
+    }),
+  );
+  expect(
+    Math.abs(structuralGeometry[0]!.anchorTop - structuralGeometry[0]!.actionTop),
+  ).toBeLessThan(24);
+  expect(
+    Math.abs(structuralGeometry[1]!.anchorTop - structuralGeometry[1]!.actionTop),
+  ).toBeLessThan(24);
+  expect(structuralGeometry[1]!.actionTop - structuralGeometry[0]!.actionTop).toBeGreaterThan(20);
+  await page.locator('#penmark-root [data-pmk-comment-action="range123"]').press("Space");
+  await expect(page.locator(".pmk-popover")).toContainText("failure-mode column");
 });
 
 // --- R14: the add flow ------------------------------------------------------
@@ -235,11 +373,30 @@ test("add flow: select → Add comment → submit posts addComment, host echo sh
   expect(await page.locator(".pmk-gutter-dot").count()).toBeGreaterThanOrEqual(1);
 });
 
+test("add flow: submit preserves intentional body whitespace", async ({ page }) => {
+  await renderAndSelect(page, "light");
+  await page.locator(".pmk-add-comment-btn").click();
+
+  const body = "  Keep my spacing  \n";
+  const box = page.locator(".pmk-commentbox");
+  await box.locator("textarea").fill(body);
+  await box.locator("button.primary").click();
+
+  const comments = await page.evaluate(() =>
+    (window as Window & { __harness?: Harness }).__harness!.messages.filter(
+      (message) => (message as { type?: string }).type === "addComment",
+    ),
+  );
+  expect(comments).toEqual([expect.objectContaining({ body })]);
+});
+
 test("add flow: empty body does not post and keeps the box open; Cancel discards", async ({
   page,
 }) => {
   await renderAndSelect(page, "light");
-  await page.locator(".pmk-add-comment-btn").click();
+  const addButton = page.locator(".pmk-add-comment-btn");
+  await expect(page.getByRole("button", { name: "Add comment" })).toBeVisible();
+  await addButton.click();
 
   const box = page.locator(".pmk-commentbox");
   await expect(box).toBeVisible();
@@ -248,6 +405,9 @@ test("add flow: empty body does not post and keeps the box open; Cancel discards
   await box.locator("textarea").fill("   ");
   await box.locator("button.primary").click();
   await expect(box).toBeVisible();
+  await expect(box.locator("textarea")).toBeFocused();
+  await expect(box.locator("textarea")).toHaveAttribute("aria-invalid", "true");
+  await expect(box.getByRole("status")).toHaveText("Enter a comment before submitting.");
   let posted = await page.evaluate(
     () => (window as Window & { __harness?: Harness }).__harness!.messages,
   );
@@ -256,10 +416,125 @@ test("add flow: empty body does not post and keeps the box open; Cancel discards
   // Cancel discards and closes.
   await box.locator("button:not(.primary)").click();
   await expect(box).toHaveCount(0);
+  await expect(addButton).toBeFocused();
   posted = await page.evaluate(
     () => (window as Window & { __harness?: Harness }).__harness!.messages,
   );
   expect(posted.some((m) => (m as { type?: string }).type === "addComment")).toBe(false);
+});
+
+test("add flow: Escape closes and returns focus to Add comment", async ({ page }) => {
+  await renderAndSelect(page, "light");
+  const addButton = page.locator(".pmk-add-comment-btn");
+  await addButton.click();
+  const textarea = page.locator(".pmk-commentbox-input");
+  await expect(textarea).toBeFocused();
+
+  await textarea.press("Escape");
+
+  await expect(page.locator(".pmk-commentbox")).toHaveCount(0);
+  await expect(addButton).toBeFocused();
+});
+
+test("add flow: validation clears only after input becomes non-whitespace", async ({ page }) => {
+  await renderAndSelect(page, "light");
+  await page.locator(".pmk-add-comment-btn").click();
+
+  const box = page.locator(".pmk-commentbox");
+  const ta = box.locator("textarea");
+  const status = box.locator(".pmk-commentbox-error");
+  await expect(status).toHaveAttribute("role", "status");
+  await ta.fill("   ");
+  await box.locator("button.primary").click();
+  await expect(status).toBeVisible();
+
+  await ta.fill("\t ");
+  await expect(ta).toHaveAttribute("aria-invalid", "true");
+  await expect(status).toBeVisible();
+  await expect(status).toHaveText("Enter a comment before submitting.");
+
+  await ta.fill("ready");
+  await expect(ta).not.toHaveAttribute("aria-invalid", "true");
+  await expect(ta).not.toHaveAttribute("aria-describedby", /.+/);
+  await expect(status).toBeHidden();
+  await expect(status).toHaveText("");
+});
+
+test("add flow: narrow viewport wraps actions without clipping the shortcut", async ({ page }) => {
+  await page.setViewportSize({ width: 260, height: 500 });
+  await renderAndSelect(page, "light");
+  await page.locator(".pmk-add-comment-btn").click();
+
+  const box = page.locator(".pmk-commentbox");
+  const shortcut = box.locator(".pmk-commentbox-shortcut");
+  const cancel = box.getByRole("button", { name: "Cancel", exact: true });
+  const comment = box.getByRole("button", { name: "Comment", exact: true });
+  await expect(shortcut).toBeVisible();
+  await expect(cancel).toBeVisible();
+  await expect(comment).toBeVisible();
+
+  const [boxRect, shortcutRect, cancelRect, commentRect] = await Promise.all([
+    box.boundingBox(),
+    shortcut.boundingBox(),
+    cancel.boundingBox(),
+    comment.boundingBox(),
+  ]);
+  expect(boxRect).not.toBeNull();
+  expect(shortcutRect).not.toBeNull();
+  expect(cancelRect).not.toBeNull();
+  expect(commentRect).not.toBeNull();
+  expect(shortcutRect!.y + shortcutRect!.height).toBeLessThanOrEqual(cancelRect!.y);
+  expect(commentRect!.x + commentRect!.width).toBeLessThanOrEqual(
+    boxRect!.x + boxRect!.width,
+  );
+});
+
+for (const shortcut of ["Meta+Enter", "Control+Enter"] as const) {
+  test(`add flow: ${shortcut} submits exactly one comment and closes the box`, async ({ page }) => {
+    await renderAndSelect(page, "light");
+    await page.locator(".pmk-add-comment-btn").click();
+
+    const box = page.locator(".pmk-commentbox");
+    const ta = box.locator("textarea");
+    await ta.fill("Submitted from the keyboard");
+    await ta.press(shortcut);
+
+    await expect(box).toHaveCount(0);
+    const comments = await page.evaluate(() =>
+      (window as Window & { __harness?: Harness }).__harness!.messages.filter(
+        (message) => (message as { type?: string }).type === "addComment",
+      ),
+    );
+    expect(comments).toEqual([
+      expect.objectContaining({
+        v: 1,
+        type: "addComment",
+        quote: "markdown-it",
+        body: "Submitted from the keyboard",
+      }),
+    ]);
+  });
+}
+
+test("add flow: bare Enter remains textarea input", async ({ page }) => {
+  await renderAndSelect(page, "light");
+  await page.locator(".pmk-add-comment-btn").click();
+
+  const box = page.locator(".pmk-commentbox");
+  const ta = box.locator("textarea");
+  await ta.fill("first line");
+  await ta.press("Enter");
+  await ta.type("second line");
+
+  await expect(box).toBeVisible();
+  await expect(ta).toHaveValue("first line\nsecond line");
+  await expect(box.getByRole("button", { name: "Comment", exact: true })).toBeVisible();
+  const posted = await page.evaluate(
+    () => (window as Window & { __harness?: Harness }).__harness!.messages,
+  );
+  expect(posted.some((message) => (message as { type?: string }).type === "addComment")).toBe(
+    false,
+  );
 });
 
 for (const theme of ["light", "dark"] as const) {
@@ -354,6 +629,44 @@ test("the attention chip opens the drawer at the needs-attention section", async
   await expect(page.locator(".pmk-drawer")).toHaveAttribute("aria-hidden", "false");
   await expect(page.locator(".pmk-drawer-attention")).toBeVisible();
   await expect(page.locator(".pmk-drawer-attention")).toContainText("three retries with backoff");
+  await expect(page.locator(".pmk-drawer-attention .pmk-drawer-card")).toContainText(
+    "Needs attention",
+  );
+  await expect(page.locator(".pmk-drawer-close")).toBeFocused();
+});
+
+test("Escape closes only the topmost comment surface", async ({ page }) => {
+  await renderForDrawer(page, "light");
+  await page.locator(".pmk-topbar-comments").click();
+  const drawer = page.locator(".pmk-drawer");
+  await drawer.locator(".pmk-drawer-action.jump").first().click();
+  await expect(page.locator(".pmk-popover")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator(".pmk-popover")).toHaveCount(0);
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+});
+
+test("topbar panel Close and Escape return focus to replacement controls", async ({ page }) => {
+  await renderForDrawer(page, "light");
+
+  const settings = page.locator('[data-pmk-topbar-control="settings"]');
+  await settings.click();
+  await page.locator(".pmk-settings-close").click();
+  await expect(settings).toBeFocused();
+  await settings.click();
+  await page.keyboard.press("Escape");
+  await expect(settings).toBeFocused();
+
+  const comments = page.locator('[data-pmk-topbar-control="comments"]');
+  await comments.click();
+  await expect(page.locator(".pmk-drawer-close")).toBeFocused();
+  await page.locator(".pmk-drawer-close").click();
+  await expect(comments).toBeFocused();
+  await comments.click();
+  await page.keyboard.press("Escape");
+  await expect(comments).toBeFocused();
 });
 
 test("jump-to in the drawer is named Open and scrolls to highlight", async ({
