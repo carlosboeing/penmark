@@ -2,7 +2,7 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
-## 2026-07-24 (feat/in-preview-find-fallback)
+## 2026-07-24 (in flight — feat/in-preview-find-fallback)
 
 ### In-preview Find fallback for Cursor and Antigravity
 
