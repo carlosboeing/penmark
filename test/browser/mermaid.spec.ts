@@ -414,16 +414,30 @@ test("contains a failed diagram: error + source shown, sibling still renders", a
   await expect(containers.nth(1).locator("svg")).toBeVisible({ timeout: 15000 });
 });
 
-test("Expand opens the lightbox dialog, zoom changes transform, Esc closes", async ({ page }) => {
+test("Expand opens an accessible focus-confined lightbox, zooms, and returns focus", async ({
+  page,
+}) => {
   await waitReady(page);
   await injectRender(page, `<div class="pmk-mermaid" data-pmk-source="${VALID}"></div>`);
 
   await expect(page.locator("#penmark-root .pmk-mermaid svg")).toBeVisible({ timeout: 15000 });
 
   // Expand button opens the dialog.
-  await page.locator(".pmk-mermaid-expand").click();
-  const dialog = page.locator("dialog.pmk-mermaid-lightbox");
+  const expand = page.getByRole("button", { name: "Expand diagram" });
+  await expand.click();
+  const dialog = page.getByRole("dialog", { name: "Expanded diagram" });
   await expect(dialog).toBeVisible();
+
+  const close = dialog.getByRole("button", { name: "Close diagram" });
+  const zoomOut = dialog.getByRole("button", { name: "Zoom out" });
+  await expect(close).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Zoom in" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Fit diagram to view" })).toBeVisible();
+
+  await page.keyboard.press("Tab");
+  await expect(zoomOut).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(close).toBeFocused();
 
   const dialogSvg = dialog.locator("svg");
   await expect(dialogSvg).toBeVisible();
@@ -442,8 +456,43 @@ test("Expand opens the lightbox dialog, zoom changes transform, Esc closes", asy
     .not.toBe(before);
 
   // Esc closes the dialog (native <dialog> behaviour).
+  await page.evaluate(() => {
+    (window as Window & { __underlyingEscapeCount?: number }).__underlyingEscapeCount = 0;
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        (window as Window & { __underlyingEscapeCount?: number }).__underlyingEscapeCount! += 1;
+      }
+    });
+  });
+  await dialog.evaluate((element) => {
+    element.addEventListener(
+      "cancel",
+      (event) => {
+        (
+          window as Window & { __mermaidCancelDefaultPrevented?: boolean }
+        ).__mermaidCancelDefaultPrevented = event.defaultPrevented;
+      },
+      { once: true },
+    );
+  });
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+  await expect(expand).toBeFocused();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __mermaidCancelDefaultPrevented?: boolean })
+          .__mermaidCancelDefaultPrevented,
+    ),
+  ).toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { __underlyingEscapeCount?: number }).__underlyingEscapeCount,
+      ),
+    )
+    .toBe(0);
 });
 
 test("setTheme re-renders the diagram under the new theme", async ({ page }) => {

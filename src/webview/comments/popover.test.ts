@@ -51,6 +51,43 @@ describe("openCommentPopover", () => {
     expect(pop!.querySelector(".pmk-popover-when")!.textContent).toContain("2026-06-11");
   });
 
+  it("moves focus to the first meaningful action and restores the anchor on close", () => {
+    const anchor = anchorEl();
+    anchor.tabIndex = 0;
+    anchor.focus();
+
+    openCommentPopover(anchor, comment(), post);
+
+    expect(document.activeElement).toBe(document.querySelector(".pmk-popover-btn"));
+    closeCommentPopover();
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  it("does not restore focus to a disconnected anchor", () => {
+    const anchor = anchorEl();
+    anchor.tabIndex = 0;
+    openCommentPopover(anchor, comment(), post);
+    anchor.remove();
+
+    closeCommentPopover();
+
+    expect(document.activeElement).not.toBe(anchor);
+  });
+
+  it("applies active styling for comment IDs containing selector metacharacters", () => {
+    const id = 'comment"\\]';
+    const root = document.createElement("div");
+    root.id = "penmark-root";
+    const anchor = anchorEl();
+    anchor.setAttribute("data-pmk-id", id);
+    root.appendChild(anchor);
+    document.body.appendChild(root);
+
+    openCommentPopover(anchor, comment({ id }), post);
+
+    expect(anchor.classList.contains("pmk-hl-active")).toBe(true);
+  });
+
   it("shows a human avatar with the author initial for human provenance", () => {
     openCommentPopover(anchorEl(), comment({ provenance: "human", author: "carlos" }), post);
 

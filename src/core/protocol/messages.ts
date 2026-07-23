@@ -57,10 +57,11 @@ export type PreviewSettingKey =
   | "preset"
   | "textSize"
   | "contentWidth"
+  | "codeBlockWrap"
   | "comments.highlightIntensity"
   | "lineHeight";
 
-export type PreviewSettingValue = string | number;
+export type PreviewSettingValue = string | number | boolean;
 
 export type HighlightIntensity = "subtle" | "medium" | "strong";
 
@@ -69,6 +70,7 @@ export interface PreviewSettingsState {
   preset: PresetName;
   textSize: TextSize;
   contentWidth: ContentWidth;
+  codeBlockWrap: boolean;
   highlightIntensity: HighlightIntensity;
   /** Raw override. Zero means use the active preset's line height. */
   lineHeight: number;
@@ -119,6 +121,7 @@ export type HostToWebview =
   | { v: 1; type: "comments"; comments: WireComment[]; attention: number }
   | { v: 1; type: "setTheme"; theme: ThemeMode }
   | { v: 1; type: "setContentWidth"; contentWidth: ContentWidth }
+  | { v: 1; type: "setCodeBlockWrap"; codeBlockWrap: boolean }
   | { v: 1; type: "setTypography"; typography: TypographySettings }
   | { v: 1; type: "revealLine"; line: number }
   | { v: 1; type: "copied" }
@@ -171,6 +174,10 @@ export type WebviewToHost =
   | { v: 1; type: "openLink"; href: string }
   | { v: 1; type: "themeSelected"; theme: ThemeMode }
   | { v: 1; type: "updateSetting"; key: PreviewSettingKey; value: PreviewSettingValue }
+  // Open the full VS Code settings UI filtered to the penmark.* section. Carries
+  // no payload: the host targets a fixed URI and ignores any webview-provided
+  // URI data, so a compromised webview cannot redirect the user elsewhere.
+  | { v: 1; type: "openPenmarkSettings" }
   | {
       v: 1;
       type: "addComment";

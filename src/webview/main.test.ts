@@ -87,10 +87,79 @@ describe("main.ts message loop", () => {
         contentWidth: "full",
         highlightIntensity: "medium",
         lineHeight: 0,
+        codeBlockWrap: true,
       },
     });
 
     expect(root!.textContent).toContain("Content");
+  });
+
+  it("derives reading metadata from rendered root text after each render", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: '<h1>Visible heading</h1>\n<p>A <a href="#">rendered link</a>.</p>',
+      theme: "light",
+      docName: "test.md",
+      comments: [
+        {
+          id: "hidden01",
+          state: "intact",
+          provenance: "human",
+          author: "carlos",
+          timestamp: "2026-07-22 09:00 +10:00",
+          quote: "Visible heading",
+          body: "Hidden review comment words must not count",
+          extent: { startLine: 0, startCol: 0, endLine: 0, endCol: 15 },
+        },
+      ],
+      attention: 0,
+    });
+
+    expect(document.querySelector(".pmk-topbar-reading-meta")?.textContent).toBe(
+      "5 words · 1 min read",
+    );
+
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Replaced</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    expect(document.querySelector(".pmk-topbar-reading-meta")?.textContent).toBe(
+      "1 word · 1 min read",
+    );
+  });
+
+  it("does not recompute reading metadata for non-render messages", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Two words</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    const root = document.getElementById("penmark-root")!;
+    root.textContent = "This mutation would change the count if metadata were recomputed";
+
+    injectMessage({ v: 1, type: "comments", comments: [], attention: 0 });
+    injectMessage({ v: 1, type: "setTheme", theme: "dark" });
+    injectMessage({
+      v: 1,
+      type: "setTypography",
+      typography: { preset: "github", textSize: "medium", contentWidth: "full", lineHeight: 0 },
+    });
+    injectMessage({ v: 1, type: "setContentWidth", contentWidth: "wide" });
+    injectMessage({ v: 1, type: "setCodeBlockWrap", codeBlockWrap: false });
+
+    expect(document.querySelector(".pmk-topbar-reading-meta")?.textContent).toBe(
+      "2 words · 1 min read",
+    );
   });
 
   it("opens preview settings and posts setting updates with local class feedback", () => {
@@ -109,6 +178,7 @@ describe("main.ts message loop", () => {
         contentWidth: "full",
         highlightIntensity: "medium",
         lineHeight: 0,
+        codeBlockWrap: true,
       },
     });
 
@@ -135,6 +205,185 @@ describe("main.ts message loop", () => {
       key: "comments.highlightIntensity",
       value: "strong",
     });
+  });
+
+  it("keeps topbar panel controls synchronized with their controlled panels", async () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Content</p>",
+      theme: "auto",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+
+    expect(document.querySelector(".pmk-settings-panel")?.id).toBe("penmark-settings-panel");
+    expect(document.querySelector(".pmk-drawer")?.id).toBe("penmark-comments-drawer");
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await Promise.resolve();
+    expect(document.querySelector(".pmk-topbar-settings")?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(".pmk-topbar-comments")?.getAttribute("aria-expanded")).toBe("false");
+
+    const settings = document.querySelector(".pmk-topbar-settings") as HTMLButtonElement;
+    settings.click();
+    expect(document.querySelector(".pmk-topbar-settings")?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".pmk-topbar-settings")?.hasAttribute("aria-pressed")).toBe(false);
+    expect(document.querySelector(".pmk-settings-panel")?.getAttribute("aria-hidden")).toBe("false");
+
+    (document.querySelector(".pmk-topbar-comments") as HTMLButtonElement).click();
+    expect(document.querySelector(".pmk-topbar-settings")?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(".pmk-settings-panel")?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelector(".pmk-topbar-comments")?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".pmk-topbar-comments")?.hasAttribute("aria-pressed")).toBe(false);
+    expect(document.querySelector(".pmk-drawer")?.getAttribute("aria-hidden")).toBe("false");
+
+    (document.querySelector(".pmk-drawer-close") as HTMLButtonElement).click();
+    await Promise.resolve();
+    expect(document.querySelector(".pmk-topbar-comments")?.getAttribute("aria-expanded")).toBe("false");
+
+    (document.querySelector(".pmk-topbar-settings") as HTMLButtonElement).click();
+    (document.querySelector(".pmk-settings-close") as HTMLButtonElement).click();
+    await Promise.resolve();
+    expect(document.querySelector(".pmk-topbar-settings")?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("returns focus to replacement topbar controls after Close and Escape", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Content</p>",
+      theme: "auto",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+
+    const originalSettings = document.querySelector(".pmk-topbar-settings") as HTMLButtonElement;
+    originalSettings.focus();
+    originalSettings.click();
+    const replacementSettings = document.querySelector(
+      '[data-pmk-topbar-control="settings"]',
+    ) as HTMLButtonElement;
+    expect(replacementSettings).not.toBe(originalSettings);
+    (document.querySelector(".pmk-settings-close") as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(replacementSettings);
+
+    replacementSettings.click();
+    const settingsAfterReopen = document.querySelector(
+      '[data-pmk-topbar-control="settings"]',
+    ) as HTMLButtonElement;
+    (document.querySelector(".pmk-settings-close") as HTMLButtonElement).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    expect(document.activeElement).toBe(settingsAfterReopen);
+
+    const originalComments = document.querySelector(
+      '[data-pmk-topbar-control="comments"]',
+    ) as HTMLButtonElement;
+    originalComments.focus();
+    originalComments.click();
+    const replacementComments = document.querySelector(
+      '[data-pmk-topbar-control="comments"]',
+    ) as HTMLButtonElement;
+    expect(replacementComments).not.toBe(originalComments);
+    (document.querySelector(".pmk-drawer-close") as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(replacementComments);
+
+    replacementComments.click();
+    const commentsAfterReopen = document.querySelector(
+      '[data-pmk-topbar-control="comments"]',
+    ) as HTMLButtonElement;
+    const drawerClose = document.querySelector(".pmk-drawer-close") as HTMLButtonElement;
+    drawerClose.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe(commentsAfterReopen);
+  });
+
+  it("routes d through panel coordination and closes Settings before opening Comments", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Content</p>",
+      theme: "auto",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    (document.querySelector(".pmk-topbar-settings") as HTMLButtonElement).click();
+    expect(document.querySelector(".pmk-settings-panel")?.getAttribute("aria-hidden")).toBe(
+      "false",
+    );
+
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true }));
+
+    expect(document.querySelector(".pmk-settings-panel")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+    expect(document.querySelector(".pmk-drawer")?.getAttribute("aria-hidden")).toBe("false");
+    expect(document.activeElement).toBe(document.querySelector(".pmk-drawer-close"));
+  });
+
+  it("applies a topbar theme selection immediately and reconciles a host theme update", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Content</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    expect(document.querySelectorAll("[data-theme-mode]")).toHaveLength(1);
+    expect(document.querySelector("[data-theme-mode]")?.getAttribute("data-theme-mode")).toBe("light");
+
+    clearMessages();
+    const lightButton = document.querySelector("[data-theme-mode]") as HTMLButtonElement;
+    lightButton.focus();
+    lightButton.click();
+    expect(document.body.classList.contains("theme-dark")).toBe(true);
+    const darkButton = document.querySelector("[data-theme-mode]") as HTMLButtonElement;
+    expect(darkButton).not.toBe(lightButton);
+    expect(darkButton.getAttribute("data-theme-mode")).toBe("dark");
+    expect(document.activeElement).toBe(darkButton);
+    expect(document.querySelector('[data-pmk-setting="theme"][data-value="dark"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(getMock()._messages).toContainEqual({ v: 1, type: "themeSelected", theme: "dark" });
+
+    (document.querySelector(".pmk-topbar-settings") as HTMLButtonElement).click();
+    expect(document.querySelector("[data-theme-mode]")?.getAttribute("data-theme-mode")).toBe("dark");
+
+    injectMessage({ v: 1, type: "setTheme", theme: "auto" });
+
+    expect(document.querySelector("[data-theme-mode]")?.getAttribute("data-theme-mode")).toBe("auto");
+    expect(document.querySelector("[data-theme-mode]")?.hasAttribute("aria-pressed")).toBe(false);
+    expect(document.querySelector('[data-pmk-setting="theme"][data-value="auto"]')?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("preserves topbar focus across comments refreshes without stealing external focus", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Content</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+
+    const commentsButton = document.querySelector(".pmk-topbar-comments") as HTMLButtonElement;
+    commentsButton.focus();
+    injectMessage({ v: 1, type: "comments", comments: [], attention: 0 });
+
+    const replacement = document.querySelector(".pmk-topbar-comments") as HTMLButtonElement;
+    expect(replacement).not.toBe(commentsButton);
+    expect(document.activeElement).toBe(replacement);
+
+    const panelControl = document.createElement("button");
+    document.body.appendChild(panelControl);
+    panelControl.focus();
+    injectMessage({ v: 1, type: "comments", comments: [], attention: 0 });
+
+    expect(document.activeElement).toBe(panelControl);
   });
 
   it("a 'render' message sanitizes XSS vectors before inserting into DOM", () => {
@@ -256,6 +505,43 @@ describe("main.ts message loop", () => {
     expect(add).toBeTruthy();
     expect(add.quote).toBe("quick brown");
     expect(add.body).toBe("is this the right animal?");
+  });
+
+  it.each(["Cancel", "Escape"])("returns focus to the Add comment trigger after %s", (closeBy) => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: '<p data-pmk-offset="0:1" data-pmk-coff="0">The quick brown fox jumps.</p>',
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    (Range.prototype as unknown as { getClientRects: () => unknown }).getClientRects = () =>
+      [] as unknown[];
+    const textNode = document.querySelector("#penmark-root p")!.firstChild!;
+    const range = document.createRange();
+    range.setStart(textNode, 4);
+    range.setEnd(textNode, 9);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    const add = document.querySelector(".pmk-add-comment-btn") as HTMLButtonElement;
+    expect(add.closest("#penmark-selection-preview")?.hasAttribute("aria-hidden")).toBe(false);
+    add.focus();
+    add.click();
+
+    if (closeBy === "Cancel") {
+      (document.querySelector(".pmk-commentbox-btn:not(.primary)") as HTMLButtonElement).click();
+    } else {
+      (document.querySelector(".pmk-commentbox-input") as HTMLTextAreaElement).dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    }
+
+    expect(add.isConnected).toBe(true);
+    expect(document.activeElement).toBe(add);
   });
 
   // --- R15: drawer + needs-attention wiring --------------------------------
@@ -407,6 +693,78 @@ describe("main.ts message loop", () => {
     expect(document.body.classList.contains("pmk-content-wide")).toBe(true);
     // previous preset removed (not accumulated)
     expect(document.body.classList.contains("pmk-content-comfortable")).toBe(false);
+  });
+
+  it("a 'setCodeBlockWrap' message changes only body state and preserves rendered nodes", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<pre><code>const longValue = originalText;</code></pre>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+      settings: {
+        theme: "light",
+        preset: "github",
+        textSize: "medium",
+        contentWidth: "full",
+        highlightIntensity: "medium",
+        lineHeight: 0,
+        codeBlockWrap: true,
+      },
+    });
+    const root = document.getElementById("penmark-root")!;
+    const code = root.querySelector("code")!;
+
+    injectMessage({ v: 1, type: "setCodeBlockWrap", codeBlockWrap: false });
+
+    expect(document.body.getAttribute("data-pmk-code-wrap")).toBe("false");
+    expect(document.getElementById("penmark-root")).toBe(root);
+    expect(root.querySelector("code")).toBe(code);
+    expect(code.textContent).toBe("const longValue = originalText;");
+
+    const copyButton = root.querySelector(".pmk-copy-btn") as HTMLButtonElement;
+    clearMessages();
+    copyButton.click();
+    expect(getMock()._messages).toContainEqual({
+      v: 1,
+      type: "copyCode",
+      text: "const longValue = originalText;",
+    });
+  });
+
+  it("uses codeBlockWrap from initial settings and defaults it on", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<pre><code>off</code></pre>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+      settings: {
+        theme: "light",
+        preset: "github",
+        textSize: "medium",
+        contentWidth: "full",
+        highlightIntensity: "medium",
+        lineHeight: 0,
+        codeBlockWrap: false,
+      },
+    });
+    expect(document.body.getAttribute("data-pmk-code-wrap")).toBe("false");
+
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<pre><code>default</code></pre>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+    expect(document.body.getAttribute("data-pmk-code-wrap")).toBe("true");
   });
 
   it("scroll state is persisted with setState and restored on re-render", () => {

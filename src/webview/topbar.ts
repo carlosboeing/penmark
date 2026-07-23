@@ -1,27 +1,58 @@
 /**
- * Penmark webview topbar — doc name display + theme mode switcher.
+ * Penmark webview topbar — compact document identity, preview state and actions.
  *
  * No vscode imports (ADR 0001). No inline style attributes (CSP blocks them).
- * Posts {v:1, type:"themeSelected", theme} to the host when the user picks a mode.
+ * Posts {v:1, type:"themeSelected", theme} to the host when theme mode cycles.
  */
 
 import type { ThemeMode } from "../core/protocol/messages.js";
 
-const THEME_MODES: ThemeMode[] = ["light", "dark", "auto"];
+const SVG_NS = "http://www.w3.org/2000/svg";
+const THEME_MODES: ThemeMode[] = ["auto", "light", "dark"];
 
-/**
- * Comments-drawer affordances for the topbar (R15). Omitted by older callers /
- * the pre-comments render path — when absent, neither the toggle nor the chip
- * is rendered.
- */
+const ICON_PATHS = {
+  document: "M4 2.5h7l4 4v11H4z M11 2.5v4h4",
+  theme: "M10 2.5v2 M10 15.5v2 M2.5 10h2 M15.5 10h2 M4.7 4.7l1.4 1.4 M13.9 13.9l1.4 1.4 M15.3 4.7l-1.4 1.4 M6.1 13.9l-1.4 1.4 M10 6.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7",
+  settings: "M4 5h12 M4 10h12 M4 15h12 M8 3.5v3 M13 8.5v3 M7 13.5v3",
+  export: "M10 3v9 M10 12l3-3 M10 12L7 9 M4 14v3h12v-3",
+  comments: "M4 4h12v9H9l-4 3v-3H4z",
+} as const;
+
+function staticIcon(pathData: string, className?: string): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  if (className) svg.setAttribute("class", className);
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", pathData);
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.5");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(path);
+  return svg;
+}
+
+function nameButton(button: HTMLButtonElement, name: string): void {
+  button.setAttribute("aria-label", name);
+  button.title = name;
+}
+
+function visibleLabel(text: string): HTMLSpanElement {
+  const label = document.createElement("span");
+  label.className = "pmk-topbar-label";
+  label.setAttribute("aria-hidden", "true");
+  label.textContent = text;
+  return label;
+}
+
 export interface TopbarCommentsOpts {
-  /** Open (live-anchored) comment count, shown on the drawer toggle. */
   openCount: number;
-  /** Needs-attention (orphan / content-removed) count; the chip shows when > 0. */
   attention: number;
-  /** Toggle the comments drawer. */
+  drawerOpen: boolean;
   onToggleDrawer: () => void;
-  /** Open the drawer at the needs-attention section (chip click). */
   onOpenAttention: () => void;
 }
 
@@ -31,44 +62,62 @@ export interface TopbarSettingsOpts {
 }
 
 export interface TopbarExportOpts {
-  /** Open the export options dialog (R17). */
   onOpenExport: () => void;
 }
 
-/**
- * Install (or re-install) the topbar into `container`.
- *
- * Safe to call multiple times — clears the container and rebuilds.
- * All node creation uses safe DOM methods (no innerHTML with untrusted content).
- *
- * When `comments` is supplied (R15), a discreet amber attention chip
- * ("N orphaned", only when `attention > 0`) and a "Comments (N)" drawer toggle
- * are added.
- */
 export function installTopbar(
   container: HTMLElement,
   docName: string,
-  postMessage: (msg: unknown) => void,
+  onThemeSelected: (theme: ThemeMode) => void,
   comments?: TopbarCommentsOpts,
   settings?: TopbarSettingsOpts,
   exportOpts?: TopbarExportOpts,
+  initialTheme: ThemeMode = "auto",
+  readingMeta?: string,
 ): void {
-  // Clear previous content safely.
-  while (container.firstChild) {
-    container.removeChild(container.firstChild);
-  }
+  while (container.firstChild) container.removeChild(container.firstChild);
 
-  // Doc name label
+  const documentZone = document.createElement("div");
+  documentZone.className = "pmk-topbar-document";
+  const documentIcon = document.createElement("span");
+  documentIcon.className = "pmk-topbar-document-icon";
+  documentIcon.appendChild(staticIcon(ICON_PATHS.document));
   const nameEl = document.createElement("span");
   nameEl.className = "pmk-topbar-docname";
   nameEl.textContent = docName;
-  container.appendChild(nameEl);
+  documentZone.append(documentIcon, nameEl);
+  if (readingMeta) {
+    const metadata = document.createElement("span");
+    metadata.className = "pmk-topbar-reading-meta";
+    metadata.textContent = readingMeta;
+    documentZone.appendChild(metadata);
+  }
 
-  // Amber attention chip — discreet, only when something needs attention.
+  const previewZone = document.createElement("div");
+  previewZone.className = "pmk-topbar-preview";
+  const themeButton = document.createElement("button");
+  themeButton.type = "button";
+  themeButton.className = "pmk-topbar-btn pmk-topbar-switcher";
+  themeButton.dataset.pmkTopbarControl = "theme";
+  themeButton.setAttribute("data-active", "true");
+  themeButton.appendChild(staticIcon(ICON_PATHS.theme));
+  const nextTheme =
+    THEME_MODES[(THEME_MODES.indexOf(initialTheme) + 1) % THEME_MODES.length] ?? "auto";
+  const themeName = `Theme: ${initialTheme}. Switch to ${nextTheme}`;
+  themeButton.setAttribute("data-theme-mode", initialTheme);
+  nameButton(themeButton, themeName);
+  themeButton.addEventListener("click", () => onThemeSelected(nextTheme));
+  previewZone.appendChild(themeButton);
+
+  const actions = document.createElement("nav");
+  actions.className = "pmk-topbar-actions";
+  actions.setAttribute("aria-label", "Preview actions");
+
   if (comments && comments.attention > 0) {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "pmk-topbar-chip";
+    chip.dataset.pmkTopbarControl = "attention";
     chip.setAttribute("title", `${comments.attention} comment(s) could not be re-anchored`);
     const dot = document.createElement("span");
     dot.className = "pmk-topbar-chip-dot";
@@ -77,55 +126,50 @@ export function installTopbar(
     label.textContent = `${comments.attention} orphaned`;
     chip.append(dot, label);
     chip.addEventListener("click", () => comments.onOpenAttention());
-    container.appendChild(chip);
+    actions.appendChild(chip);
   }
-
-  // Theme switcher group
-  const switcher = document.createElement("div");
-  switcher.className = "pmk-topbar-switcher";
-
-  for (const mode of THEME_MODES) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pmk-topbar-btn";
-    btn.setAttribute("data-theme-mode", mode);
-    btn.textContent = mode;
-    btn.addEventListener("click", () => {
-      postMessage({ v: 1, type: "themeSelected", theme: mode });
-    });
-    switcher.appendChild(btn);
-  }
-
-  container.appendChild(switcher);
 
   if (settings) {
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "pmk-topbar-btn pmk-topbar-settings";
-    toggle.textContent = "Preview settings";
-    toggle.setAttribute("aria-expanded", settings.settingsOpen ? "true" : "false");
+    toggle.dataset.pmkTopbarControl = "settings";
+    nameButton(toggle, "Preview settings");
+    toggle.setAttribute("aria-controls", "penmark-settings-panel");
+    toggle.setAttribute("aria-expanded", String(settings.settingsOpen));
+    toggle.append(staticIcon(ICON_PATHS.settings), visibleLabel("Settings"));
     toggle.addEventListener("click", () => settings.onToggleSettings());
-    container.appendChild(toggle);
+    actions.appendChild(toggle);
   }
 
-  // Export dialog trigger (R17) — the preview is where the export decision
-  // happens, so the affordance lives here, not only in editor menus.
   if (exportOpts) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pmk-topbar-btn pmk-topbar-export";
-    btn.textContent = "Export";
-    btn.addEventListener("click", () => exportOpts.onOpenExport());
-    container.appendChild(btn);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pmk-topbar-btn pmk-topbar-export";
+    button.dataset.pmkTopbarControl = "export";
+    nameButton(button, "Export document");
+    button.append(staticIcon(ICON_PATHS.export), visibleLabel("Export"));
+    button.addEventListener("click", () => exportOpts.onOpenExport());
+    actions.appendChild(button);
   }
 
-  // Comments drawer toggle (R15).
   if (comments) {
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "pmk-topbar-btn pmk-topbar-comments";
-    toggle.textContent = `Comments (${comments.openCount})`;
+    toggle.dataset.pmkTopbarControl = "comments";
+    const name = `Comments, ${comments.openCount} open`;
+    nameButton(toggle, name);
+    toggle.setAttribute("aria-controls", "penmark-comments-drawer");
+    toggle.setAttribute("aria-expanded", String(comments.drawerOpen));
+    const count = document.createElement("span");
+    count.className = "pmk-topbar-count";
+    count.setAttribute("aria-hidden", "true");
+    count.textContent = String(comments.openCount);
+    toggle.append(staticIcon(ICON_PATHS.comments), visibleLabel("Comments"), count);
     toggle.addEventListener("click", () => comments.onToggleDrawer());
-    container.appendChild(toggle);
+    actions.appendChild(toggle);
   }
+
+  container.append(documentZone, previewZone, actions);
 }

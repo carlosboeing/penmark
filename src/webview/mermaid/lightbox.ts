@@ -16,6 +16,34 @@ import { adaptMermaidDarkBackgrounds, rehydrateMermaidInlineStyles } from "./sty
 
 let _dialog: HTMLDialogElement | null = null;
 let _panZoom: SvgPanZoom.Instance | null = null;
+let _opener: HTMLElement | null = null;
+
+function isFocusable(el: HTMLElement): boolean {
+  return el.isConnected && !el.hidden && !el.closest("[inert]") && el.tabIndex >= 0;
+}
+
+function focusableControls(dialog: HTMLDialogElement): HTMLElement[] {
+  return Array.from(
+    dialog.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ),
+  ).filter((el) => !el.hidden && !el.closest("[inert]"));
+}
+
+function trapDialogFocus(dialog: HTMLDialogElement, event: KeyboardEvent): void {
+  if (event.key !== "Tab") return;
+  const controls = focusableControls(dialog);
+  if (controls.length === 0) return;
+  const first = controls[0]!;
+  const last = controls.at(-1)!;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 /** Tear down the current pan/zoom instance, if any. */
 function destroyPanZoom(): void {
@@ -36,6 +64,7 @@ function ensureDialog(): HTMLDialogElement {
   const dialog = document.createElement("dialog");
   dialog.id = "pmk-mermaid-lightbox";
   dialog.className = "pmk-mermaid-lightbox";
+  dialog.setAttribute("aria-label", "Expanded diagram");
 
   const toolbar = document.createElement("div");
   toolbar.className = "pmk-mermaid-lightbox-toolbar";
@@ -91,10 +120,26 @@ function ensureDialog(): HTMLDialogElement {
     if (e.target === dialog) dialog.close();
   });
 
+  dialog.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      // Keep underlying document-level surfaces from consuming the same key.
+      // Do not preventDefault: native dialog cancellation remains authoritative.
+      e.stopPropagation();
+      return;
+    }
+    trapDialogFocus(dialog, e);
+  });
+
   // Clean up pan/zoom and the cloned SVG whenever the dialog closes.
   dialog.addEventListener("close", () => {
+    const opener = _opener;
+    const active = document.activeElement;
+    const shouldRestore =
+      active === document.body || active === dialog || dialog.contains(active) || active === opener;
     destroyPanZoom();
     stage.replaceChildren();
+    _opener = null;
+    if (opener && shouldRestore && isFocusable(opener)) opener.focus();
   });
 
   document.body.appendChild(dialog);
@@ -110,7 +155,11 @@ function ensureDialog(): HTMLDialogElement {
  * @param theme     Resolved preview theme, so the clone gets the same dark-mode
  *                  background adaptation as the inline diagram.
  */
-export function openLightbox(sourceSvg: SVGElement, theme: "light" | "dark" = "light"): void {
+export function openLightbox(
+  sourceSvg: SVGElement,
+  theme: "light" | "dark" = "light",
+  opener?: HTMLElement | null,
+): void {
   const dialog = ensureDialog();
   const stage = dialog.querySelector<HTMLElement>(".pmk-mermaid-lightbox-stage");
   if (!stage) return;
@@ -131,7 +180,9 @@ export function openLightbox(sourceSvg: SVGElement, theme: "light" | "dark" = "l
   rehydrateMermaidInlineStyles(clone);
   adaptMermaidDarkBackgrounds(clone, theme === "dark");
 
+  _opener = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
   dialog.showModal();
+  dialog.querySelector<HTMLButtonElement>(".pmk-mermaid-lightbox-close")?.focus();
 
   // Initialise pan/zoom after the dialog is visible so dimensions are known.
   _panZoom = svgPanZoom(clone, {

@@ -3,6 +3,7 @@ import { PROTOCOL_VERSION } from "./messages.js";
 import type {
   HostToWebview,
   PreviewSettingKey,
+  PreviewSettingsState,
   WebviewToHost,
   WireComment,
   WireExtent,
@@ -107,6 +108,34 @@ describe("protocol/messages", () => {
     expect(msg.value).toBe("strong");
   });
 
+  it("carries code-block wrapping through preview settings and targeted updates", () => {
+    const key: PreviewSettingKey = "codeBlockWrap";
+    const settings: PreviewSettingsState = {
+      theme: "auto",
+      preset: "github",
+      textSize: "medium",
+      contentWidth: "full",
+      highlightIntensity: "medium",
+      lineHeight: 0,
+      codeBlockWrap: true,
+    };
+    const update: WebviewToHost = {
+      v: 1,
+      type: "updateSetting",
+      key,
+      value: false,
+    };
+    const hostMessage: HostToWebview = {
+      v: 1,
+      type: "setCodeBlockWrap",
+      codeBlockWrap: false,
+    };
+
+    expect(settings.codeBlockWrap).toBe(true);
+    expect(update.value).toBe(false);
+    expect(hostMessage.type).toBe("setCodeBlockWrap");
+  });
+
   it("exhaustively narrows every HostToWebview variant", () => {
     const assertNever = (x: never): never => {
       throw new Error(`unexpected host message: ${JSON.stringify(x)}`);
@@ -120,6 +149,8 @@ describe("protocol/messages", () => {
         case "setTheme":
           return msg.type;
         case "setContentWidth":
+          return msg.type;
+        case "setCodeBlockWrap":
           return msg.type;
         case "setTypography":
           return msg.type;
@@ -165,6 +196,8 @@ describe("protocol/messages", () => {
           return msg.type;
         case "updateSetting":
           return msg.type;
+        case "openPenmarkSettings":
+          return msg.type;
         case "addComment":
           return msg.type;
         case "resolveComment":
@@ -186,6 +219,7 @@ describe("protocol/messages", () => {
       }
     };
     expect(handle({ v: 1, type: "exportReview" })).toBe("exportReview");
+    expect(handle({ v: 1, type: "openPenmarkSettings" })).toBe("openPenmarkSettings");
     expect(
       handle({
         v: 1,

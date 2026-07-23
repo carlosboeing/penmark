@@ -20,6 +20,7 @@
  */
 
 import type { WebviewToHost } from "../../core/protocol/messages.js";
+import { registerPenmarkSurface } from "../keyboard.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -31,7 +32,7 @@ export interface CommentDraftStore {
 
 interface OpenBox {
   el: HTMLElement;
-  onKeydown: (e: KeyboardEvent) => void;
+  unregister: (restoreFocus?: boolean) => void;
 }
 
 let _open: OpenBox | null = null;
@@ -42,16 +43,11 @@ export function isCommentBoxOpen(): boolean {
 }
 
 /** Close the open box (if any) and detach its document listeners. */
-export function closeCommentBox(): void {
+export function closeCommentBox(restoreFocus = true): void {
   if (!_open) return;
-  document.removeEventListener("keydown", _open.onKeydown, true);
+  _open.unregister(restoreFocus);
   _open.el.remove();
   _open = null;
-
-  const overlay = document.getElementById("penmark-selection-preview");
-  if (overlay) {
-    overlay.replaceChildren();
-  }
 }
 
 /**
@@ -66,7 +62,7 @@ export function openCommentBox(
   postMessage: PostMessage,
   draft?: CommentDraftStore,
 ): void {
-  closeCommentBox();
+  closeCommentBox(false);
 
   const el = document.createElement("div");
   el.className = "pmk-commentbox";
@@ -80,8 +76,23 @@ export function openCommentBox(
   ta.setAttribute("aria-label", "Comment body");
   const saved = draft?.get();
   if (saved) ta.value = saved;
-  ta.addEventListener("input", () => draft?.set(ta.value === "" ? undefined : ta.value));
-  el.appendChild(ta);
+
+  const error = document.createElement("div");
+  error.id = "pmk-commentbox-error";
+  error.className = "pmk-commentbox-error";
+  error.setAttribute("role", "status");
+  error.setAttribute("aria-live", "polite");
+  error.hidden = true;
+
+  ta.addEventListener("input", () => {
+    draft?.set(ta.value === "" ? undefined : ta.value);
+    if (ta.value.trim() === "") return;
+    ta.removeAttribute("aria-invalid");
+    ta.removeAttribute("aria-describedby");
+    error.hidden = true;
+    error.textContent = "";
+  });
+  el.append(ta, error);
 
   const actions = document.createElement("div");
   actions.className = "pmk-commentbox-actions";
@@ -99,30 +110,46 @@ export function openCommentBox(
   submit.type = "button";
   submit.className = "pmk-commentbox-btn primary";
   submit.textContent = "Comment";
-  submit.addEventListener("click", () => {
-    const body = ta.value.trim();
-    if (body === "") return; // empty body is rejected — no message
+
+  const submitComment = (): void => {
+    const body = ta.value;
+    if (body.trim() === "") {
+      ta.setAttribute("aria-invalid", "true");
+      ta.setAttribute("aria-describedby", error.id);
+      error.hidden = false;
+      error.textContent = "Enter a comment before submitting.";
+      ta.focus();
+      return;
+    }
     postMessage({ v: 1, type: "addComment", range, quote, body });
     draft?.set(undefined);
-    closeCommentBox();
+    closeCommentBox(false);
+    document.getElementById("penmark-selection-preview")?.replaceChildren();
+  };
+
+  submit.addEventListener("click", submitComment);
+  ta.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || (!e.metaKey && !e.ctrlKey) || e.isComposing || e.repeat) return;
+    e.preventDefault();
+    submitComment();
   });
 
-  actions.append(cancel, submit);
+  const shortcut = document.createElement("span");
+  shortcut.className = "pmk-commentbox-shortcut";
+  shortcut.textContent = "Cmd/Ctrl+Enter";
+  shortcut.setAttribute("aria-hidden", "true");
+
+  actions.append(shortcut, cancel, submit);
   el.appendChild(actions);
 
   document.body.appendChild(el);
   positionOver(el, anchor);
 
-  const onKeydown = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      draft?.set(undefined);
-      closeCommentBox();
-    }
-  };
-  document.addEventListener("keydown", onKeydown, true);
-
-  _open = { el, onKeydown };
+  const unregister = registerPenmarkSurface(el, anchor, () => {
+    draft?.set(undefined);
+    closeCommentBox();
+  });
+  _open = { el, unregister };
   ta.focus();
 }
 

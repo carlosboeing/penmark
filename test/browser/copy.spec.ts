@@ -11,11 +11,12 @@ import { test, expect } from "@playwright/test";
 type HarnessMessage = { v?: number; type: string; text?: string };
 type Harness = { messages: HarnessMessage[]; injectMessage: (msg: unknown) => void };
 
-const FIXTURE_CODE = "function add(a, b) {\n  return a + b;\n}\n";
+const FIXTURE_CODE = `function add(a, b) {\n  return "${"visually-wrapped-text-".repeat(12)}";\n}`;
 
 test("clicking the copy button records a copyCode payload equal to the code text", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 480, height: 700 });
   await page.goto("/");
 
   // Wait for the webview bundle to post 'ready'.
@@ -38,6 +39,18 @@ test("clicking the copy button records a copyCode payload equal to the code text
   // The copy button must be installed after the render.
   const btn = page.locator("#penmark-root .pmk-copy-btn");
   await expect(btn).toHaveCount(1);
+  await expect(page.locator("#penmark-root pre code")).toHaveCSS("white-space", "pre-wrap");
+
+  // Visual wrapping must not mutate the DOM text or insert newlines into a selection.
+  const selectedText = await page.locator("#penmark-root pre code").evaluate((code) => {
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return selection.toString();
+  });
+  expect(selectedText).toBe(FIXTURE_CODE);
 
   // Click it (force — the button is opacity:0 until pre:hover, but present + clickable).
   await btn.click({ force: true });

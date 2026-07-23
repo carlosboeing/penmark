@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as vscode from "vscode";
 import {
   handleAddComment,
@@ -6,6 +6,10 @@ import {
   handleEditComment,
   handleExportReview,
   handleUpdateSetting,
+  openPreview,
+  PreviewPanelSerializer,
+  previewManager,
+  pushConfiguredPreviewUpdates,
   enqueueMutation,
 } from "./previewPanel.js";
 import type { PanelEntry } from "./previewPanel.js";
@@ -20,6 +24,18 @@ const seam = vscode as unknown as {
     _resetEdits: () => void;
   };
   window: {
+    activeTextEditor:
+      | {
+          document: vscode.TextDocument;
+        }
+      | undefined;
+    _createWebviewPanelCalls: Array<{
+      viewType: string;
+      title: string;
+      showOptions: unknown;
+      options: unknown;
+    }>;
+    _createdWebviewPanels: Array<{ dispose: () => void }>;
     visibleTextEditors: Array<{
       document: { uri: { toString: () => string } };
       edit: (
@@ -38,6 +54,7 @@ const seam = vscode as unknown as {
 function fakeDoc(text: string, fsPath = "/tmp/doc.md"): vscode.TextDocument {
   return {
     uri: vscode.Uri.file(fsPath),
+    fileName: fsPath,
     getText: () => text,
     positionAt(offset: number): vscode.Position {
       const clamped = Math.max(0, Math.min(offset, text.length));
@@ -60,7 +77,41 @@ beforeEach(() => {
   seam.workspace._resetEdits();
   seam.window._resetMessages();
   seam.window.visibleTextEditors.length = 0;
+  seam.window.activeTextEditor = undefined;
+  seam.window._createWebviewPanelCalls.length = 0;
+  seam.window._createdWebviewPanels.length = 0;
   seam.env.clipboard._text = "";
+});
+
+describe("openPreview — native Find", () => {
+  it("enables the native Find widget when creating the command preview panel", () => {
+    const document = fakeDoc("# Find me\n");
+    Object.defineProperty(document, "languageId", { value: "markdown" });
+    seam.window.activeTextEditor = { document };
+
+    openPreview({ extensionUri: vscode.Uri.file("/extension") } as vscode.ExtensionContext);
+
+    expect(seam.window._createWebviewPanelCalls).toHaveLength(1);
+    expect(seam.window._createWebviewPanelCalls[0]).toMatchObject({
+      viewType: "penmark.preview",
+      title: "Penmark Preview",
+      showOptions: { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      options: {
+        enableScripts: true,
+        enableFindWidget: true,
+      },
+    });
+    expect(
+      (
+        seam.window._createWebviewPanelCalls[0]?.options as {
+          localResourceRoots: Array<{ fsPath: string }>;
+        }
+      ).localResourceRoots.map((uri) => uri.fsPath),
+    ).toEqual(["/extension/dist"]);
+
+    seam.window._createdWebviewPanels[0]?.dispose();
+    expect(previewManager.panelCount()).toBe(0);
+  });
 });
 
 describe("handleAddComment — host wiring (R7)", () => {
@@ -279,6 +330,7 @@ describe("handleUpdateSetting — preview settings panel host wiring", () => {
     await handleUpdateSetting("contentWidth", "comfortable");
     await handleUpdateSetting("comments.highlightIntensity", "strong");
     await handleUpdateSetting("lineHeight", 1.65);
+    await handleUpdateSetting("codeBlockWrap", false);
 
     expect(seam.workspace._configUpdates.map((u) => [u.key, u.value])).toEqual([
       ["preset", "reading"],
@@ -286,6 +338,7 @@ describe("handleUpdateSetting — preview settings panel host wiring", () => {
       ["contentWidth", "comfortable"],
       ["comments.highlightIntensity", "strong"],
       ["lineHeight", 1.65],
+      ["codeBlockWrap", false],
     ]);
   });
 
@@ -295,5 +348,178 @@ describe("handleUpdateSetting — preview settings panel host wiring", () => {
     await handleUpdateSetting("theme", "solarized");
 
     expect(seam.workspace._configUpdates).toHaveLength(0);
+  });
+
+  it("accepts only booleans for codeBlockWrap", async () => {
+    await handleUpdateSetting("codeBlockWrap", true);
+    await handleUpdateSetting("codeBlockWrap", "true");
+    await handleUpdateSetting("codeBlockWrap", 1);
+
+    expect(seam.workspace._configUpdates.map((u) => [u.key, u.value])).toEqual([
+      ["codeBlockWrap", true],
+    ]);
+  });
+
+  it("pushes an external codeBlockWrap change without rendering or assigning webview.html", () => {
+    (
+      vscode as unknown as {
+        __setConfig: (section: string, values: Record<string, unknown>) => void;
+      }
+    ).__setConfig("penmark", { codeBlockWrap: false });
+    const posted: unknown[] = [];
+    let htmlAssignments = 0;
+    const webview = {
+      get html(): string {
+        return "shell";
+      },
+      set html(_value: string) {
+        htmlAssignments++;
+      },
+      postMessage(message: unknown): Promise<boolean> {
+        posted.push(message);
+        return Promise.resolve(true);
+      },
+    };
+    const entry = {
+      panel: { webview },
+      renderCount: 4,
+      html: "shell",
+    } as unknown as PanelEntry;
+
+    pushConfiguredPreviewUpdates(entry, (section) => section === "penmark.codeBlockWrap");
+
+    expect(posted).toEqual([{ v: 1, type: "setCodeBlockWrap", codeBlockWrap: false }]);
+    expect(entry.renderCount).toBe(4);
+    expect(entry.html).toBe("shell");
+    expect(htmlAssignments).toBe(0);
+  });
+
+  it("rejects malformed setting values at the webview message boundary", async () => {
+    let receiveMessage: ((message: unknown) => void) | undefined;
+    let disposePanel: (() => void) | undefined;
+    const disposable = { dispose(): void {} };
+    const workspace = vscode.workspace as unknown as {
+      onDidChangeConfiguration?: (listener: (event: unknown) => void) => vscode.Disposable;
+    };
+    const window = vscode.window as unknown as {
+      onDidChangeTextEditorVisibleRanges?: (listener: (event: unknown) => void) => vscode.Disposable;
+    };
+    const originalConfigListener = workspace.onDidChangeConfiguration;
+    const originalVisibleRangeListener = window.onDidChangeTextEditorVisibleRanges;
+    workspace.onDidChangeConfiguration = () => disposable;
+    window.onDidChangeTextEditorVisibleRanges = () => disposable;
+
+    const webview = {
+      cspSource: "test-csp",
+      html: "",
+      asWebviewUri: (uri: vscode.Uri) => uri,
+      postMessage: async () => true,
+      onDidReceiveMessage(callback: (message: unknown) => void): vscode.Disposable {
+        receiveMessage = callback;
+        return disposable;
+      },
+    };
+    const panel = {
+      viewColumn: 1,
+      webview,
+      onDidDispose(callback: () => void): vscode.Disposable {
+        disposePanel = callback;
+        return disposable;
+      },
+    } as unknown as vscode.WebviewPanel;
+    const context = {
+      extensionUri: vscode.Uri.file("/extension"),
+    } as vscode.ExtensionContext;
+
+    try {
+      await new PreviewPanelSerializer(context).deserializeWebviewPanel(panel, undefined);
+      expect(receiveMessage).toBeTypeOf("function");
+
+      receiveMessage!({ v: 1, type: "updateSetting", key: "codeBlockWrap", value: "true" });
+      receiveMessage!({ v: 1, type: "updateSetting", key: "codeBlockWrap", value: 1 });
+      receiveMessage!({ v: 1, type: "updateSetting", key: "preset", value: true });
+      receiveMessage!({ v: 1, type: "updateSetting", key: "codeBlockWrap", value: false });
+
+      expect(seam.workspace._configUpdates.map((update) => [update.key, update.value])).toEqual([
+        ["codeBlockWrap", false],
+      ]);
+    } finally {
+      disposePanel?.();
+      workspace.onDidChangeConfiguration = originalConfigListener;
+      window.onDidChangeTextEditorVisibleRanges = originalVisibleRangeListener;
+    }
+  });
+});
+
+describe("openPenmarkSettings — host wiring", () => {
+  it("opens the fixed penmark settings URI and ignores webview-provided URI data", async () => {
+    let receiveMessage: ((message: unknown) => void) | undefined;
+    let disposePanel: (() => void) | undefined;
+    const disposable = { dispose(): void {} };
+    const workspace = vscode.workspace as unknown as {
+      onDidChangeConfiguration?: (listener: (event: unknown) => void) => vscode.Disposable;
+    };
+    const window = vscode.window as unknown as {
+      onDidChangeTextEditorVisibleRanges?: (listener: (event: unknown) => void) => vscode.Disposable;
+    };
+    const originalConfigListener = workspace.onDidChangeConfiguration;
+    const originalVisibleRangeListener = window.onDidChangeTextEditorVisibleRanges;
+    workspace.onDidChangeConfiguration = () => disposable;
+    window.onDidChangeTextEditorVisibleRanges = () => disposable;
+
+    const webview = {
+      cspSource: "test-csp",
+      html: "",
+      asWebviewUri: (uri: vscode.Uri) => uri,
+      postMessage: async () => true,
+      onDidReceiveMessage(callback: (message: unknown) => void): vscode.Disposable {
+        receiveMessage = callback;
+        return disposable;
+      },
+    };
+    const panel = {
+      viewColumn: 1,
+      webview,
+      onDidDispose(callback: () => void): vscode.Disposable {
+        disposePanel = callback;
+        return disposable;
+      },
+    } as unknown as vscode.WebviewPanel;
+    const context = {
+      extensionUri: vscode.Uri.file("/extension"),
+    } as vscode.ExtensionContext;
+
+    const openExternal = vi.spyOn(vscode.env, "openExternal");
+    try {
+      await new PreviewPanelSerializer(context).deserializeWebviewPanel(panel, undefined);
+      expect(receiveMessage).toBeTypeOf("function");
+
+      const settingsUri = vscode.Uri.parse("vscode://settings/penmark");
+      receiveMessage!({ v: 1, type: "openPenmarkSettings" });
+      expect(openExternal).toHaveBeenCalledTimes(1);
+      expect(openExternal).toHaveBeenCalledWith(settingsUri);
+
+      openExternal.mockClear();
+      // Nearby URI-like fields must not redirect the fixed target, and a wrong
+      // protocol version must be ignored entirely.
+      receiveMessage!({
+        v: 1,
+        type: "openPenmarkSettings",
+        url: "https://evil.example",
+        href: "vscode://settings/evil",
+        uri: "file:///etc/passwd",
+      });
+      receiveMessage!({ v: 2, type: "openPenmarkSettings" });
+
+      expect(openExternal).toHaveBeenCalledTimes(1);
+      expect(openExternal).toHaveBeenCalledWith(settingsUri);
+      expect(openExternal).not.toHaveBeenCalledWith(vscode.Uri.parse("https://evil.example"));
+      expect(openExternal).not.toHaveBeenCalledWith(vscode.Uri.parse("vscode://settings/evil"));
+    } finally {
+      openExternal.mockRestore();
+      disposePanel?.();
+      workspace.onDidChangeConfiguration = originalConfigListener;
+      window.onDidChangeTextEditorVisibleRanges = originalVisibleRangeListener;
+    }
   });
 });

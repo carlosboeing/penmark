@@ -174,6 +174,67 @@ describe("drawer", () => {
     expect(cards.length).toBe(2);
     expect(cards[0]!.textContent).toContain("three retries with backoff");
     expect(cards[1]!.textContent).toContain("deleted sentence");
+    expect(cards[0]!.textContent).toContain("Needs attention");
+    expect(cards[1]!.textContent).toContain("Needs attention");
+  });
+
+  it("announces count and attention changes politely without repeating unchanged totals", () => {
+    renderDrawer([]);
+    const status = document.querySelector<HTMLElement>(".pmk-drawer-announcement")!;
+    expect(status.textContent).toBe("");
+
+    renderDrawer([OPEN_HUMAN]);
+    expect(panel().contains(status)).toBe(false);
+    expect(status.getAttribute("role")).toBe("status");
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(status.textContent).toBe("1 open comment, 0 need attention");
+
+    renderDrawer([OPEN_HUMAN]);
+    expect(status.textContent).toBe("1 open comment, 0 need attention");
+
+    renderDrawer(ALL);
+    expect(status.textContent).toBe("2 open comments, 2 need attention");
+  });
+
+  it("treats the first non-empty count render as a silent baseline", () => {
+    renderDrawer([OPEN_HUMAN, ORPHANED]);
+    const status = document.querySelector<HTMLElement>(".pmk-drawer-announcement")!;
+    expect(status.textContent).toBe("");
+
+    renderDrawer(ALL);
+    expect(status.textContent).toBe("2 open comments, 2 need attention");
+  });
+
+  it("restores a focused drawer action after rebuild and falls back to Close if it vanished", () => {
+    renderDrawer(ALL);
+    openDrawer();
+    const edit = openCards()[0]!.querySelector<HTMLButtonElement>(".pmk-drawer-action.edit")!;
+    edit.focus();
+
+    renderDrawer(ALL);
+    const replacement = openCards()[0]!.querySelector<HTMLButtonElement>(
+      ".pmk-drawer-action.edit",
+    )!;
+    expect(replacement).not.toBe(edit);
+    expect(document.activeElement).toBe(replacement);
+
+    renderDrawer([OPEN_AGENT, ORPHANED, REMOVED]);
+    expect(document.activeElement).toBe(panel().querySelector(".pmk-drawer-close"));
+  });
+
+  it("finds hostile comment IDs without interpolating a selector", () => {
+    const hostile = comment({ id: 'comment"\\]', body: "hostile id" });
+    const root = document.createElement("div");
+    root.id = "penmark-root";
+    const mark = document.createElement("mark");
+    mark.setAttribute("data-pmk-id", hostile.id);
+    root.appendChild(mark);
+    document.body.appendChild(root);
+    renderDrawer([hostile]);
+
+    (openCards()[0]!.querySelector(".pmk-drawer-action.jump") as HTMLButtonElement).click();
+
+    expect(document.querySelector(".pmk-popover")).not.toBeNull();
   });
 
   it("delete in needs-attention posts resolveComment (resolve = delete, ADR 0002)", () => {
@@ -217,6 +278,18 @@ describe("drawer", () => {
     expect(isDrawerOpen()).toBe(true);
   });
 
+  it("moves focus into the drawer and restores its connected opener on close", () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+
+    openDrawer();
+    expect(document.activeElement).toBe(panel().querySelector(".pmk-drawer-close"));
+
+    closeDrawer();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it("openDrawerAtAttention opens the drawer and reveals the needs-attention section", () => {
     renderDrawer(ALL);
     openDrawerAtAttention();
@@ -250,5 +323,12 @@ describe("drawer persistence", () => {
     document.body.innerHTML = "";
     ensureDrawer({ post: vi.fn(), onReanchor: vi.fn(), store });
     expect(isDrawerOpen()).toBe(true);
+    expect(document.activeElement).toBe(panel().querySelector(".pmk-drawer-close"));
+
+    (document.activeElement as HTMLElement).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    expect(isDrawerOpen()).toBe(false);
+    expect(store.value).toBe(false);
   });
 });

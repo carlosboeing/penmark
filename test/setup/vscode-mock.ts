@@ -43,6 +43,11 @@ export class WorkspaceEdit {
   }
 }
 
+/** Parsed-URI cache so `Uri.parse(x)` returns a reference-stable value: two
+ *  calls with the same string yield the identical object, which keeps
+ *  `toHaveBeenCalledWith(Uri.parse(...))` assertions robust. */
+const _parsedUris = new Map<string, { scheme: string; toString: () => string }>();
+
 export const Uri = {
   file(p: string): { fsPath: string; scheme: string; toString: () => string } {
     return { fsPath: p, scheme: "file", toString: () => `file://${p}` };
@@ -54,9 +59,20 @@ export const Uri = {
     const joined = [base.fsPath.replace(/\/$/, ""), ...segments].join("/");
     return { fsPath: joined, scheme: "file", toString: () => `file://${joined}` };
   },
+  // A second `strict` argument (as VS Code's Uri.parse accepts) is ignored here.
+  parse(value: string): { scheme: string; toString: () => string } {
+    let uri = _parsedUris.get(value);
+    if (!uri) {
+      const colon = value.indexOf(":");
+      uri = { scheme: colon > 0 ? value.slice(0, colon) : "", toString: () => value };
+      _parsedUris.set(value, uri);
+    }
+    return uri;
+  },
 };
 
-/** Clipboard seam: tests read `env.clipboard._text`. */
+/** Clipboard + external-open seam. Tests read `env.clipboard._text` and can
+ *  spy on `env.openExternal`. */
 export const env = {
   clipboard: {
     _text: "" as string,
@@ -65,10 +81,15 @@ export const env = {
       return Promise.resolve();
     },
   },
+  // The opened target is irrelevant to the seam; tests spy on the call itself.
+  openExternal(): Promise<boolean> {
+    return Promise.resolve(true);
+  },
 };
 
 export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;
 export const ProgressLocation = { Notification: 15 } as const;
+export const ViewColumn = { One: 1, Beside: 2 } as const;
 
 /**
  * Configuration store the host mock reads. Tests set values via
@@ -86,6 +107,7 @@ export function __resetConfig(): void {
 }
 
 export const workspace = {
+  workspaceFolders: [] as Array<{ uri: ReturnType<typeof Uri.file> }>,
   /** WorkspaceEdits passed to applyEdit, in call order (test seam). */
   _appliedEdits: [] as WorkspaceEdit[],
   /** Configuration writes via getConfiguration().update(), in call order. */
@@ -135,9 +157,36 @@ export const workspace = {
     this._appliedEdits.push(edit);
     return Promise.resolve(true);
   },
+  onDidChangeConfiguration(): { dispose: () => void } {
+    return { dispose(): void {} };
+  },
+  onDidChangeTextDocument(): { dispose: () => void } {
+    return { dispose(): void {} };
+  },
+};
+
+export const commands = {
+  _registrations: [] as Array<{ command: string; callback: (...args: unknown[]) => unknown }>,
+  registerCommand(
+    command: string,
+    callback: (...args: unknown[]) => unknown,
+  ): { dispose: () => void } {
+    this._registrations.push({ command, callback });
+    return { dispose(): void {} };
+  },
 };
 
 export const window = {
+  activeTextEditor: undefined as
+    | {
+        document: {
+          languageId: string;
+          uri: ReturnType<typeof Uri.file>;
+          getText: () => string;
+          positionAt: (offset: number) => Position;
+        };
+      }
+    | undefined,
   visibleTextEditors: [] as Array<{
     document: { uri: { toString: () => string } };
     edit: (
@@ -149,6 +198,18 @@ export const window = {
   _infos: [] as string[],
   /** Lines written to any "Penmark" output channel (test seam). */
   _outputLines: [] as string[],
+  _createWebviewPanelCalls: [] as Array<{
+    viewType: string;
+    title: string;
+    showOptions: unknown;
+    options: unknown;
+  }>,
+  _createdWebviewPanels: [] as Array<{ dispose: () => void }>,
+  _registerCustomEditorProviderCalls: [] as Array<{
+    viewType: string;
+    provider: unknown;
+    options: unknown;
+  }>,
   _resetMessages(): void {
     this._warnings.length = 0;
     this._infos.length = 0;
@@ -197,5 +258,51 @@ export const window = {
       dispose: (): void => {},
       replace: (): void => {},
     };
+  },
+  createWebviewPanel(
+    viewType: string,
+    title: string,
+    showOptions: unknown,
+    options: unknown,
+  ): unknown {
+    window._createWebviewPanelCalls.push({ viewType, title, showOptions, options });
+    const disposable = { dispose(): void {} };
+    let disposeListener: (() => void) | undefined;
+    const panel = {
+      viewColumn: ViewColumn.Beside,
+      dispose(): void {
+        const listener = disposeListener;
+        disposeListener = undefined;
+        listener?.();
+      },
+      reveal(): void {},
+      onDidDispose(listener: () => void) {
+        disposeListener = listener;
+        return disposable;
+      },
+      webview: {
+        cspSource: "test-csp",
+        html: "",
+        asWebviewUri: (uri: unknown) => uri,
+        postMessage: () => Promise.resolve(true),
+        onDidReceiveMessage: () => disposable,
+      },
+    };
+    window._createdWebviewPanels.push(panel);
+    return panel;
+  },
+  onDidChangeTextEditorVisibleRanges(): { dispose: () => void } {
+    return { dispose(): void {} };
+  },
+  registerWebviewPanelSerializer(): { dispose: () => void } {
+    return { dispose(): void {} };
+  },
+  registerCustomEditorProvider(
+    viewType: string,
+    provider: unknown,
+    options: unknown,
+  ): { dispose: () => void } {
+    window._registerCustomEditorProviderCalls.push({ viewType, provider, options });
+    return { dispose(): void {} };
   },
 };

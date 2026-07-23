@@ -42,12 +42,15 @@ import {
   closeDrawer,
   openDrawerAtAttention,
   bucketComments,
+  isDrawerOpen,
+  focusDrawerItem,
   type DrawerStateStore,
 } from "./comments/drawer.js";
 import { installHighlights } from "./comments/highlights.js";
 import { closeCommentPopover } from "./comments/popover.js";
 import { installCopyButtons, markLastCopied } from "./copyButtons.js";
 import { renderInto } from "./dom.js";
+import { readingMetrics } from "./readingMetrics.js";
 import { installLinkHandler } from "./links.js";
 import { ensureMermaid, hasMermaid, isMermaidLoaded } from "./mermaidLoader.js";
 import { lineToScrollTop, readBlocks, scrollTopToLine } from "./scrollSync.js";
@@ -62,6 +65,7 @@ import { renderFrontmatterCard } from "./frontmatterCard.js";
 import { installKeyboardNav } from "./keyboard.js";
 import {
   ensureSettingsPanel,
+  closeSettingsPanel,
   isSettingsPanelOpen,
   renderSettingsPanel,
   toggleSettingsPanel,
@@ -110,8 +114,13 @@ if (_initialRoot) {
 }
 
 let _lastComments: WireComment[] = [];
+let _lastAttention = 0;
 let _previewSettings: PreviewSettingsState | null = null;
-installKeyboardNav(() => _lastComments);
+installKeyboardNav(() => _lastComments, {
+  toggle: toggleCommentsSurface,
+  isOpen: isDrawerOpen,
+  focusItem: focusDrawerItem,
+});
 
 // ---------------------------------------------------------------------------
 // Scroll sync (T10) — bidirectional, echo-suppressed
@@ -209,9 +218,6 @@ if (_initialRoot) {
 // Theme application — uses theme.ts for resolution (T6)
 // ---------------------------------------------------------------------------
 
-// Tracks the current ThemeMode setting so the IDE-observer can re-resolve.
-let _currentSetting: ThemeMode = "auto";
-
 // Disposer for the current MutationObserver (auto mode only).
 let _ideObserverDispose: (() => void) | null = null;
 
@@ -221,8 +227,6 @@ function resolvedTheme(): "light" | "dark" {
 }
 
 function applyTheme(theme: ThemeMode): void {
-  _currentSetting = theme;
-
   // Disconnect any existing IDE observer before re-wiring.
   if (_ideObserverDispose) {
     _ideObserverDispose();
@@ -235,7 +239,7 @@ function applyTheme(theme: ThemeMode): void {
   // In auto mode, re-resolve whenever the IDE body class changes.
   if (theme === "auto") {
     _ideObserverDispose = observeIdeTheme(() => {
-      applyResolvedTheme(resolveTheme(_currentSetting, document.body.classList));
+      applyResolvedTheme(resolveTheme(_previewSettings?.theme ?? theme, document.body.classList));
     });
   }
 }
@@ -258,15 +262,19 @@ function applyHighlightIntensity(intensity: string): void {
   cls.add(`pmk-hl-${intensity}`);
 }
 
+function applyCodeBlockWrap(codeBlockWrap: boolean): void {
+  document.body.setAttribute("data-pmk-code-wrap", String(codeBlockWrap));
+}
+
 function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettingValue): void {
-  if (key === "theme" && (value === "light" || value === "dark" || value === "auto")) {
-    applyTheme(value);
-  }
   if (key === "contentWidth" && (value === "comfortable" || value === "wide" || value === "full")) {
     applyContentWidth(value);
   }
   if (key === "comments.highlightIntensity" && typeof value === "string") {
     applyHighlightIntensity(value);
+  }
+  if (key === "codeBlockWrap" && typeof value === "boolean") {
+    applyCodeBlockWrap(value);
   }
 
   if (!_previewSettings) return;
@@ -301,6 +309,9 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
         next.highlightIntensity = value;
       }
       break;
+    case "codeBlockWrap":
+      if (typeof value === "boolean") next.codeBlockWrap = value;
+      break;
     case "lineHeight":
       if (typeof value === "number" && Number.isFinite(value)) next.lineHeight = value;
       break;
@@ -322,6 +333,10 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
     );
   }
   renderSettingsPanel(next);
+  if (key === "theme") {
+    applyTheme(next.theme);
+    refreshTopbar();
+  }
 }
 
 /** The content-width preset currently active on <body> (shell or live update). */
@@ -342,6 +357,9 @@ let _selectionPreviewInstalled = false;
 
 /** Last doc name from a render, so a comments-only message can re-draw the topbar. */
 let _lastDocName = "";
+
+/** Last reading label, recomputed only after a rendered document DOM update. */
+let _lastReadingMeta: string | undefined;
 
 /**
  * Whether at least one `render` has been processed. Export capture requests
@@ -391,16 +409,84 @@ function topbarCommentsOpts(
 ): {
   openCount: number;
   attention: number;
+  drawerOpen: boolean;
   onToggleDrawer: () => void;
   onOpenAttention: () => void;
 } {
   return {
     openCount: bucketComments(comments).open.length,
     attention,
-    onToggleDrawer: toggleDrawer,
-    onOpenAttention: openDrawerAtAttention,
+    drawerOpen: isDrawerOpen(),
+    onToggleDrawer: toggleCommentsSurface,
+    onOpenAttention: () => {
+      closeSettingsPanel(false);
+      openDrawerAtAttention();
+      refreshTopbar();
+    },
   };
 }
+
+function toggleCommentsSurface(): void {
+  closeSettingsPanel(false);
+  toggleDrawer();
+  refreshTopbar();
+}
+
+function refreshTopbar(): void {
+  const topbar = getTopbar();
+  if (!topbar) return;
+  const focusedControl = topbar.querySelector<HTMLElement>(
+    "[data-pmk-topbar-control]:focus",
+  )?.dataset.pmkTopbarControl;
+  installTopbar(
+    topbar,
+    _lastDocName,
+    (theme) => {
+      if (_previewSettings) {
+        _previewSettings = { ..._previewSettings, theme };
+        renderSettingsPanel(_previewSettings);
+      }
+      applyTheme(theme);
+      refreshTopbar();
+      vscode.postMessage({ v: 1, type: "themeSelected", theme });
+    },
+    topbarCommentsOpts(_lastComments, _lastAttention),
+    {
+      settingsOpen: isSettingsPanelOpen(),
+      onToggleSettings: () => {
+        closeDrawer(false);
+        toggleSettingsPanel();
+        refreshTopbar();
+      },
+    },
+    topbarExportOpts(),
+    _previewSettings?.theme ?? "auto",
+    _lastReadingMeta,
+  );
+  const active = document.activeElement;
+  if (
+    focusedControl &&
+    (active === null || active === document.body || active === document.documentElement)
+  ) {
+    Array.from(topbar.querySelectorAll<HTMLElement>("[data-pmk-topbar-control]"))
+      .find((control) => control.dataset.pmkTopbarControl === focusedControl)
+      ?.focus();
+  }
+}
+
+function syncTopbarPanelState(): void {
+  const settings = document.querySelector<HTMLElement>(".pmk-topbar-settings");
+  const comments = document.querySelector<HTMLElement>(".pmk-topbar-comments");
+  const settingsOpen = String(isSettingsPanelOpen());
+  const drawerOpen = String(isDrawerOpen());
+  settings?.setAttribute("aria-expanded", settingsOpen);
+  comments?.setAttribute("aria-expanded", drawerOpen);
+}
+
+new MutationObserver(syncTopbarPanelState).observe(document.body, {
+  attributes: true,
+  attributeFilter: ["data-pmk-settings-open", "data-pmk-drawer-open"],
+});
 
 /** Persist the in-progress comment body across reloads via getState/setState. */
 const commentDraftStore: CommentDraftStore = {
@@ -507,7 +593,6 @@ function getOrCreateOverlay(): HTMLElement {
   if (!layer) {
     layer = document.createElement("div");
     layer.id = "penmark-selection-preview";
-    layer.setAttribute("aria-hidden", "true");
     document.body.appendChild(layer);
   }
   return layer;
@@ -536,6 +621,7 @@ function installSelectionPreview(): void {
     for (const rect of rects) {
       const box = document.createElement("div");
       box.className = "pmk-hl-preview";
+      box.setAttribute("aria-hidden", "true");
       box.style.left = `${rect.left + window.scrollX}px`;
       box.style.top = `${rect.top + window.scrollY}px`;
       box.style.width = `${rect.width}px`;
@@ -564,7 +650,6 @@ function installSelectionPreview(): void {
       addBtn.addEventListener("click", () => {
         // Open first (positionOver reads addBtn's rect), then remove the button but keep highlights.
         openCommentBox(addBtn, range, quote, (m) => vscode.postMessage(m), commentDraftStore);
-        addBtn.remove();
       });
     }
     if (last) {
@@ -584,64 +669,33 @@ window.addEventListener("message", (event: MessageEvent) => {
       const root = getRoot();
       if (!root) break;
 
-      // Apply theme embedded in the render message.
-      applyTheme(msg.theme);
       _hasRendered = true;
       if (msg.exportDefaults) {
         _exportDefaults = msg.exportDefaults;
       }
 
-      // Install/refresh the topbar with the current doc name + comments
-      // affordances (drawer toggle + attention chip, R15).
-      _previewSettings =
-        msg.settings ??
-        ({
+      // Capture topbar state now; refresh after the rendered text is available.
+      _previewSettings = {
+        ...(msg.settings ?? {
           theme: msg.theme,
           preset: msg.typography?.preset ?? "github",
           textSize: msg.typography?.textSize ?? "medium",
           contentWidth: msg.typography?.contentWidth ?? "full",
           highlightIntensity: "medium",
           lineHeight: msg.typography?.lineHeight ?? 0,
-        } satisfies PreviewSettingsState);
+        }),
+        codeBlockWrap: msg.settings?.codeBlockWrap ?? true,
+      } satisfies PreviewSettingsState;
+      applyTheme(_previewSettings.theme);
+      applyCodeBlockWrap(_previewSettings.codeBlockWrap);
       _lastDocName = msg.docName;
-      const topbar = getTopbar();
-      if (topbar) {
-        installTopbar(
-          topbar,
-          msg.docName,
-          (m) => vscode.postMessage(m),
-          topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
-          {
-            settingsOpen: isSettingsPanelOpen(),
-            onToggleSettings: () => {
-              closeDrawer();
-              toggleSettingsPanel();
-              const freshTopbar = getTopbar();
-              if (freshTopbar) {
-                installTopbar(
-                  freshTopbar,
-                  _lastDocName,
-                  (m) => vscode.postMessage(m),
-                  topbarCommentsOpts(_lastComments, msg.attention ?? 0),
-                  {
-                    settingsOpen: isSettingsPanelOpen(),
-                    onToggleSettings: () => {
-                      closeDrawer();
-                      toggleSettingsPanel();
-                    },
-                  },
-                  topbarExportOpts(),
-                );
-              }
-            },
-          },
-          topbarExportOpts(),
-        );
-      }
-      ensureSettingsPanel({
+      _lastComments = msg.comments ?? [];
+      _lastAttention = msg.attention ?? 0;
+      const settingsPanel = ensureSettingsPanel({
         post: (m) => vscode.postMessage(m),
         applyLocal: applyPreviewSettingLocally,
       });
+      settingsPanel.id = "penmark-settings-panel";
       renderSettingsPanel(_previewSettings);
 
       // Ensure the scroll-sync listener is attached to the live root (T10).
@@ -656,17 +710,18 @@ window.addEventListener("message", (event: MessageEvent) => {
       // Close any open comment popover / add-box — their anchor is about to be
       // reconciled away by morphdom.
       closeCommentPopover();
-      closeCommentBox();
+      closeCommentBox(false);
+      getOrCreateOverlay().replaceChildren();
 
       // Render sanitized HTML using morphdom (D5, D6).
       renderInto(root, msg.html);
+      _lastReadingMeta = readingMetrics(root.textContent ?? "").label;
+      refreshTopbar();
 
       if (msg.typography) {
         applyTypography(root, msg.typography);
       }
       renderFrontmatterCard(msg.frontmatter);
-      _lastComments = msg.comments ?? [];
-
       installTaskCheckboxHandler(root);
 
       // morphdom reconciles the DOM to the host's button-free HTML on every
@@ -684,11 +739,12 @@ window.addEventListener("message", (event: MessageEvent) => {
       // Comments drawer (R15): ensure the panel exists, then re-render the open
       // + needs-attention lists. The panel lives in <body> (outside the morphed
       // root), so it survives re-renders; only its contents are rebuilt here.
-      ensureDrawer({
+      const drawer = ensureDrawer({
         post: (m) => vscode.postMessage(m),
         onReanchor: requestReanchor,
         store: drawerStateStore,
       });
+      drawer.id = "penmark-comments-drawer";
       renderDrawer(msg.comments ?? []);
 
       // Lazily render mermaid diagrams — only when a .pmk-mermaid container
@@ -718,33 +774,19 @@ window.addEventListener("message", (event: MessageEvent) => {
       // drawer lists, and the topbar count/chip against the new comment set
       // (R15). No docName on this message — reuse the last render's.
       _lastComments = msg.comments ?? [];
+      _lastAttention = msg.attention ?? 0;
       const root = getRoot();
       if (root) {
         installHighlights(root, msg.comments ?? [], (m) => vscode.postMessage(m));
       }
-      ensureDrawer({
+      const drawer = ensureDrawer({
         post: (m) => vscode.postMessage(m),
         onReanchor: requestReanchor,
         store: drawerStateStore,
       });
+      drawer.id = "penmark-comments-drawer";
       renderDrawer(msg.comments ?? []);
-      const topbar = getTopbar();
-      if (topbar) {
-        installTopbar(
-          topbar,
-          _lastDocName,
-          (m) => vscode.postMessage(m),
-          topbarCommentsOpts(msg.comments ?? [], msg.attention ?? 0),
-          {
-            settingsOpen: isSettingsPanelOpen(),
-            onToggleSettings: () => {
-              closeDrawer();
-              toggleSettingsPanel();
-            },
-          },
-          topbarExportOpts(),
-        );
-      }
+      refreshTopbar();
       break;
     }
 
@@ -759,8 +801,23 @@ window.addEventListener("message", (event: MessageEvent) => {
       break;
     }
 
+    case "setCodeBlockWrap": {
+      if (typeof msg.codeBlockWrap === "boolean") {
+        applyCodeBlockWrap(msg.codeBlockWrap);
+        if (_previewSettings) {
+          _previewSettings = { ..._previewSettings, codeBlockWrap: msg.codeBlockWrap };
+        }
+      }
+      break;
+    }
+
     case "setTheme": {
+      if (_previewSettings) {
+        _previewSettings = { ..._previewSettings, theme: msg.theme };
+        renderSettingsPanel(_previewSettings);
+      }
       applyTheme(msg.theme);
+      refreshTopbar();
       const current = (vscode.getState() as PersistedState | undefined) ?? {
         scrollTop: 0,
         theme: "light",

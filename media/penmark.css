@@ -28,6 +28,8 @@ body {
 
 body {
   position: relative;
+  --pmk-document-gutter: clamp(20px, 5vw, 64px);
+  --pmk-document-block-space: 32px;
   background-color: var(--pmk-color-bg);
   color: var(--pmk-color-fg);
   font-family: var(
@@ -59,13 +61,34 @@ body {
   z-index: 100;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 16px;
+  gap: 8px;
+  height: 40px;
+  min-height: 40px;
+  padding: 5px 10px 5px 14px;
   background-color: var(--pmk-topbar-bg);
   border-bottom: 1px solid var(--pmk-topbar-border);
   color: var(--pmk-topbar-fg);
   font-size: 12px;
-  min-height: 36px;
+  overflow: hidden;
+}
+
+.pmk-topbar-document {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pmk-topbar-document-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--pmk-color-fg-muted);
+}
+
+.pmk-topbar-document-icon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .pmk-topbar-docname {
@@ -73,19 +96,44 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
-.pmk-topbar-switcher {
+.pmk-topbar-reading-meta {
+  flex: none;
+  color: var(--pmk-color-fg-subtle);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pmk-topbar-preview,
+.pmk-topbar-actions {
   display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-  margin-left: 12px;
+  align-items: center;
+  flex: none;
+}
+
+.pmk-topbar-preview {
+  margin-left: auto;
+}
+
+.pmk-topbar-actions {
+  gap: 3px;
+}
+
+.pmk-topbar-switcher {
+  flex: none;
 }
 
 .pmk-topbar-btn {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 28px;
+  height: 28px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -93,10 +141,17 @@ body {
   cursor: pointer;
   font-size: 11px;
   font-family: inherit;
-  padding: 2px 8px;
+  padding: 3px 6px;
+  white-space: nowrap;
   transition:
     background-color 0.1s,
     border-color 0.1s;
+}
+
+.pmk-topbar-btn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 
 .pmk-topbar-btn:hover {
@@ -109,23 +164,66 @@ body {
   color: var(--pmk-topbar-btn-active-fg);
 }
 
+.pmk-topbar-btn:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 1px;
+}
+
+.pmk-topbar-count {
+  min-width: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background-color: var(--pmk-ui-elevated);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  #penmark-topbar {
+    gap: 4px;
+    padding-left: 10px;
+  }
+
+  .pmk-topbar-reading-meta,
+  .pmk-topbar-label {
+    display: none;
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * Content wrapper
  * --------------------------------------------------------------------------- */
 
 /*
  * Content width (penmark.contentWidth). All presets are responsive: max-width
- * only caps how wide the column may grow, and the 32px padding is the side
- * margin — so the content always shrinks to fit a narrow/split pane and grows
+ * only caps how wide the column may grow, and the responsive gutter keeps the
+ * content fitted to narrow/split panes while giving it room on wide screens
  * with a wide one. The shell sets a pmk-content-* class on <body> (html.ts);
  * live changes arrive via the setContentWidth message (main.ts). Default "full"
  * grows to a 1600px ceiling so prose stays readable on ultra-wide panes.
  */
 #penmark-root {
-  padding: 0 80px;
+  padding: var(--pmk-document-block-space) var(--pmk-document-gutter);
   width: 100%;
   max-width: 1600px;
   margin: 0 auto;
+}
+
+#penmark-root > :first-child {
+  margin-top: 0;
+}
+
+#penmark-root > :last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  body {
+    --pmk-document-gutter: 20px;
+    --pmk-document-block-space: 20px;
+  }
 }
 
 body.pmk-content-comfortable #penmark-root {
@@ -311,6 +409,16 @@ body.pmk-content-full #penmark-root {
   font-size: 100%;
   border: none;
   border-radius: 0;
+}
+
+body[data-pmk-code-wrap="true"] #penmark-root pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+body[data-pmk-code-wrap="false"] #penmark-root pre code {
+  white-space: pre;
+  overflow-wrap: normal;
 }
 
 /* Syntax highlighting (highlight.js token classes — colors from theme tokens) */
@@ -535,6 +643,16 @@ foreignObject p {
   border-color: var(--pmk-copy-btn-hover-border);
 }
 
+#penmark-root img[role="button"] {
+  cursor: zoom-in;
+}
+
+#penmark-root img[role="button"]:focus-visible,
+#penmark-root .pmk-mermaid .pmk-mermaid-expand:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 2px;
+}
+
 /* Lightbox dialog */
 .pmk-mermaid-lightbox {
   width: 90vw;
@@ -576,6 +694,11 @@ foreignObject p {
 .pmk-mermaid-lightbox-btn:hover {
   background-color: var(--pmk-copy-btn-hover-bg);
   border-color: var(--pmk-copy-btn-hover-border);
+}
+
+.pmk-mermaid-lightbox-btn:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 1px;
 }
 
 /* svg-pan-zoom default controls (if ever enabled) — hard-coded black glyphs. */
@@ -694,6 +817,39 @@ body.pmk-hl-strong {
 #penmark-root .pmk-hl:hover {
   background-color: rgba(var(--pmk-comment-hl-rgb), calc(var(--pmk-comment-hl-alpha, 0.28) + 0.12));
 }
+
+#penmark-root [data-pmk-id][role="button"]:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 2px;
+}
+
+#penmark-root .pmk-highlight-action {
+  appearance: none;
+  width: 9px;
+  height: 9px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pmk-comment-hl-border);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+#penmark-root .pmk-gutter-dot.pmk-structural-highlight-action {
+  left: auto;
+  top: auto;
+  transform: translate(-24px, 0.5em);
+}
+
+#penmark-root .pmk-highlight-action:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 2px;
+}
+
+#penmark-root .pmk-hl-keyboard-focus {
+  box-shadow: 0 0 0 2px var(--pmk-ui-focus);
+}
 #penmark-root .pmk-hl.pmk-hl-active {
   background: linear-gradient(
     to bottom,
@@ -755,6 +911,10 @@ body.pmk-hl-strong {
   border-radius: 50%;
   background-color: var(--pmk-comment-hl-border);
   pointer-events: none;
+}
+
+#penmark-root .pmk-gutter-dot.pmk-highlight-action {
+  pointer-events: auto;
 }
 
 /* Comment popover: a floating card anchored over the clicked highlight. Lives in
@@ -917,11 +1077,32 @@ body.pmk-hl-strong {
   outline-offset: 1px;
   border-color: transparent;
 }
+.pmk-commentbox-error {
+  margin-top: 5px;
+  color: var(--pmk-comment-note-fg);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
 .pmk-commentbox-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
   justify-content: flex-end;
   margin-top: 10px;
+}
+.pmk-commentbox-shortcut {
+  margin-right: auto;
+  color: var(--pmk-color-fg-subtle);
+  font-size: 11px;
+  white-space: nowrap;
+}
+@media (max-width: 380px) {
+  .pmk-commentbox-actions {
+    flex-wrap: wrap;
+  }
+  .pmk-commentbox-shortcut {
+    flex-basis: 100%;
+  }
 }
 .pmk-commentbox-btn {
   font-size: 12px;
@@ -986,24 +1167,24 @@ body.pmk-hl-strong {
   background-color: var(--pmk-comment-note-fg);
 }
 .pmk-topbar-comments {
-  margin-left: 8px;
+  margin-left: 0;
   flex: none;
 }
 
 .pmk-topbar-settings {
-  margin-left: 8px;
+  margin-left: 0;
   flex: none;
 }
 
 /* Preview settings panel. */
 .pmk-settings-panel {
   position: fixed;
-  top: 36px;
+  top: 40px;
   right: 0;
   bottom: 0;
   z-index: 7;
-  width: 340px;
-  max-width: 88vw;
+  width: 342px;
+  max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-ui-elevated);
@@ -1138,8 +1319,8 @@ body.pmk-hl-strong {
   right: 0;
   bottom: 0;
   z-index: 6;
-  width: 320px;
-  max-width: 86vw;
+  width: 342px;
+  max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-ui-elevated);
@@ -1151,20 +1332,36 @@ body.pmk-hl-strong {
 .pmk-drawer[data-open] {
   transform: translateX(0);
 }
+/* Reduced motion: collapse Penmark-owned, non-essential transitions for panels,
+ * topbar controls, comment highlights, and image zoom. Native Find and native
+ * <dialog> motion are deliberately left untouched. */
 @media (prefers-reduced-motion: reduce) {
   .pmk-drawer,
-  .pmk-settings-panel {
+  .pmk-settings-panel,
+  .pmk-topbar-btn,
+  #penmark-root .pmk-hl,
+  #penmark-root .pmk-hl-range,
+  #penmark-root [data-pmk-block],
+  .pmk-image-lightbox-img {
     transition: none;
   }
 }
 
-/* Shrink the preview on wide screens when the drawer is open (no overlay) */
-@media (min-width: 600px) {
-  body {
-    transition: padding-right 160ms ease;
+/* Below 700px both panels span nearly the full viewport (no reserved space). */
+@media (max-width: 699px) {
+  .pmk-drawer,
+  .pmk-settings-panel {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
   }
+}
+
+/* Reserve document space for the open Comments drawer only on wide screens; the
+ * Settings panel always overlays. The reserve is instant (no padding-right
+ * transition) so opening a panel never animates the document reflow. */
+@media (min-width: 1050px) {
   body[data-pmk-drawer-open] {
-    padding-right: 320px;
+    padding-right: 342px;
   }
 }
 
@@ -1197,6 +1394,18 @@ body.pmk-hl-strong {
 .pmk-drawer-close:focus-visible {
   outline: 2px solid var(--pmk-ui-focus);
   outline-offset: 1px;
+}
+
+.pmk-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .pmk-drawer-content {
@@ -1361,8 +1570,8 @@ body.pmk-hl-strong {
 
 .pmk-frontmatter-card {
   margin: 12px auto 0;
-  width: calc(100% - 160px);
-  max-width: 1440px;
+  width: calc(100% - var(--pmk-document-gutter) - var(--pmk-document-gutter));
+  max-width: calc(1600px - var(--pmk-document-gutter) - var(--pmk-document-gutter));
   padding: 10px 14px;
   border: 1px solid var(--pmk-ui-border-muted);
   border-radius: 8px;
@@ -1412,12 +1621,6 @@ body.pmk-hl-strong {
   grid-template-columns: auto 1fr;
   gap: 4px 12px;
   margin: 8px 0 0;
-}
-
-@media (max-width: 700px) {
-  .pmk-frontmatter-card {
-    width: calc(100% - 32px);
-  }
 }
 
 .pmk-frontmatter-fields dt {

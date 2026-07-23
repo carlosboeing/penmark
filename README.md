@@ -24,9 +24,10 @@ It is built to stay out of your way: a slim bundle, lazy activation, incremental
 
 - GitHub-flavored markdown rendering (tables, task lists, footnotes, strikethrough, autolinks, GitHub-compatible heading anchors).
 - Light / dark / auto themes, independent of the IDE theme.
-- Syntax highlighting (highlight.js, lazy-loaded) and one-click code-block copy.
+- Syntax highlighting (highlight.js, lazy-loaded), one-click code-block copy, and live long-line wrapping.
 - Mermaid diagrams, lazy-rendered, with a pan/zoom lightbox.
-- Bidirectional scroll sync between the editor and the preview.
+- Bidirectional scroll sync between the editor and the preview, native IDE Find in the preview, and a compact word-count/reading-time line beside the document title.
+- A responsive Settings and Comments surface: the Comments panel reserves space on wide layouts (Settings always overlays), both collapse to near-full-width on narrow layouts, with reduced-motion support.
 
 **Reviewing**
 
@@ -70,6 +71,7 @@ Requires an IDE on the `^1.105.0` engine floor (VS Code 1.105+, Cursor 1.105+, A
 | `penmark.scrollSync` | `true` | Sync preview scroll with the editor cursor. |
 | `penmark.mermaid.enabled` | `true` | Render Mermaid diagrams. |
 | `penmark.contentWidth` | `full` | How wide the content column may grow (`comfortable` / `wide` / `full`). |
+| `penmark.codeBlockWrap` | `true` | Visually wrap long lines in fenced code blocks. |
 | `penmark.comments.highlightIntensity` | `medium` | Tint strength for commented spans (`subtle` / `medium` / `strong`). |
 
 ## Architecture

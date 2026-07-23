@@ -23,7 +23,6 @@ body.pmk-export #penmark-root {
 
 body.pmk-export .pmk-frontmatter-card {
   margin: 32px auto 0;
-  max-width: inherit;
 }
 
 /* Defense in depth: the capture strips preview chrome before serializing;
