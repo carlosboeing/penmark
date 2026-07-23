@@ -156,6 +156,8 @@ describe("protocol/messages", () => {
           return msg.type;
         case "revealLine":
           return msg.type;
+        case "openFind":
+          return msg.type;
         case "copied":
           return msg.type;
         case "exportCapture":

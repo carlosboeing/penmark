@@ -80,6 +80,12 @@ export interface PanelEntry {
   suppressVisibleRangeUntil: number;
   /** Last time a `revealLine` was posted to this panel, for throttling. */
   lastRevealLinePostedAt: number;
+  /** Whether this panel's current webview instance has attached its listener. */
+  webviewReady: boolean;
+  /** A find command awaiting the current webview's ready handshake. */
+  pendingOpenFind: boolean;
+  /** Monotonic recency token updated when this panel gains focus. */
+  focusOrder: number;
   /**
    * Serialization chain for document-mutating comment ops (add/resolve). Each op
    * reads the live document text and applies a WorkspaceEdit; running two at once
@@ -100,6 +106,9 @@ export interface PanelEntry {
 
 /** Active panels keyed by the ViewColumn they occupy. */
 const panels = new Map<vscode.ViewColumn | string, PanelEntry>();
+
+/** Monotonic focus order, used when no preview panel is currently active. */
+let _focusOrder = 0;
 
 /** Accumulated render count across all panels, reset by the test seam. */
 let _totalRenderCount = 0;
@@ -726,8 +735,19 @@ function setupPanelEntry(
     lastRevealLineMessage: undefined,
     suppressVisibleRangeUntil: 0,
     lastRevealLinePostedAt: 0,
+    webviewReady: false,
+    pendingOpenFind: false,
+    focusOrder: ++_focusOrder,
   };
   panels.set(key, entry);
+
+  // A hidden webview may be discarded because retainContextWhenHidden is false.
+  // Treat its next reveal as a fresh listener lifecycle and route commands only
+  // after it sends `ready` again.
+  (panel as Partial<vscode.WebviewPanel>).onDidChangeViewState?.(() => {
+    if (panel.active) entry.focusOrder = ++_focusOrder;
+    else entry.webviewReady = false;
+  });
 
   // Initial render
   if (document) {
@@ -758,11 +778,16 @@ function setupPanelEntry(
 
     switch (message.type) {
       case "ready":
+        entry.webviewReady = true;
         // Webview has attached its listener — re-post the current render so the
         // initial postRender (which may have been dropped before the listener
         // was attached) is guaranteed to arrive.
         if (entry.document) {
           void postRender(entry, entry.document);
+        }
+        if (entry.pendingOpenFind) {
+          entry.pendingOpenFind = false;
+          void entry.panel.webview.postMessage({ v: 1, type: "openFind" } satisfies HostToWebview);
         }
         break;
 
@@ -1080,6 +1105,36 @@ export function openPreview(context: vscode.ExtensionContext): void {
     return;
   }
   openOrReveal(context, activeEditor.document);
+}
+
+/** Open the webview-owned search surface in the active (or last-focused) preview. */
+export function openFind(): void {
+  const entries = [...panels.values()];
+  const entry = entries.find((candidate) => candidate.panel.active)
+    ?? entries.reduce<PanelEntry | undefined>(
+      (latest, candidate) => !latest || candidate.focusOrder > latest.focusOrder ? candidate : latest,
+      undefined,
+    );
+  if (!entry) {
+    void vscode.window.showInformationMessage("Penmark: open a preview to search it.");
+    return;
+  }
+  entry.pendingOpenFind = true;
+  const wasHidden = !entry.panel.active;
+  if (wasHidden) {
+    // A hidden panel does not retain its webview context. Reveal it first so
+    // the restored frame can attach its listener and acknowledge with `ready`.
+    entry.webviewReady = false;
+    entry.panel.reveal(entry.column, false);
+  }
+  if (entry.webviewReady || wasHidden) {
+    entry.pendingOpenFind = false;
+    void entry.panel.webview.postMessage({ v: 1, type: "openFind" } satisfies HostToWebview);
+    // A restored webview can retain its listener (and needs no new `ready`),
+    // while a recreated one drops this first post and re-sends `ready` below.
+    // Keep the latter pending so its new listener receives the command.
+    if (wasHidden) entry.pendingOpenFind = true;
+  }
 }
 
 // ---------------------------------------------------------------------------

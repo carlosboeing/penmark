@@ -2,6 +2,16 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-07-24 (feat/in-preview-find-fallback)
+
+### In-preview Find fallback for Cursor and Antigravity
+
+Native Find remains enabled in stock VS Code, but its webview integration is incomplete in Cursor and Antigravity. Penmark now provides a reliable in-preview alternative ([ADR 0008](adrs/0008-in-preview-find-fallback.md)):
+
+- **Search control and command** — the preview top bar gains **Search**, and **Penmark: Search Preview** (`penmark.find`) opens the same surface from the Command Palette or a user keybinding.
+- **Transient highlighter** — search decorates rendered text with temporary marks, reports the current and total match count, supports previous/next navigation and case-sensitive matching, and never changes the selection or persisted Markdown. `Esc` closes the surface and restores focus to its opener.
+- **Anchor-safe incremental rendering** — matches never cross comment-anchor wrappers; marks are removed before a morphdom render and reapplied when search stays open. Work is bounded at 500 matches, 10,000 text nodes, or 1,000,000 text characters; a capped count displays `N+` and logs the cap.
+
 ## 2026-07-23 (feat/adaptive-review-ui)
 
 ### Adaptive review surface — responsive panels, native Find, live code wrapping, reading metadata

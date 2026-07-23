@@ -6,6 +6,7 @@ import {
   handleEditComment,
   handleExportReview,
   handleUpdateSetting,
+  openFind,
   openPreview,
   PreviewPanelSerializer,
   previewManager,
@@ -111,6 +112,131 @@ describe("openPreview — native Find", () => {
 
     seam.window._createdWebviewPanels[0]?.dispose();
     expect(previewManager.panelCount()).toBe(0);
+  });
+});
+
+describe("openFind — webview readiness", () => {
+  it("delivers immediately after revealing a hidden webview that retained its listener", async () => {
+    let disposePanel: (() => void) | undefined;
+    let reveals = 0;
+    const posted: unknown[] = [];
+    const disposable = { dispose(): void {} };
+    const panel = {
+      active: false,
+      viewColumn: vscode.ViewColumn.One,
+      reveal(): void {
+        reveals++;
+      },
+      webview: {
+        cspSource: "test-csp",
+        html: "",
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        postMessage: async (message: unknown) => {
+          posted.push(message);
+          return true;
+        },
+        onDidReceiveMessage(): vscode.Disposable {
+          return disposable;
+        },
+      },
+      onDidDispose(callback: () => void): vscode.Disposable {
+        disposePanel = callback;
+        return disposable;
+      },
+    } as unknown as vscode.WebviewPanel;
+
+    await new PreviewPanelSerializer({ extensionUri: vscode.Uri.file("/extension") } as vscode.ExtensionContext)
+      .deserializeWebviewPanel(panel, undefined);
+
+    openFind();
+
+    expect(reveals).toBe(1);
+    expect(posted).toEqual([{ v: 1, type: "openFind" }]);
+    disposePanel?.();
+  });
+
+  it("waits for a newly created webview listener before posting the command once", async () => {
+    let receiveMessage: ((message: unknown) => void) | undefined;
+    let disposePanel: (() => void) | undefined;
+    const posted: unknown[] = [];
+    const disposable = { dispose(): void {} };
+    const panel = {
+      active: true,
+      viewColumn: vscode.ViewColumn.One,
+      webview: {
+        cspSource: "test-csp",
+        html: "",
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        postMessage: async (message: unknown) => {
+          posted.push(message);
+          return true;
+        },
+        onDidReceiveMessage(callback: (message: unknown) => void): vscode.Disposable {
+          receiveMessage = callback;
+          return disposable;
+        },
+      },
+      onDidDispose(callback: () => void): vscode.Disposable {
+        disposePanel = callback;
+        return disposable;
+      },
+    } as unknown as vscode.WebviewPanel;
+
+    await new PreviewPanelSerializer({ extensionUri: vscode.Uri.file("/extension") } as vscode.ExtensionContext)
+      .deserializeWebviewPanel(panel, undefined);
+
+    openFind();
+    expect(posted).toEqual([]);
+
+    receiveMessage!({ v: 1, type: "ready" });
+    expect(posted).toEqual([{ v: 1, type: "openFind" }]);
+
+    receiveMessage!({ v: 1, type: "ready" });
+    expect(posted).toEqual([{ v: 1, type: "openFind" }]);
+    disposePanel?.();
+  });
+
+  it("retries after ready when revealing recreated webview drops the first delivery", async () => {
+    let receiveMessage: ((message: unknown) => void) | undefined;
+    let disposePanel: (() => void) | undefined;
+    let reveals = 0;
+    const posted: unknown[] = [];
+    const disposable = { dispose(): void {} };
+    const panel = {
+      active: false,
+      viewColumn: vscode.ViewColumn.One,
+      reveal(): void {
+        reveals++;
+      },
+      webview: {
+        cspSource: "test-csp",
+        html: "",
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        postMessage: async (message: unknown) => {
+          posted.push(message);
+          return true;
+        },
+        onDidReceiveMessage(callback: (message: unknown) => void): vscode.Disposable {
+          receiveMessage = callback;
+          return disposable;
+        },
+      },
+      onDidDispose(callback: () => void): vscode.Disposable {
+        disposePanel = callback;
+        return disposable;
+      },
+    } as unknown as vscode.WebviewPanel;
+
+    await new PreviewPanelSerializer({ extensionUri: vscode.Uri.file("/extension") } as vscode.ExtensionContext)
+      .deserializeWebviewPanel(panel, undefined);
+
+    openFind();
+    expect(reveals).toBe(1);
+    expect(posted).toEqual([{ v: 1, type: "openFind" }]);
+
+    receiveMessage!({ v: 1, type: "ready" });
+    expect(posted).toEqual([{ v: 1, type: "openFind" }, { v: 1, type: "openFind" }]);
+    disposePanel?.();
   });
 });
 

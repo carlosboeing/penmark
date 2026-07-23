@@ -16,6 +16,7 @@ const ICON_PATHS = {
   settings: "M4 5h12 M4 10h12 M4 15h12 M8 3.5v3 M13 8.5v3 M7 13.5v3",
   export: "M10 3v9 M10 12l3-3 M10 12L7 9 M4 14v3h12v-3",
   comments: "M4 4h12v9H9l-4 3v-3H4z",
+  find: "M9 3.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11 M13 13l3.5 3.5",
 } as const;
 
 function staticIcon(pathData: string, className?: string): SVGSVGElement {
@@ -65,6 +66,11 @@ export interface TopbarExportOpts {
   onOpenExport: () => void;
 }
 
+export interface TopbarFindOpts {
+  open: boolean;
+  onOpenFind: () => void;
+}
+
 export function installTopbar(
   container: HTMLElement,
   docName: string,
@@ -74,6 +80,7 @@ export function installTopbar(
   exportOpts?: TopbarExportOpts,
   initialTheme: ThemeMode = "auto",
   readingMeta?: string,
+  findOpts?: TopbarFindOpts,
 ): void {
   while (container.firstChild) container.removeChild(container.firstChild);
 
@@ -150,6 +157,18 @@ export function installTopbar(
     nameButton(button, "Export document");
     button.append(staticIcon(ICON_PATHS.export), visibleLabel("Export"));
     button.addEventListener("click", () => exportOpts.onOpenExport());
+    actions.appendChild(button);
+  }
+
+  if (findOpts) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pmk-topbar-btn pmk-topbar-find";
+    button.dataset.pmkTopbarControl = "find";
+    nameButton(button, "Search document");
+    button.setAttribute("aria-pressed", String(findOpts.open));
+    button.append(staticIcon(ICON_PATHS.find), visibleLabel("Search"));
+    button.addEventListener("click", () => findOpts.onOpenFind());
     actions.appendChild(button);
   }
 
