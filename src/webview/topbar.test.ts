@@ -1,5 +1,5 @@
 /**
- * Unit tests for topbar.ts — doc name display + theme cycle callback.
+ * Unit tests for topbar.ts — doc name display + preview action controls.
  *
  * Runs in the vitest "webview" project (jsdom environment).
  */
@@ -7,14 +7,6 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { installTopbar } from "./topbar.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeThemeSelected(): (theme: "auto" | "light" | "dark") => void {
-  return vi.fn();
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -26,22 +18,13 @@ describe("installTopbar", () => {
   });
 
   it("renders the doc name in the topbar", () => {
-    installTopbar(document.getElementById("penmark-topbar")!, "my-doc.md", makeThemeSelected());
+    installTopbar(document.getElementById("penmark-topbar")!, "my-doc.md");
     const topbar = document.getElementById("penmark-topbar")!;
     expect(topbar.textContent).toContain("my-doc.md");
   });
 
   it("renders subdued reading metadata beside the document name", () => {
-    installTopbar(
-      topbar(),
-      "my-doc.md",
-      makeThemeSelected(),
-      undefined,
-      undefined,
-      undefined,
-      "auto",
-      "2,140 words · 9 min read",
-    );
+    installTopbar(topbar(), "my-doc.md", undefined, undefined, undefined, "2,140 words · 9 min read");
 
     const documentZone = topbar().querySelector(":scope > .pmk-topbar-document")!;
     const metadata = documentZone.querySelector(".pmk-topbar-reading-meta")!;
@@ -55,7 +38,7 @@ describe("installTopbar", () => {
     const compactRules = css.match(/@media \(max-width: 700px\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
     expect(compactRules).toMatch(/\.pmk-topbar-reading-meta[\s\S]*display:\s*none/);
-    expect(compactRules).not.toMatch(/\.pmk-topbar-(?:switcher|settings|export|comments)[\s\S]*display:\s*none/);
+    expect(compactRules).not.toMatch(/\.pmk-topbar-(?:settings|export|comments)[\s\S]*display:\s*none/);
     expect(css).toMatch(/\.pmk-topbar-reading-meta\s*\{[\s\S]*color:\s*var\(--pmk-color-fg-subtle\)/);
   });
 
@@ -67,49 +50,17 @@ describe("installTopbar", () => {
     expect(css).toMatch(/\.pmk-search-hit-current\s*\{/);
   });
 
-  it("renders one native theme button that announces and cycles all three modes", () => {
-    const onThemeSelected = makeThemeSelected();
-    installTopbar(
-      document.getElementById("penmark-topbar")!,
-      "test.md",
-      onThemeSelected,
-      undefined,
-      undefined,
-      undefined,
-      "auto",
-    );
-    const buttons = document.querySelectorAll("[data-theme-mode]");
-    expect(buttons).toHaveLength(1);
-    const button = buttons[0] as HTMLButtonElement;
-    expect(button.tagName).toBe("BUTTON");
-    expect(button.type).toBe("button");
-    expect(button.getAttribute("data-theme-mode")).toBe("auto");
-    expect(button.getAttribute("data-active")).toBe("true");
-    expect(button.hasAttribute("aria-pressed")).toBe(false);
-    expect(button.getAttribute("aria-label")).toBe("Theme: auto. Switch to light");
-    expect(button.title).toBe("Theme: auto. Switch to light");
+  it("renders no theme control — theme selection lives in the settings panel", () => {
+    installTopbar(topbar(), "test.md");
 
-    button.click();
-    expect(onThemeSelected).toHaveBeenLastCalledWith("light");
-
-    installTopbar(topbar(), "test.md", onThemeSelected, undefined, undefined, undefined, "light");
-    const lightButton = document.querySelector("[data-theme-mode]") as HTMLButtonElement;
-    expect(lightButton.hasAttribute("aria-pressed")).toBe(false);
-    expect(lightButton.getAttribute("aria-label")).toBe("Theme: light. Switch to dark");
-    lightButton.click();
-    expect(onThemeSelected).toHaveBeenLastCalledWith("dark");
-
-    installTopbar(topbar(), "test.md", onThemeSelected, undefined, undefined, undefined, "dark");
-    const darkButton = document.querySelector("[data-theme-mode]") as HTMLButtonElement;
-    expect(darkButton.hasAttribute("aria-pressed")).toBe(false);
-    expect(darkButton.getAttribute("aria-label")).toBe("Theme: dark. Switch to auto");
-    darkButton.click();
-    expect(onThemeSelected).toHaveBeenLastCalledWith("auto");
+    expect(document.querySelectorAll("[data-theme-mode]")).toHaveLength(0);
+    expect(document.querySelectorAll("[data-pmk-topbar-control='theme']")).toHaveLength(0);
+    expect(document.querySelectorAll(".pmk-topbar-switcher")).toHaveLength(0);
   });
 
   it("renders a Preview settings toggle when settings opts are passed", () => {
     const onToggleSettings = vi.fn();
-    installTopbar(document.getElementById("penmark-topbar")!, "test.md", makeThemeSelected(), undefined, {
+    installTopbar(document.getElementById("penmark-topbar")!, "test.md", undefined, {
       onToggleSettings,
       settingsOpen: false,
     });
@@ -126,7 +77,7 @@ describe("installTopbar", () => {
 
   it("renders a Search control that reports its active state and opens the find surface", () => {
     const onOpenFind = vi.fn();
-    installTopbar(topbar(), "test.md", makeThemeSelected(), undefined, undefined, undefined, "auto", undefined, {
+    installTopbar(topbar(), "test.md", undefined, undefined, undefined, undefined, {
       open: true,
       onOpenFind,
     });
@@ -142,16 +93,13 @@ describe("installTopbar", () => {
     installTopbar(
       topbar(),
       "test.md",
-      makeThemeSelected(),
       { openCount: 3, attention: 0, drawerOpen: false, onToggleDrawer: vi.fn(), onOpenAttention: vi.fn() },
       { settingsOpen: false, onToggleSettings: vi.fn() },
       { onOpenExport: vi.fn() },
-      "light",
     );
 
     expect(topbar().querySelector(".pmk-topbar-document-icon svg")?.getAttribute("aria-hidden")).toBe("true");
     for (const selector of [
-      ".pmk-topbar-switcher",
       ".pmk-topbar-settings",
       ".pmk-topbar-export",
       ".pmk-topbar-comments",
@@ -165,9 +113,8 @@ describe("installTopbar", () => {
   });
 
   it("updates doc name when called again with a new name", () => {
-    const onThemeSelected = makeThemeSelected();
-    installTopbar(document.getElementById("penmark-topbar")!, "first.md", onThemeSelected);
-    installTopbar(document.getElementById("penmark-topbar")!, "second.md", onThemeSelected);
+    installTopbar(document.getElementById("penmark-topbar")!, "first.md");
+    installTopbar(document.getElementById("penmark-topbar")!, "second.md");
     const topbar = document.getElementById("penmark-topbar")!;
     expect(topbar.textContent).toContain("second.md");
   });
@@ -179,7 +126,7 @@ describe("installTopbar", () => {
   }
 
   it("renders a Comments toggle showing the open-comment count", () => {
-    installTopbar(topbar(), "test.md", makeThemeSelected(), {
+    installTopbar(topbar(), "test.md", {
       openCount: 3,
       attention: 0,
       drawerOpen: false,
@@ -198,7 +145,7 @@ describe("installTopbar", () => {
 
   it("clicking the Comments toggle invokes onToggleDrawer", () => {
     const onToggleDrawer = vi.fn();
-    installTopbar(topbar(), "test.md", makeThemeSelected(), {
+    installTopbar(topbar(), "test.md", {
       openCount: 2,
       attention: 0,
       drawerOpen: false,
@@ -210,7 +157,7 @@ describe("installTopbar", () => {
   });
 
   it("shows the amber attention chip with the count only when attention > 0", () => {
-    installTopbar(topbar(), "test.md", makeThemeSelected(), {
+    installTopbar(topbar(), "test.md", {
       openCount: 1,
       attention: 0,
       drawerOpen: false,
@@ -219,7 +166,7 @@ describe("installTopbar", () => {
     });
     expect(topbar().querySelector(".pmk-topbar-chip")).toBeNull();
 
-    installTopbar(topbar(), "test.md", makeThemeSelected(), {
+    installTopbar(topbar(), "test.md", {
       openCount: 1,
       attention: 2,
       drawerOpen: false,
@@ -233,7 +180,7 @@ describe("installTopbar", () => {
 
   it("clicking the attention chip invokes onOpenAttention", () => {
     const onOpenAttention = vi.fn();
-    installTopbar(topbar(), "test.md", makeThemeSelected(), {
+    installTopbar(topbar(), "test.md", {
       openCount: 1,
       attention: 1,
       drawerOpen: false,
@@ -245,7 +192,7 @@ describe("installTopbar", () => {
   });
 
   it("omits the Comments toggle and chip when no comment opts are passed", () => {
-    installTopbar(topbar(), "test.md", makeThemeSelected());
+    installTopbar(topbar(), "test.md");
     expect(topbar().querySelector(".pmk-topbar-comments")).toBeNull();
     expect(topbar().querySelector(".pmk-topbar-chip")).toBeNull();
   });

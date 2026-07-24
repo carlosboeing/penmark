@@ -1,18 +1,15 @@
 /**
- * Penmark webview topbar — compact document identity, preview state and actions.
+ * Penmark webview topbar — compact document identity and preview actions.
  *
  * No vscode imports (ADR 0001). No inline style attributes (CSP blocks them).
- * Posts {v:1, type:"themeSelected", theme} to the host when theme mode cycles.
+ * Theme selection lives in the settings panel, which persists it through the
+ * `updateSetting` host message — the topbar carries no theme control.
  */
 
-import type { ThemeMode } from "../core/protocol/messages.js";
-
 const SVG_NS = "http://www.w3.org/2000/svg";
-const THEME_MODES: ThemeMode[] = ["auto", "light", "dark"];
 
 const ICON_PATHS = {
   document: "M4 2.5h7l4 4v11H4z M11 2.5v4h4",
-  theme: "M10 2.5v2 M10 15.5v2 M2.5 10h2 M15.5 10h2 M4.7 4.7l1.4 1.4 M13.9 13.9l1.4 1.4 M15.3 4.7l-1.4 1.4 M6.1 13.9l-1.4 1.4 M10 6.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7",
   settings: "M4 5h12 M4 10h12 M4 15h12 M8 3.5v3 M13 8.5v3 M7 13.5v3",
   export: "M10 3v9 M10 12l3-3 M10 12L7 9 M4 14v3h12v-3",
   comments: "M4 4h12v9H9l-4 3v-3H4z",
@@ -74,11 +71,9 @@ export interface TopbarFindOpts {
 export function installTopbar(
   container: HTMLElement,
   docName: string,
-  onThemeSelected: (theme: ThemeMode) => void,
   comments?: TopbarCommentsOpts,
   settings?: TopbarSettingsOpts,
   exportOpts?: TopbarExportOpts,
-  initialTheme: ThemeMode = "auto",
   readingMeta?: string,
   findOpts?: TopbarFindOpts,
 ): void {
@@ -99,22 +94,6 @@ export function installTopbar(
     metadata.textContent = readingMeta;
     documentZone.appendChild(metadata);
   }
-
-  const previewZone = document.createElement("div");
-  previewZone.className = "pmk-topbar-preview";
-  const themeButton = document.createElement("button");
-  themeButton.type = "button";
-  themeButton.className = "pmk-topbar-btn pmk-topbar-switcher";
-  themeButton.dataset.pmkTopbarControl = "theme";
-  themeButton.setAttribute("data-active", "true");
-  themeButton.appendChild(staticIcon(ICON_PATHS.theme));
-  const nextTheme =
-    THEME_MODES[(THEME_MODES.indexOf(initialTheme) + 1) % THEME_MODES.length] ?? "auto";
-  const themeName = `Theme: ${initialTheme}. Switch to ${nextTheme}`;
-  themeButton.setAttribute("data-theme-mode", initialTheme);
-  nameButton(themeButton, themeName);
-  themeButton.addEventListener("click", () => onThemeSelected(nextTheme));
-  previewZone.appendChild(themeButton);
 
   const actions = document.createElement("nav");
   actions.className = "pmk-topbar-actions";
@@ -190,5 +169,5 @@ export function installTopbar(
     actions.appendChild(toggle);
   }
 
-  container.append(documentZone, previewZone, actions);
+  container.append(documentZone, actions);
 }

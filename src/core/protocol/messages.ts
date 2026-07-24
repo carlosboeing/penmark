@@ -173,7 +173,6 @@ export type WebviewToHost =
   | { v: 1; type: "scrolled"; topLine: number }
   | { v: 1; type: "copyCode"; text: string }
   | { v: 1; type: "openLink"; href: string }
-  | { v: 1; type: "themeSelected"; theme: ThemeMode }
   | { v: 1; type: "updateSetting"; key: PreviewSettingKey; value: PreviewSettingValue }
   // Open the full native settings UI filtered to the penmark.* section. Carries
   // no payload: the host runs a fixed openSettings command and ignores any
