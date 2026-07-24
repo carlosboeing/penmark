@@ -2,6 +2,14 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-07-25 (in flight — fix/find-search-and-topbar-theme)
+
+### Search fixes and a single home for theme selection
+
+- **Longer queries match again** — clearing search marks left the surrounding text split into separate nodes, and because search never crosses a text-node boundary, each keystroke shrank what the next query could find: short queries matched while longer ones reported no results. Marks now re-merge the text they split, so a query keeps matching as it grows.
+- **Closing search clears the query** — the search box no longer reopens holding the previous term and its stale match count.
+- **Theme moved out of the top bar** — theme selection now lives only in the preview settings panel, which already persisted it through `penmark.theme`. The top-bar theme control and its host message are gone.
+
 ## 2026-07-24 (feat/in-preview-find-fallback)
 
 ### In-preview Find fallback for Cursor and Antigravity
