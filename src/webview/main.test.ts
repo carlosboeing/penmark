@@ -373,7 +373,7 @@ describe("main.ts message loop", () => {
     expect(document.activeElement).toBe(document.querySelector(".pmk-drawer-close"));
   });
 
-  it("applies a topbar theme selection immediately and reconciles a host theme update", () => {
+  it("applies a settings-panel theme selection immediately and reconciles a host theme update", () => {
     injectMessage({
       v: 1,
       type: "render",
@@ -383,28 +383,20 @@ describe("main.ts message loop", () => {
       comments: [],
       attention: 0,
     });
-    expect(document.querySelectorAll("[data-theme-mode]")).toHaveLength(1);
-    expect(document.querySelector("[data-theme-mode]")?.getAttribute("data-theme-mode")).toBe("light");
+    // Theme selection lives in the settings panel — the topbar has no control.
+    expect(document.querySelectorAll("[data-theme-mode]")).toHaveLength(0);
 
     clearMessages();
-    const lightButton = document.querySelector("[data-theme-mode]") as HTMLButtonElement;
-    lightButton.focus();
-    lightButton.click();
-    expect(document.body.classList.contains("theme-dark")).toBe(true);
-    const darkButton = document.querySelector("[data-theme-mode]") as HTMLButtonElement;
-    expect(darkButton).not.toBe(lightButton);
-    expect(darkButton.getAttribute("data-theme-mode")).toBe("dark");
-    expect(document.activeElement).toBe(darkButton);
-    expect(document.querySelector('[data-pmk-setting="theme"][data-value="dark"]')?.getAttribute("aria-pressed")).toBe("true");
-    expect(getMock()._messages).toContainEqual({ v: 1, type: "themeSelected", theme: "dark" });
-
     (document.querySelector(".pmk-topbar-settings") as HTMLButtonElement).click();
-    expect(document.querySelector("[data-theme-mode]")?.getAttribute("data-theme-mode")).toBe("dark");
+    (document.querySelector('[data-pmk-setting="theme"][data-value="dark"]') as HTMLButtonElement).click();
+
+    expect(document.body.classList.contains("theme-dark")).toBe(true);
+    expect(document.querySelector('[data-pmk-setting="theme"][data-value="dark"]')?.getAttribute("aria-pressed")).toBe("true");
+    // The settings path is what persists the choice on the host.
+    expect(getMock()._messages).toContainEqual({ v: 1, type: "updateSetting", key: "theme", value: "dark" });
 
     injectMessage({ v: 1, type: "setTheme", theme: "auto" });
 
-    expect(document.querySelector("[data-theme-mode]")?.getAttribute("data-theme-mode")).toBe("auto");
-    expect(document.querySelector("[data-theme-mode]")?.hasAttribute("aria-pressed")).toBe(false);
     expect(document.querySelector('[data-pmk-setting="theme"][data-value="auto"]')?.getAttribute("aria-pressed")).toBe("true");
   });
 

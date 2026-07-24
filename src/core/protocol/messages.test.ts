@@ -194,8 +194,6 @@ describe("protocol/messages", () => {
           return msg.type;
         case "openLink":
           return msg.type;
-        case "themeSelected":
-          return msg.type;
         case "updateSetting":
           return msg.type;
         case "openPenmarkSettings":

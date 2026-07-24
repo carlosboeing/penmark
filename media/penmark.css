@@ -107,23 +107,11 @@ body {
   white-space: nowrap;
 }
 
-.pmk-topbar-preview,
 .pmk-topbar-actions {
   display: flex;
   align-items: center;
   flex: none;
-}
-
-.pmk-topbar-preview {
-  margin-left: auto;
-}
-
-.pmk-topbar-actions {
   gap: 3px;
-}
-
-.pmk-topbar-switcher {
-  flex: none;
 }
 
 .pmk-topbar-btn {

@@ -32,4 +32,26 @@ describe("in-preview find surface", () => {
     expect(document.querySelectorAll(".pmk-search-hit")).toHaveLength(0);
     expect(document.activeElement).toBe(opener);
   });
+
+  it("clears the query and match count when closed, so reopening starts empty", () => {
+    const surface = ensureFindSurface(() => document.getElementById("penmark-root")!);
+    const opener = document.querySelector<HTMLButtonElement>("[data-pmk-topbar-control='find']")!;
+    surface.open(opener);
+
+    const input = document.querySelector<HTMLInputElement>(".pmk-find-input")!;
+    const count = document.querySelector<HTMLElement>(".pmk-find-count")!;
+    input.value = "needle";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(count.textContent).toBe("1 / 2");
+
+    surface.close();
+    expect(input.value).toBe("");
+    expect(count.textContent).toBe("");
+
+    // Reopening must not resurrect the previous query or its decorations.
+    surface.open(opener);
+    expect(input.value).toBe("");
+    expect(count.textContent).toBe("");
+    expect(document.querySelectorAll(".pmk-search-hit")).toHaveLength(0);
+  });
 });

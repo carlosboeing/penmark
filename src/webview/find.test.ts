@@ -84,6 +84,37 @@ describe("FindHighlighter", () => {
     expect(root.textContent).toBe("Needle, needle, NEEDLE.");
   });
 
+  it("re-merges split text nodes on clear so a later query matches across an old boundary", () => {
+    root.innerHTML = "<p>runbook</p>";
+    const first = new FindHighlighter(root);
+    first.apply("run");
+
+    first.clear();
+
+    // Unwrapping the mark must not leave "run" and "book" as separate nodes —
+    // search never crosses text-node boundaries, so the seam would hide the word.
+    expect(root.querySelector("p")!.childNodes).toHaveLength(1);
+    const second = new FindHighlighter(root);
+    expect(second.apply("runbook")).toEqual({ count: 1, capped: false });
+  });
+
+  it("keeps matching as a query grows one character at a time", () => {
+    // findSurface re-searches the same root on every keystroke (clear, then a
+    // fresh highlighter). Before the clear() fix, the first query fragmented the
+    // text and every longer query silently reported no results.
+    root.innerHTML = "<p>Executes the runbook review gate, then the runbook sketch.</p>";
+    let find: FindHighlighter | null = null;
+    const counts = ["r", "ru", "run", "runb", "runbo", "runboo", "runbook"].map((query) => {
+      find?.clear();
+      find = new FindHighlighter(root);
+      return find.apply(query).count;
+    });
+
+    // "r" also matches "review"; every longer query matches both "runbook"s.
+    expect(counts).toEqual([3, 2, 2, 2, 2, 2, 2]);
+    expect(root.querySelectorAll("mark.pmk-search-hit")).toHaveLength(2);
+  });
+
   it("does not create a match across a comment anchor boundary", () => {
     root.innerHTML = '<p>Need<mark class="pmk-hl" data-pmk-id="comment1">le</mark></p>';
     const find = new FindHighlighter(root);

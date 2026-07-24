@@ -232,14 +232,13 @@ test("compact topbar keeps all task controls visible and non-overlapping at 620p
   const topbar = page.locator("#penmark-topbar");
   await expect(topbar).toHaveCSS("height", "40px");
   await expect(topbar.locator(":scope > .pmk-topbar-document")).toBeVisible();
-  await expect(topbar.locator(":scope > .pmk-topbar-preview")).toBeVisible();
   await expect(topbar.locator(":scope > .pmk-topbar-actions")).toBeVisible();
 
   const controls = topbar.locator(
-    ".pmk-topbar-switcher, .pmk-topbar-settings, .pmk-topbar-export, .pmk-topbar-comments",
+    ".pmk-topbar-settings, .pmk-topbar-export, .pmk-topbar-comments",
   );
-  await expect(controls).toHaveCount(4);
-  for (let index = 0; index < 4; index += 1) await expect(controls.nth(index)).toBeVisible();
+  await expect(controls).toHaveCount(3);
+  for (let index = 0; index < 3; index += 1) await expect(controls.nth(index)).toBeVisible();
   const optionalLabels = topbar.locator(".pmk-topbar-label");
   for (let index = 0; index < await optionalLabels.count(); index += 1) {
     await expect(optionalLabels.nth(index)).toBeHidden();
@@ -247,7 +246,7 @@ test("compact topbar keeps all task controls visible and non-overlapping at 620p
 
   const geometry = await topbar.evaluate((element) => {
     const actions = Array.from(element.querySelectorAll<HTMLElement>(
-      ".pmk-topbar-switcher, .pmk-topbar-settings, .pmk-topbar-export, .pmk-topbar-comments",
+      ".pmk-topbar-settings, .pmk-topbar-export, .pmk-topbar-comments",
     )).map((control) => control.getBoundingClientRect());
     const doc = element.querySelector<HTMLElement>(".pmk-topbar-document")!.getBoundingClientRect();
     const docName = element.querySelector<HTMLElement>(".pmk-topbar-docname")!;
@@ -495,7 +494,6 @@ type OpenSurface = "settings" | "comments";
 async function assertReviewInvariants(page: Page, open: OpenSurface): Promise<void> {
   await expect(page.locator("#penmark-topbar")).toHaveCount(1);
   for (const control of [
-    ".pmk-topbar-switcher",
     ".pmk-topbar-settings",
     ".pmk-topbar-export",
     ".pmk-topbar-comments",

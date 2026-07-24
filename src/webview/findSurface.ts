@@ -76,6 +76,10 @@ export function ensureFindSurface(getRoot: () => HTMLElement | null): FindSurfac
   const close = (restoreFocus = true): void => {
     highlighter?.clear();
     highlighter = null;
+    // Reset the query so reopening starts clean rather than restoring stale text.
+    input.value = "";
+    result = { count: 0, capped: false };
+    updateCount();
     el.setAttribute("aria-hidden", "true");
     const cleanup = unregister;
     unregister = null;

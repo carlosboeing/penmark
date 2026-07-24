@@ -794,16 +794,6 @@ function setupPanelEntry(
         }
         break;
 
-      case "themeSelected": {
-        const theme = (message as { v: number; type: string; theme?: string }).theme;
-        if (theme === "light" || theme === "dark" || theme === "auto") {
-          void vscode.workspace
-            .getConfiguration("penmark")
-            .update("theme", theme, vscode.ConfigurationTarget.Global);
-        }
-        break;
-      }
-
       case "updateSetting": {
         const key = (message as { key?: unknown }).key;
         const value = (message as { value?: unknown }).value;

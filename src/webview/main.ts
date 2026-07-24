@@ -10,7 +10,7 @@
  *   - Post `scrolled` (throttled, echo-suppressed) when the user scrolls (T10).
  *   - Persist scroll + theme via getState/setState (survives webview reload).
  *   - Install delegated link handler on the root.
- *   - Install topbar (doc name + theme switcher).
+ *   - Install topbar (doc name + preview actions).
  *   - Post {v:1, type:"ready"} once the listener is attached (handshake).
  *
  * ADR 0001: no vscode imports — only the injected acquireVsCodeApi() bridge.
@@ -448,15 +448,6 @@ function refreshTopbar(): void {
   installTopbar(
     topbar,
     _lastDocName,
-    (theme) => {
-      if (_previewSettings) {
-        _previewSettings = { ..._previewSettings, theme };
-        renderSettingsPanel(_previewSettings);
-      }
-      applyTheme(theme);
-      refreshTopbar();
-      vscode.postMessage({ v: 1, type: "themeSelected", theme });
-    },
     topbarCommentsOpts(_lastComments, _lastAttention),
     {
       settingsOpen: isSettingsPanelOpen(),
@@ -467,7 +458,6 @@ function refreshTopbar(): void {
       },
     },
     topbarExportOpts(),
-    _previewSettings?.theme ?? "auto",
     _lastReadingMeta,
     {
       open: _findSurface?.isOpen() ?? false,
