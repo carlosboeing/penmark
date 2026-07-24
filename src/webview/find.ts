@@ -115,9 +115,17 @@ export class FindHighlighter {
   }
 
   clear(): void {
+    const parents = new Set<Node>();
     this.root.querySelectorAll<HTMLElement>("mark.pmk-search-hit").forEach((hit) => {
+      if (hit.parentNode) parents.add(hit.parentNode);
       hit.replaceWith(...Array.from(hit.childNodes));
     });
+    // Unwrapping a mark leaves its text split from its neighbours (the before /
+    // after slices are separate nodes). Re-merge them so a later, longer query
+    // can still match across a former match boundary — search never crosses
+    // text-node boundaries, so un-normalized fragments would silently drop hits
+    // as the query grows character by character.
+    parents.forEach((parent) => parent.normalize());
     this.matches = [];
     this.activeIndex = -1;
   }
