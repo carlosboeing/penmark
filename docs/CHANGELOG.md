@@ -2,7 +2,7 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
-## 2026-07-25 (in flight — fix/find-search-and-topbar-theme)
+## 2026-07-25 (fix/find-search-and-topbar-theme)
 
 ### Search fixes and a single home for theme selection
 
