@@ -203,3 +203,10 @@ for (const width of ["comfortable", "wide", "full"] as const) {
     expect(Math.abs(card!.width - root!.width)).toBeLessThanOrEqual(1);
   });
 }
+
+test("frontmatter card renders block-sequence list values", async ({ page }) => {
+  await renderDocWithFrontmatter(page, "full");
+  const card = page.locator(".pmk-frontmatter-card");
+  await expect(card).toContainText("Carlos Boeing");
+  await expect(card).toContainText("Carlos Boeing, claude-opus-5");
+});
