@@ -898,4 +898,27 @@ describe("main.ts message loop", () => {
     });
     expect(root.innerHTML).toBe(before);
   });
+
+  it("closes the find surface when the topbar search button is clicked while open", () => {
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Needle</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+    });
+
+    // The topbar is rebuilt on every refresh, so the button must be re-queried
+    // after each click rather than held across them.
+    const search = (): HTMLButtonElement =>
+      document.querySelector<HTMLButtonElement>("[data-pmk-topbar-control='find']")!;
+
+    search().click();
+    expect(document.querySelector(".pmk-find-surface")!.getAttribute("aria-hidden")).toBe("false");
+
+    search().click();
+    expect(document.querySelector(".pmk-find-surface")!.getAttribute("aria-hidden")).toBe("true");
+  });
 });

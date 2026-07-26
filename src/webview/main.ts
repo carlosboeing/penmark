@@ -461,9 +461,15 @@ function refreshTopbar(): void {
     _lastReadingMeta,
     {
       open: _findSurface?.isOpen() ?? false,
-      onOpenFind: () => {
+      onToggleFind: () => {
+        const surface = findSurface();
+        if (surface.isOpen()) {
+          // close() dispatches pmk-find-closed, which refreshes the topbar.
+          surface.close();
+          return;
+        }
         const opener = document.querySelector<HTMLElement>("[data-pmk-topbar-control='find']");
-        findSurface().open(opener);
+        surface.open(opener);
         refreshTopbar();
       },
     },
