@@ -184,15 +184,36 @@ function locateReview(text: string): {
   };
 }
 
-/** Parse one entry HTML comment whose inner text (after `pmk:c `) is `inner`. */
-function parseEntry(inner: string, rawStart: number, rawEnd: number): ParsedEntry | null {
+/**
+ * Parse one entry HTML comment whose inner text (after `pmk:c `) is `inner`.
+ *
+ * `indent` is the whitespace preceding the entry's `<!--` on its own line. A
+ * markdown formatter indents a review block that follows a list, because the
+ * block is then a lazy continuation of the last list item; the formatter reflows
+ * it to the list content column. Stripping that prefix (where present, per line
+ * — the reflow often stops at the first blank line) lets an already-mangled
+ * document still read, rather than losing every comment in it.
+ */
+function parseEntry(
+  inner: string,
+  rawStart: number,
+  rawEnd: number,
+  indent = "",
+): ParsedEntry | null {
   // inner is everything between `<!--pmk:c ` and the terminating `-->`. Strip a
   // trailing CR from each line so CRLF-authored documents (Windows / VS Code
   // `files.eol`) parse identically to LF ones — without this the `$`-anchored
   // meta regex and the blank-separator check would fail on the leftover `\r` and
   // every entry would be silently dropped. Offsets are unaffected (the raw text
   // is never normalized; only the in-memory line content used for parsing).
-  const lines = inner.split("\n").map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l));
+  // Line 0 sits after `<!--pmk:c ` on the opener's own line, so it never carries
+  // the indent; every later line does.
+  const lines = inner
+    .split("\n")
+    .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
+    .map((l, idx) =>
+      idx > 0 && indent !== "" && l.startsWith(indent) ? l.slice(indent.length) : l,
+    );
   const line1 = lines[0] ?? "";
 
   // Line 1: ID, optionally ` re <parent-id>` (v2, parsed-but-ignored, §5.3).
@@ -213,17 +234,23 @@ function parseEntry(inner: string, rawStart: number, rawEnd: number): ParsedEntr
   const provenance = meta[2] as Provenance;
   const timestamp = meta[3] as string;
 
-  // Quote lines: zero or more `> ` lines starting at line 3.
+  // Quote lines: zero or more `> ` lines starting at line 3. An EMPTY quote line
+  // is a bare `>`: writing it as `"> "` would leave trailing whitespace, which
+  // every formatter strips, so the bare form is the only stable one (§5.2.2).
+  // Both are accepted on read — documents written before that rule exist.
   const quoteLines: string[] = [];
   let i = 2;
-  while (i < lines.length && (lines[i] ?? "").startsWith("> ")) {
-    quoteLines.push((lines[i] as string).slice(2));
-    i++;
+  for (; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (line.startsWith("> ")) quoteLines.push(line.slice(2));
+    else if (line === ">") quoteLines.push("");
+    else break;
   }
   const quote = decodeEntryText(quoteLines.join("\n"));
 
-  // Exactly one blank line separates the quote from the body (§5.2).
-  if (i >= lines.length || (lines[i] ?? "") !== "") return null;
+  // Exactly one blank line separates the quote from the body (§5.2). Accept a
+  // whitespace-only line: a formatter may have left indentation behind.
+  if (i >= lines.length || (lines[i] ?? "").trim() !== "") return null;
   i++;
 
   // Body: remaining lines to the terminator (trailing blank from the `\n-->`
@@ -237,6 +264,17 @@ function parseEntry(inner: string, rawStart: number, rawEnd: number): ParsedEntr
   const entry: ParsedEntry = { id, author, provenance, timestamp, quote, body, rawStart, rawEnd };
   if (parentId !== undefined) entry.parentId = parentId;
   return entry;
+}
+
+/**
+ * The whitespace between the start of `pos`'s line and `pos` itself, or `""`
+ * when anything else precedes it on that line (in which case there is no indent
+ * prefix to strip).
+ */
+function leadingIndent(text: string, pos: number): string {
+  const lineStart = text.lastIndexOf("\n", pos - 1) + 1;
+  const prefix = text.slice(lineStart, pos);
+  return /^[ \t]*$/.test(prefix) ? prefix : "";
 }
 
 /**
@@ -258,7 +296,7 @@ function parseEntries(
     const inner = m[1] ?? "";
     const rawStart = info.start + m.index;
     const rawEnd = rawStart + m[0].length;
-    const entry = parseEntry(inner, rawStart, rawEnd);
+    const entry = parseEntry(inner, rawStart, rawEnd, leadingIndent(region, m.index));
     if (entry !== null) {
       entries.push(entry);
     } else {
@@ -433,8 +471,7 @@ export function parseDoc(text: string): ParsedDoc {
     });
   }
 
-  const entries: ParsedEntry[] =
-    review === null ? [] : parseEntries(text, review, corruption);
+  const entries: ParsedEntry[] = review === null ? [] : parseEntries(text, review, corruption);
 
   // §8.5: parse entries from non-authoritative review blocks too — reconcile
   // surfaces them in needs-attention rather than dropping them silently.

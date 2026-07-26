@@ -31,14 +31,17 @@
  */
 
 import type { SourceRange } from "./placement.js";
-import type { CommentState, ParsedAnchor, ParsedDoc, ParsedEntry } from "./types.js";
+import type {
+  CommentState,
+  CorruptionItem,
+  ParsedAnchor,
+  ParsedDoc,
+  ParsedEntry,
+} from "./types.js";
 
 /** A reconcile flag: a non-fatal signal attached to a classified comment. */
 export type ReconcileFlag =
-  | "stray-closer"
-  | "closer-destroyed"
-  | "half-pair"
-  | "marker-not-own-line";
+  "stray-closer" | "closer-destroyed" | "half-pair" | "marker-not-own-line";
 
 /** One entry classified against the current document (spec §8). */
 export interface ReconciledComment {
@@ -64,9 +67,27 @@ export interface ReconcileResult {
   reviewBlockMisplaced: boolean;
   /** More than one review block in the document (§9 corruption surfacing). */
   secondReviewBlock: boolean;
+  /**
+   * Parse corruption that cost review DATA: an entry the grammar rejected, or a
+   * review header that was not recognised (so its whole block went unread).
+   * These leave no comment to classify, so without their own signal the loss is
+   * invisible — the comment simply disappears from the preview and the drawer.
+   *
+   * Anchor-level corruption is deliberately NOT repeated here: stray closers and
+   * range half-pairs already surface via {@link strayClosers}, a not-own-line
+   * block marker via its comment's `marker-not-own-line` flag, and an unclosed
+   * block via {@link reviewBlockMisplaced}.
+   */
+  unreadableReviewData: CorruptionItem[];
   /** needsAttention.length + corruption signals; drives the attention chip. */
   attentionCount: number;
 }
+
+/** Corruption rules that mean review data could not be read at all. */
+const DATA_LOSS_RULES: ReadonlySet<string> = new Set<string>([
+  "§5.2-malformed-entry",
+  "§5.1-malformed-review-header",
+]);
 
 const ID = "[a-z2-7]{8}";
 const SPAN_CLOSE_RE = new RegExp(`<!--/pmk:s (${ID})-->`, "g");
@@ -208,12 +229,16 @@ export function reconcile(text: string, doc: ParsedDoc): ReconcileResult {
   const reviewBlockMisplaced = doc.review !== null && !doc.review.atEof;
   const secondReviewBlock = doc.reviewCount > 1;
 
+  const unreadableReviewData = doc.corruption.filter((c) => DATA_LOSS_RULES.has(c.rule));
+
   // The chip aggregates everything the user must act on: every needs-attention
-  // comment, every stray closer/half not tied to a live entry, and the two
-  // document-level corruption signals.
+  // comment, every stray closer/half not tied to a live entry, every piece of
+  // review data that could not be read, and the two document-level corruption
+  // signals.
   const attentionCount =
     needsAttention.length +
     strayClosers.length +
+    unreadableReviewData.length +
     (reviewBlockMisplaced ? 1 : 0) +
     (secondReviewBlock ? 1 : 0);
 
@@ -223,6 +248,7 @@ export function reconcile(text: string, doc: ParsedDoc): ReconcileResult {
     strayClosers,
     reviewBlockMisplaced,
     secondReviewBlock,
+    unreadableReviewData,
     attentionCount,
   };
 }

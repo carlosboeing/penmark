@@ -16,6 +16,7 @@ function result(over: Partial<ReconcileResult>): ReconcileResult {
     strayClosers: [],
     reviewBlockMisplaced: false,
     secondReviewBlock: false,
+    unreadableReviewData: [],
     attentionCount: 0,
     ...over,
   };

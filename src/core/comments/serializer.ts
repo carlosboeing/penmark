@@ -76,12 +76,17 @@ function renderEntry(
  * Render the advisory quote as zero or more `> ` lines, each terminated by a
  * newline (§5.2.2). An empty quote yields no lines (an entry MAY have no quote).
  * The quote is encoded per §6.
+ *
+ * An EMPTY line within the quote is written as a bare `>`, never `"> "`: the
+ * padded form leaves trailing whitespace, which Prettier, markdownlint MD009 and
+ * `files.trimTrailingWhitespace` all strip on the next save. Emitting it would
+ * mean Penmark writes bytes the user's formatter immediately rewrites.
  */
 function renderQuoteLines(quote: string): string {
   if (quote === "") return "";
   return encodeEntryText(quote)
     .split("\n")
-    .map((line) => `> ${line}\n`)
+    .map((line) => (line === "" ? ">\n" : `> ${line}\n`))
     .join("");
 }
 
@@ -117,6 +122,18 @@ function anchorEdits(placement: AnchorPlacement, id: string): TextEdit[] {
 }
 
 /**
+ * The newlines needed after `text` so an EOF-appended block starts on its own
+ * line with one blank line before it: `""` when the document already ends in a
+ * blank line, `"\n"` when it ends in a newline, `"\n\n"` otherwise. An empty
+ * document needs neither.
+ */
+function blankLineSeparator(text: string): string {
+  if (text.length === 0) return "";
+  if (text.endsWith("\n\n")) return "";
+  return text.endsWith("\n") ? "\n" : "\n\n";
+}
+
+/**
  * Build the edits to add a comment: the body anchor insertion(s) plus the entry
  * insertion in the review block — creating the block at EOF on the first comment
  * (§7.2), or appending the entry inside the existing block otherwise (§7.6).
@@ -127,8 +144,11 @@ export function buildAddCommentEdits(text: string, doc: ParsedDoc, c: NewComment
 
   if (doc.review === null) {
     // No review block yet: create it at EOF (§5.1, §7.2). Ensure the document
-    // ends with a newline so the block starts on its own line.
-    const eofInsert = text.length === 0 || text.endsWith("\n") ? "" : "\n";
+    // ends with a newline so the block starts on its own line, and that a blank
+    // line precedes it. Without the blank line the block is a lazy continuation
+    // of a preceding list item, which invites a reflowing tool to indent it into
+    // the list — and an indented entry is one a strict reader will not accept.
+    const eofInsert = blankLineSeparator(text);
     const block = `${eofInsert}${REVIEW_OPEN}\n${entry}\n${REVIEW_CLOSE}\n`;
     edits.push({ start: text.length, end: text.length, newText: block });
   } else {
@@ -214,12 +234,22 @@ function lineEndAfter(text: string, pos: number): number {
  */
 function entryRemovalEdit(text: string, doc: ParsedDoc, entry: ParsedEntry): TextEdit {
   if (doc.entries.length === 1 && doc.review !== null) {
-    // Last comment → remove the entire review block (§7.2). Also strip a single
-    // leading newline before the block so the body is not left with a trailing
-    // blank line the block creation introduced.
+    // Last comment → remove the entire review block (§7.2), along with the
+    // newlines block creation inserted before it (a terminating newline plus the
+    // blank-line separator). Strip them all and put one back, so the body is
+    // left ending in exactly one newline — POSIX-clean, and byte-identical to
+    // the pre-comment document for any body that already ended that way.
     let start = doc.review.start;
-    if (start > 0 && text.charAt(start - 1) === "\n") start -= 1;
-    return { start, end: doc.review.end, newText: "" };
+    let stripped = 0;
+    while (start > 0 && text.charAt(start - 1) === "\n") {
+      start -= 1;
+      stripped += 1;
+    }
+    if (stripped > 0) start += 1;
+    // The block was written with a terminating newline of its own; take it too,
+    // or it becomes the body's new trailing blank line.
+    const end = text.charAt(doc.review.end) === "\n" ? doc.review.end + 1 : doc.review.end;
+    return { start, end, newText: "" };
   }
   // Mid-list / multi-entry: remove the entry plus its trailing newline.
   return { start: entry.rawStart, end: lineEndAfter(text, entry.rawEnd), newText: "" };
@@ -261,13 +291,14 @@ function quoteRegion(text: string, entry: ParsedEntry): { start: number; end: nu
   const secondNl = inner.indexOf("\n", firstNl + 1);
   // Offset (into `text`) where the quote region begins (start of line 3).
   const quoteStart = innerStart + secondNl + 1;
-  // Walk forward over `> ` lines (encoded form: the parser's quote lines start
-  // with "> "; we treat any leading "> " line as part of the quote).
+  // Walk forward over quote lines. A non-empty quote line is `> …`; an EMPTY one
+  // is a bare `>` (§5.2.2) — matching the parser, which must also accept the
+  // legacy `"> "` form left by writers that predate that rule.
   let cursor = quoteStart;
   while (cursor < entry.rawEnd) {
     const lineEnd = nextLineEnd(text, cursor, entry.rawEnd);
     const line = text.slice(cursor, lineEnd);
-    if (!line.startsWith("> ")) break;
+    if (!line.startsWith("> ") && line !== ">") break;
     cursor = lineEnd + 1; // skip the newline
   }
   return { start: quoteStart, end: cursor };

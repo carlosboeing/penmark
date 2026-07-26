@@ -183,6 +183,7 @@ const EMPTY_RECONCILE: ReconcileResult = {
   strayClosers: [],
   reviewBlockMisplaced: false,
   secondReviewBlock: false,
+  unreadableReviewData: [],
   attentionCount: 0,
 };
 

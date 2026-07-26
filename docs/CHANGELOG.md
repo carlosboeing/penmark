@@ -2,6 +2,20 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-07-26 (worktree-quote-line-formatter-hardening)
+
+### Comments survive a format-on-save
+
+Comments could disappear from the preview and the drawer after an ordinary save. They were still on disk — the parser was rejecting them, and nothing said so. Reported from a real review session where two comments vanished on the second save.
+
+- **An empty quote line is written as a bare `>`** — the writer rendered every quote line as `` `> ${line}` ``, so a quote containing a blank line got a line ending in a space. Prettier, markdownlint MD009 and editor trim-on-save all strip trailing whitespace, and the reader required the `"> "` prefix, so the entry stopped parsing. Any quote spanning paragraphs was affected.
+- **The reader accepts both forms, and tolerates indentation** — a bare `>` reads as an empty quote line, and an entry indented by a reflowing tool still parses (the indent before the entry's own `<!--` is stripped from each line carrying it). Documents already mangled by a save are readable again without editing them by hand.
+- **The review block is separated from the body by a blank line** — appended straight after a list it was a lazy continuation of the last list item, which invites a reflow into the list. Removing the last comment removes the separator again, so add-then-resolve still restores the document byte-for-byte.
+- **Unreadable review data raises the attention count** — an entry the grammar rejects and an unrecognised review header both left `attentionCount` at zero, so a lost comment produced no chip, no drawer row, and no warning. Both now count. On the negative conformance fixture the count goes from 2 to 4: two malformed review headers that were previously silent.
+- **Tests now model a hostile formatter** — the round-trip suites were closed-loop, re-parsing the exact bytes the writer produced, and no test or fixture ever used a quote containing a blank line. New tests push every fixture's serialized output through real Prettier and through trailing-whitespace trimming before re-parsing, and pin the writer's bytes directly.
+
+Format spec updated: §5.2.2 (empty quote line encoding, indentation tolerance) and writer invariant 2 (blank-line separator).
+
 ## 2026-07-26 (worktree-panel-typography-bug-bash)
 
 ### Four distinct typography presets
