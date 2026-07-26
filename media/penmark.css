@@ -313,7 +313,7 @@ body {
 #penmark-root {
   padding: var(--pmk-document-block-space) var(--pmk-document-gutter);
   width: 100%;
-  max-width: 1600px;
+  max-width: var(--pmk-content-max-width, 1600px);
   margin: 0 auto;
 }
 
@@ -332,16 +332,19 @@ body {
   }
 }
 
-body.pmk-content-comfortable #penmark-root {
-  max-width: 860px;
+/* One property, two boxes. The frontmatter card is a SIBLING of #penmark-root,
+ * so a `body.pmk-content-* #penmark-root` descendant rule could never reach it
+ * and the card stayed at the full-width cap while the prose narrowed. */
+body.pmk-content-comfortable {
+  --pmk-content-max-width: 860px;
 }
 
-body.pmk-content-wide #penmark-root {
-  max-width: 1200px;
+body.pmk-content-wide {
+  --pmk-content-max-width: 1200px;
 }
 
-body.pmk-content-full #penmark-root {
-  max-width: 1600px;
+body.pmk-content-full {
+  --pmk-content-max-width: 1600px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1705,7 +1708,13 @@ body.pmk-hl-strong {
 .pmk-frontmatter-card {
   margin: 12px auto 0;
   width: calc(100% - var(--pmk-document-gutter) - var(--pmk-document-gutter));
-  max-width: calc(1600px - var(--pmk-document-gutter) - var(--pmk-document-gutter));
+  /* The card aligns to the root's TEXT column while the root carries the
+   * gutters as its own padding, so the card's cap is the column minus two
+   * gutters. Taking the variable raw would leave the card two gutters wider
+   * than the prose beneath it — the exact misalignment this removes. */
+  max-width: calc(
+    var(--pmk-content-max-width, 1600px) - var(--pmk-document-gutter) - var(--pmk-document-gutter)
+  );
   padding: 10px 14px;
   border: 1px solid var(--pmk-ui-border-muted);
   border-radius: 8px;

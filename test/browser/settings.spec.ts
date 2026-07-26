@@ -148,3 +148,58 @@ test("document font does not leak into the chrome", async ({ page }) => {
   expect(body).toContain("Georgia");
   expect(chrome).not.toContain("Georgia");
 });
+
+/**
+ * Render a document that carries a frontmatter card, at a chosen content width.
+ * The body pmk-content-* class is normally set by the shell (html.ts); in the
+ * harness the setContentWidth message is the equivalent lever.
+ */
+async function renderDocWithFrontmatter(
+  page: import("@playwright/test").Page,
+  contentWidth: "comfortable" | "wide" | "full",
+): Promise<void> {
+  await page.goto("/");
+  await page.waitForFunction(() => {
+    const h = (window as Window & { __harness?: Harness }).__harness;
+    return h !== undefined && h.messages.length > 0;
+  });
+  await page.evaluate(
+    ({ html, contentWidth }) => {
+      const harness = (window as Window & { __harness?: Harness }).__harness!;
+      harness.injectMessage({
+        v: 1,
+        type: "render",
+        html,
+        theme: "light",
+        docName: "frontmatter.md",
+        comments: [],
+        attention: 0,
+        frontmatter: {
+          title: "Bug bash",
+          status: "draft",
+          authors: ["Carlos Boeing", "claude-opus-5"],
+        },
+      });
+      harness.injectMessage({ v: 1, type: "setContentWidth", contentWidth });
+    },
+    { html: DOC_HTML, contentWidth },
+  );
+  await expect(page.locator(".pmk-frontmatter-card")).toBeVisible();
+  await expect(page.locator("body")).toHaveClass(new RegExp(`pmk-content-${contentWidth}`));
+}
+
+// The viewport must be wide enough for the cap to bind — below 1600px at the
+// "full" setting the card's width binds first and the bug is invisible, which
+// is why no existing golden catches it.
+for (const width of ["comfortable", "wide", "full"] as const) {
+  test(`frontmatter card matches the document column at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1900, height: 900 });
+    await renderDocWithFrontmatter(page, width);
+
+    const card = await page.locator(".pmk-frontmatter-card").boundingBox();
+    const root = await page.locator("#penmark-root p").first().boundingBox();
+
+    expect(Math.abs(card!.x - root!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(card!.width - root!.width)).toBeLessThanOrEqual(1);
+  });
+}
