@@ -1277,7 +1277,10 @@ body.pmk-hl-strong {
   transform: translateX(0);
 }
 
-.pmk-settings-head {
+/* The settings panel and the comments drawer share one header treatment.
+ * Selector lists rather than duplicated blocks, so the two cannot drift. */
+.pmk-settings-head,
+.pmk-drawer-bar {
   flex: none;
   display: flex;
   align-items: center;
@@ -1287,12 +1290,14 @@ body.pmk-hl-strong {
   border-bottom: 1px solid var(--pmk-ui-border-muted);
 }
 
-.pmk-settings-title {
+.pmk-settings-title,
+.pmk-drawer-title {
   font-size: 13px;
   font-weight: 650;
 }
 
-.pmk-settings-close {
+.pmk-settings-close,
+.pmk-drawer-close {
   appearance: none;
   cursor: pointer;
   font: inherit;
@@ -1304,12 +1309,14 @@ body.pmk-hl-strong {
   padding: 4px 10px;
 }
 
-.pmk-settings-close:hover {
+.pmk-settings-close:hover,
+.pmk-drawer-close:hover {
   background-color: var(--pmk-topbar-btn-hover-bg);
   color: var(--pmk-color-fg);
 }
 
 .pmk-settings-close:focus-visible,
+.pmk-drawer-close:focus-visible,
 .pmk-settings-option:focus-visible,
 .pmk-settings-line-height:focus-visible {
   outline: 2px solid var(--pmk-ui-focus);
@@ -1393,7 +1400,9 @@ body.pmk-hl-strong {
 /* The slide-in drawer panel — lives in <body>, slides in from the right edge. */
 .pmk-drawer {
   position: fixed;
-  top: 0;
+  /* Below the 40px sticky topbar (z-index 100), which would otherwise paint
+   * over the drawer header. Matches .pmk-settings-panel. */
+  top: 40px;
   right: 0;
   bottom: 0;
   z-index: 6;
@@ -1443,36 +1452,8 @@ body.pmk-hl-strong {
   }
 }
 
-.pmk-drawer-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--pmk-ui-border-muted);
-}
-.pmk-drawer-title {
-  font-weight: 600;
-  font-size: 13px;
-}
-.pmk-drawer-close {
-  appearance: none;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--pmk-color-fg-muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 3px 6px;
-}
-.pmk-drawer-close:hover {
-  background-color: var(--pmk-topbar-btn-hover-bg);
-}
-.pmk-drawer-close:focus-visible {
-  outline: 2px solid var(--pmk-ui-focus);
-  outline-offset: 1px;
-}
+/* .pmk-drawer-bar, .pmk-drawer-title and .pmk-drawer-close are styled with
+ * their .pmk-settings-* counterparts above. */
 
 .pmk-visually-hidden {
   position: absolute;

@@ -705,3 +705,13 @@ for (const theme of ["light", "dark"] as const) {
     });
   });
 }
+
+test("drawer header is not occluded by the topbar", async ({ page }) => {
+  await renderDoc(page, "light");
+  await page.locator("[data-pmk-topbar-control='comments']").click();
+  await expect(page.locator(".pmk-drawer")).toHaveAttribute("aria-hidden", "false");
+
+  const bar = await page.locator(".pmk-drawer-bar").boundingBox();
+  expect(bar).not.toBeNull();
+  expect(bar!.y).toBeGreaterThanOrEqual(40);
+});
