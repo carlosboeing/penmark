@@ -12,6 +12,7 @@ import {
   previewManager,
   pushConfiguredPreviewUpdates,
   enqueueMutation,
+  openPenmarkSettings,
 } from "./previewPanel.js";
 import type { PanelEntry } from "./previewPanel.js";
 
@@ -630,7 +631,9 @@ describe("openPenmarkSettings — host wiring", () => {
     } as unknown as vscode.WebviewPanel;
     const context = {
       extensionUri: vscode.Uri.file("/extension"),
+      extension: { id: "local.penmark-markdown-review" },
     } as vscode.ExtensionContext;
+    const query = "@ext:local.penmark-markdown-review";
 
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand");
     const openExternal = vi.spyOn(vscode.env, "openExternal");
@@ -640,7 +643,7 @@ describe("openPenmarkSettings — host wiring", () => {
 
       receiveMessage!({ v: 1, type: "openPenmarkSettings" });
       expect(executeCommand).toHaveBeenCalledTimes(1);
-      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "penmark");
+      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", query);
 
       executeCommand.mockClear();
       // Nearby URI-like fields must not redirect the fixed target, and a wrong
@@ -655,7 +658,7 @@ describe("openPenmarkSettings — host wiring", () => {
       receiveMessage!({ v: 2, type: "openPenmarkSettings" });
 
       expect(executeCommand).toHaveBeenCalledTimes(1);
-      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "penmark");
+      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", query);
       // No URI is ever built or opened for this message — the settings hand-off
       // must not depend on a product-specific vscode:// scheme.
       expect(openExternal).not.toHaveBeenCalled();
@@ -666,5 +669,52 @@ describe("openPenmarkSettings — host wiring", () => {
       workspace.onDidChangeConfiguration = originalConfigListener;
       window.onDidChangeTextEditorVisibleRanges = originalVisibleRangeListener;
     }
+  });
+});
+
+describe("openPenmarkSettings", () => {
+  it("targets the settings UI with an @ext: query derived from the extension id", async () => {
+    const calls: Array<[string, unknown]> = [];
+    const spy = vi
+      .spyOn(vscode.commands, "executeCommand")
+      .mockImplementation((id: string, arg?: unknown) => {
+        calls.push([id, arg]);
+        return Promise.resolve(undefined);
+      });
+
+    await openPenmarkSettings("local.penmark-markdown-review");
+
+    expect(calls).toEqual([
+      ["workbench.action.openSettings", "@ext:local.penmark-markdown-review"],
+    ]);
+    spy.mockRestore();
+  });
+
+  it("falls back to the JSON settings editor when the settings UI command rejects", async () => {
+    const calls: string[] = [];
+    const spy = vi.spyOn(vscode.commands, "executeCommand").mockImplementation((id: string) => {
+      calls.push(id);
+      if (id === "workbench.action.openSettings") return Promise.reject(new Error("no"));
+      return Promise.resolve(undefined);
+    });
+
+    await openPenmarkSettings();
+
+    expect(calls).toContain("workbench.action.openSettings");
+    expect(calls).toContain("workbench.action.openSettingsJson");
+    spy.mockRestore();
+  });
+
+  it("warns when every settings command rejects", async () => {
+    const spy = vi
+      .spyOn(vscode.commands, "executeCommand")
+      .mockRejectedValue(new Error("no such command"));
+    const warn = vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined);
+
+    await openPenmarkSettings();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    warn.mockRestore();
   });
 });

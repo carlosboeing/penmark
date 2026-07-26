@@ -31,7 +31,7 @@ import {
 } from "./comments.js";
 import { buildReviewPrompt } from "../core/comments/exportPrompt.js";
 import { exportDefaultsFromSettings } from "./exportSettings.js";
-import { logReconcileCorruption } from "./outputChannel.js";
+import { logReconcileCorruption, penmarkOutput } from "./outputChannel.js";
 
 // The markdown-it render stack (src/vscode/render.ts → markdown-it + plugins) is
 // LAZY-loaded so it is NOT evaluated at activation — keeping activate() within
@@ -662,6 +662,42 @@ export function enqueueMutation(entry: PanelEntry, op: () => Promise<void>): voi
     });
 }
 
+/**
+ * Open the native settings UI filtered to penmark.*.
+ *
+ * The target is FIXED — nothing from the webview message influences it, so a
+ * compromised webview cannot redirect the user.
+ *
+ * The `@ext:` query is the documented filter form and is confirmed working in
+ * Antigravity's settings editor, where the previous bare "penmark" query
+ * produced nothing at all. Every step is awaited and logged: the original bug
+ * was invisible for three rounds of investigation because the call discarded
+ * its promise with `void`.
+ */
+export async function openPenmarkSettings(extensionId?: string): Promise<void> {
+  const out = penmarkOutput();
+  const query = `@ext:${extensionId ?? "local.penmark-markdown-review"}`;
+  const attempts: Array<[string, string | undefined]> = [
+    ["workbench.action.openSettings", query],
+    ["workbench.action.openSettingsJson", undefined],
+  ];
+
+  for (const [command, arg] of attempts) {
+    try {
+      await (arg === undefined
+        ? vscode.commands.executeCommand(command)
+        : vscode.commands.executeCommand(command, arg));
+      return;
+    } catch (err) {
+      out.appendLine(`[settings] ${command} failed: ${String(err)}`);
+    }
+  }
+
+  void vscode.window.showWarningMessage(
+    'Penmark could not open the settings editor. Open Settings and search for "penmark".',
+  );
+}
+
 async function postRender(entry: PanelEntry, document: vscode.TextDocument): Promise<void> {
   // Track which document this panel is currently previewing so we can re-post
   // it when the webview signals `ready` (race-free handshake, T5).
@@ -808,13 +844,9 @@ function setupPanelEntry(
       }
 
       case "openPenmarkSettings": {
-        // Open the native settings UI filtered to penmark.*. The target is
-        // FIXED — any fields on the message are ignored, so a compromised
-        // webview cannot redirect the user to an arbitrary target. Uses the
-        // openSettings command rather than a vscode:// URI because the product
-        // URI scheme differs per IDE (cursor://, …); the command works
-        // identically in VS Code, Cursor, and Antigravity.
-        void vscode.commands.executeCommand("workbench.action.openSettings", "penmark");
+        // Any fields on the message are ignored — see openPenmarkSettings for
+        // why the target is fixed and how the fallback chain is logged.
+        void openPenmarkSettings(context.extension.id);
         break;
       }
 
