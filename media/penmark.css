@@ -36,6 +36,30 @@ body {
   --pmk-panel-width: clamp(260px, 40vw, 342px);
   background-color: var(--pmk-color-bg);
   color: var(--pmk-color-fg);
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Noto Sans",
+    Helvetica,
+    Arial,
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji";
+  font-size: 16px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Document typography. Scoped to the document surfaces so the topbar, panels
+ * and find surface keep the UI font — a reader's serif body font must not leak
+ * into the chrome. The card's own font-size is set in its rule below, because
+ * it carries a 0.9 ratio that a shared declaration here would lose to source
+ * order. */
+#penmark-root,
+.pmk-frontmatter-card {
   font-family: var(
     --pmk-font-family,
     -apple-system,
@@ -48,11 +72,11 @@ body {
     "Apple Color Emoji",
     "Segoe UI Emoji"
   );
-  font-size: var(--pmk-text-size-base, 16px);
   line-height: var(--pmk-line-height, 1.5);
-  word-wrap: break-word;
-  -ms-text-size-adjust: 100%;
-  -webkit-text-size-adjust: 100%;
+}
+
+#penmark-root {
+  font-size: var(--pmk-text-size-base, 16px);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1686,7 +1710,7 @@ body.pmk-hl-strong {
   border: 1px solid var(--pmk-ui-border-muted);
   border-radius: 8px;
   background-color: var(--pmk-ui-panel);
-  font-size: 0.9em;
+  font-size: calc(0.9 * var(--pmk-text-size-base, 16px));
 }
 
 .pmk-frontmatter-card summary {

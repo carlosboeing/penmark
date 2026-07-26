@@ -324,13 +324,8 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
       break;
   }
   _previewSettings = next;
-  const root = getRoot();
-  if (
-    root &&
-    (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth")
-  ) {
+  if (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth") {
     applyTypography(
-      root,
       resolveTypography({
         preset: next.preset,
         textSize: next.textSize,
@@ -738,7 +733,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       refreshTopbar();
 
       if (msg.typography) {
-        applyTypography(root, msg.typography);
+        applyTypography(msg.typography);
       }
       renderFrontmatterCard(msg.frontmatter);
       installTaskCheckboxHandler(root);
@@ -817,8 +812,7 @@ window.addEventListener("message", (event: MessageEvent) => {
     }
 
     case "setTypography": {
-      const root = getRoot();
-      if (root) applyTypography(root, msg.typography);
+      applyTypography(msg.typography);
       break;
     }
 

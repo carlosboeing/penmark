@@ -94,3 +94,57 @@ test("open-all settings button is styled, not a raw browser button", async ({ pa
   const radius = await button.evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
   expect(radius).not.toBe("0px");
 });
+
+test("text size changes body text, not only headings", async ({ page }) => {
+  await renderDoc(page, "light");
+  const paragraph = page.locator("#penmark-root p").first();
+  const before = await paragraph.evaluate((el) => getComputedStyle(el).fontSize);
+
+  await page.evaluate(() => {
+    (window as Window & { __harness?: Harness }).__harness!.injectMessage({
+      v: 1,
+      type: "setTypography",
+      typography: {
+        preset: "github",
+        textSize: "x-large",
+        fontFamily: "Georgia, serif",
+        headingFontFamily: "Georgia, serif",
+        lineHeight: 1.5,
+        contentWidth: "full",
+      },
+    });
+  });
+
+  const after = await paragraph.evaluate((el) => getComputedStyle(el).fontSize);
+  expect(after).not.toBe(before);
+  expect(after).toBe("20px");
+});
+
+test("document font does not leak into the chrome", async ({ page }) => {
+  await renderDoc(page, "light");
+  await page.evaluate(() => {
+    (window as Window & { __harness?: Harness }).__harness!.injectMessage({
+      v: 1,
+      type: "setTypography",
+      typography: {
+        preset: "reading",
+        textSize: "large",
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        headingFontFamily: "system-ui, sans-serif",
+        lineHeight: 1.7,
+        contentWidth: "comfortable",
+      },
+    });
+  });
+
+  const body = await page
+    .locator("#penmark-root p")
+    .first()
+    .evaluate((el) => getComputedStyle(el).fontFamily);
+  const chrome = await page
+    .locator("#penmark-topbar")
+    .evaluate((el) => getComputedStyle(el).fontFamily);
+
+  expect(body).toContain("Georgia");
+  expect(chrome).not.toContain("Georgia");
+});
