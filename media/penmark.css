@@ -146,7 +146,11 @@ body {
   background-color: var(--pmk-topbar-btn-hover-bg);
 }
 
-.pmk-topbar-btn[data-active="true"] {
+/* Topbar toggles report state through aria-pressed (Search) or aria-expanded
+ * (Settings, Comments). A previous `data-active` selector matched nothing —
+ * no code ever set that attribute on a topbar button. */
+.pmk-topbar-btn[aria-pressed="true"],
+.pmk-topbar-btn[aria-expanded="true"] {
   background-color: var(--pmk-topbar-btn-active-bg);
   border-color: var(--pmk-topbar-btn-active-fg);
   color: var(--pmk-topbar-btn-active-fg);
@@ -218,6 +222,14 @@ body {
 
 .pmk-find-surface button:hover {
   background-color: var(--pmk-copy-btn-hover-bg);
+}
+
+/* Toggle buttons inside the find surface (match case) report aria-pressed;
+ * this is what paints it. Same three tokens as .pmk-settings-option. */
+.pmk-find-surface button[aria-pressed="true"] {
+  color: var(--pmk-topbar-btn-active-fg);
+  background-color: var(--pmk-topbar-btn-active-bg);
+  border-color: var(--pmk-topbar-btn-active-fg);
 }
 
 .pmk-find-input:focus-visible,

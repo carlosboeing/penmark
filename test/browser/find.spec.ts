@@ -44,3 +44,28 @@ test("openFind host message opens the in-preview search surface", async ({ page 
   await expect(page.locator(".pmk-find-surface")).toHaveAttribute("aria-hidden", "false");
   await expect(page.locator(".pmk-find-input")).toBeFocused();
 });
+
+test("match case button paints an active state when pressed", async ({ page }) => {
+  await renderDoc(page);
+  await page.locator("[data-pmk-topbar-control='find']").click();
+
+  const caseToggle = page.locator(".pmk-find-surface button[aria-label='Match case']");
+  const activeBg = await page.evaluate(() =>
+    getComputedStyle(document.body).getPropertyValue("--pmk-topbar-btn-active-bg").trim(),
+  );
+
+  // The pointer must be parked away from the button before every read: clicking
+  // leaves it hovering, and the hover rule alone changes the background, which
+  // would make this pass against a build that paints no pressed state at all.
+  await page.mouse.move(0, 0);
+  const unpressedBg = await caseToggle.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  await caseToggle.click();
+  await expect(caseToggle).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.move(0, 0);
+  const pressedBg = await caseToggle.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  expect(pressedBg).not.toBe(unpressedBg);
+  expect(activeBg).not.toBe("");
+  expect(pressedBg).toBe("rgb(221, 244, 255)"); // --pmk-topbar-btn-active-bg, light theme
+});

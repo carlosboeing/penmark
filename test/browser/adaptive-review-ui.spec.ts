@@ -560,3 +560,23 @@ test("golden: comments panel at narrow width", async ({ page }) => {
     maxDiffPixelRatio: 0,
   });
 });
+
+test("topbar toggles paint an active state while their surface is open", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await renderReviewFixture(page);
+
+  const settings = page.locator("[data-pmk-topbar-control='settings']");
+  // Park the pointer away from the button for every read: clicking leaves it
+  // hovering, and the hover rule alone changes the background, which would make
+  // this pass against a build that paints no active state at all.
+  await page.mouse.move(0, 0);
+  const closedBg = await settings.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  await settings.click();
+  await expect(settings).toHaveAttribute("aria-expanded", "true");
+  await page.mouse.move(0, 0);
+  const openBg = await settings.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  expect(openBg).not.toBe(closedBg);
+  expect(openBg).toBe("rgb(221, 244, 255)"); // --pmk-topbar-btn-active-bg, light theme
+});
