@@ -922,3 +922,64 @@ describe("main.ts message loop", () => {
     expect(document.querySelector(".pmk-find-surface")!.getAttribute("aria-hidden")).toBe("true");
   });
 });
+
+describe("preset ownership in the optimistic settings path", () => {
+  beforeEach(async () => {
+    clearMessages();
+    resetMockState();
+    document.body.innerHTML = '<div id="penmark-topbar"></div><div id="penmark-root"></div>';
+    await import("./main.js");
+    injectMessage({
+      v: 1,
+      type: "render",
+      html: "<p>Body</p>",
+      theme: "light",
+      docName: "test.md",
+      comments: [],
+      attention: 0,
+      settings: {
+        theme: "light",
+        preset: "github",
+        textSize: "medium",
+        contentWidth: "full",
+        codeBlockWrap: true,
+        highlightIntensity: "medium",
+        lineHeight: 0,
+      },
+    });
+    (document.querySelector(".pmk-topbar-settings") as HTMLButtonElement).click();
+  });
+
+  const pick = (control: string, value: string): void => {
+    const button = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(`[data-pmk-setting='${control}']`),
+    ).find((b) => b.getAttribute("data-value") === value);
+    if (!button) throw new Error(`no ${control} control for ${value}`);
+    button.click();
+  };
+
+  it("lets a newly picked preset supply the knobs it owns", () => {
+    // Reading owns textSize large. Picking Compact next must NOT keep large.
+    pick("preset", "reading");
+    expect(document.body.style.getPropertyValue("--pmk-text-size-base")).toBe("18px");
+
+    pick("preset", "compact");
+    expect(document.body.style.getPropertyValue("--pmk-text-size-base")).toBe("14px");
+  });
+
+  it("is idempotent when the same preset is picked twice", () => {
+    pick("preset", "focus");
+    const first = document.body.style.getPropertyValue("--pmk-text-size-base");
+    const firstLh = document.body.style.getPropertyValue("--pmk-line-height");
+
+    pick("preset", "focus");
+    expect(document.body.style.getPropertyValue("--pmk-text-size-base")).toBe(first);
+    expect(document.body.style.getPropertyValue("--pmk-line-height")).toBe(firstLh);
+  });
+
+  it("still honours an explicit text size picked after a preset", () => {
+    pick("preset", "compact");
+    pick("textSize", "x-large");
+    expect(document.body.style.getPropertyValue("--pmk-text-size-base")).toBe("20px");
+  });
+});

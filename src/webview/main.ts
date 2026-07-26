@@ -323,17 +323,31 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
       if (typeof value === "number" && Number.isFinite(value)) next.lineHeight = value;
       break;
   }
-  _previewSettings = next;
   if (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth") {
-    applyTypography(
-      resolveTypography({
-        preset: next.preset,
-        textSize: next.textSize,
-        lineHeight: next.lineHeight > 0 ? next.lineHeight : undefined,
-        contentWidth: next.contentWidth,
-      }),
-    );
+    // A preset owns textSize, contentWidth and lineHeight. When the user picks
+    // one, those knobs must be left undefined so the preset supplies them —
+    // exactly what the host does by clearing them. Passing the values carried
+    // in `next` would pin the outgoing preset's knobs onto the incoming one, so
+    // presets would appear to half-apply and re-picking one would shift the
+    // document again.
+    const ownedByPreset = key === "preset";
+    const resolved = resolveTypography({
+      preset: next.preset,
+      textSize: ownedByPreset ? undefined : next.textSize,
+      lineHeight: ownedByPreset || next.lineHeight <= 0 ? undefined : next.lineHeight,
+      contentWidth: ownedByPreset ? undefined : next.contentWidth,
+    });
+    // Mirror the resolved values back into panel state so the segmented
+    // controls highlight what the document is actually showing.
+    if (ownedByPreset) {
+      next.textSize = resolved.textSize;
+      next.contentWidth = resolved.contentWidth;
+      next.lineHeight = 0; // 0 means "unset — the preset decides", as in config.
+    }
+    applyTypography(resolved);
+    applyContentWidth(resolved.contentWidth);
   }
+  _previewSettings = next;
   renderSettingsPanel(next);
   if (key === "theme") {
     applyTheme(next.theme);
