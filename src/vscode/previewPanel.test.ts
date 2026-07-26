@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as vscode from "vscode";
+import { __setConfig } from "../../test/setup/vscode-mock.js";
 import {
   handleAddComment,
   handleResolveComment,
@@ -13,6 +14,8 @@ import {
   pushConfiguredPreviewUpdates,
   enqueueMutation,
   openPenmarkSettings,
+  configuredTypography,
+  configuredContentWidth,
 } from "./previewPanel.js";
 import type { PanelEntry } from "./previewPanel.js";
 
@@ -478,6 +481,11 @@ describe("handleUpdateSetting — preview settings panel host wiring", () => {
 
     expect(seam.workspace._configUpdates.map((u) => [u.key, u.value])).toEqual([
       ["preset", "reading"],
+      // Picking a preset clears the three knobs it owns, so a knob the user set
+      // earlier cannot keep overriding every preset they choose afterwards.
+      ["textSize", undefined],
+      ["contentWidth", undefined],
+      ["lineHeight", undefined],
       ["textSize", "large"],
       ["contentWidth", "comfortable"],
       ["comments.highlightIntensity", "strong"],
@@ -716,5 +724,42 @@ describe("openPenmarkSettings", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     spy.mockRestore();
     warn.mockRestore();
+  });
+});
+
+describe("preset resolution", () => {
+  beforeEach(() => {
+    seam.__resetConfig();
+    seam.workspace._configUpdates.length = 0;
+  });
+
+  it("lets the preset supply textSize when the knob is unset", () => {
+    __setConfig("penmark", { preset: "reading" });
+    expect(configuredTypography().textSize).toBe("large");
+  });
+
+  it("lets an explicitly set knob override the preset", () => {
+    __setConfig("penmark", { preset: "reading", textSize: "small" });
+    expect(configuredTypography().textSize).toBe("small");
+  });
+
+  it("resolves contentWidth from the preset for the shell class", () => {
+    __setConfig("penmark", { preset: "compact" });
+    expect(configuredContentWidth()).toBe("full");
+  });
+
+  it("clears the knobs a preset owns when the preset changes", async () => {
+    __setConfig("penmark", { textSize: "small", contentWidth: "wide", lineHeight: 1.9 });
+    await handleUpdateSetting("preset", "focus");
+
+    const cleared = seam.workspace._configUpdates
+      .filter((u) => u.value === undefined)
+      .map((u) => u.key);
+    expect(cleared).toEqual(expect.arrayContaining(["textSize", "contentWidth", "lineHeight"]));
+  });
+
+  it("does not clear knobs when a non-preset setting changes", async () => {
+    await handleUpdateSetting("textSize", "large");
+    expect(seam.workspace._configUpdates.filter((u) => u.value === undefined)).toHaveLength(0);
   });
 });

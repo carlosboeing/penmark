@@ -145,6 +145,15 @@ export const workspace = {
       get<T>(key: string, defaultValue?: T): T | undefined {
         return key in values ? (values[key] as T) : defaultValue;
       },
+      /**
+       * Only explicitly-set values, so callers can tell "user set this" from
+       * "this is the manifest default" — which is what lets a preset supply a
+       * value for an untouched knob. configStore only ever holds values a test
+       * set or an update() wrote, so presence in `values` is exactly that.
+       */
+      inspect<T>(key: string): { globalValue?: T; workspaceValue?: T; workspaceFolderValue?: T } {
+        return key in values ? { globalValue: values[key] as T } : {};
+      },
       update(key: string, value: unknown, target: unknown): Promise<void> {
         workspace._configUpdates.push({ section, key, value, target });
         values[key] = value;

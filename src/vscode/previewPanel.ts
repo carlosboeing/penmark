@@ -15,6 +15,7 @@ import type {
 import {
   resolveTypography,
   type PresetName,
+  type RawTypographyConfig,
   type TextSize,
   type TypographySettings,
 } from "../core/settings/typography.js";
@@ -163,8 +164,8 @@ function configuredScrollSync(): boolean {
  * class on the shell and live-updated via `setContentWidth` (see html.ts +
  * media/penmark.css).
  */
-function configuredContentWidth(): ContentWidth {
-  return vscode.workspace.getConfiguration("penmark").get<ContentWidth>("contentWidth", "full");
+export function configuredContentWidth(): ContentWidth {
+  return configuredTypography().contentWidth;
 }
 
 function configuredCodeBlockWrap(): boolean {
@@ -216,28 +217,61 @@ export async function handleUpdateSetting(
   await vscode.workspace
     .getConfiguration("penmark")
     .update(key, value, vscode.ConfigurationTarget.Global);
+
+  // A preset owns these three knobs. Without clearing them, an explicitly set
+  // knob overrides every preset forever, so presets appear to do nothing for
+  // anyone who has touched the settings panel.
+  if (key === "preset") {
+    const cfg = vscode.workspace.getConfiguration("penmark");
+    for (const owned of ["textSize", "contentWidth", "lineHeight"]) {
+      await cfg.update(owned, undefined, vscode.ConfigurationTarget.Global);
+    }
+  }
+}
+
+/**
+ * Raw typography config. Uses inspect() rather than get(key, default) because
+ * get() with a default ALWAYS returns a value, so a preset could never supply
+ * one — the bug this exists to fix. An undefined here means "user has not set
+ * this knob", which is what lets resolveTypography fall back to the preset.
+ */
+function rawTypographyConfig(): RawTypographyConfig {
+  const cfg = vscode.workspace.getConfiguration("penmark");
+  const explicit = <T>(key: string): T | undefined => {
+    const i = cfg.inspect<T>(key);
+    return i?.globalValue ?? i?.workspaceValue ?? i?.workspaceFolderValue;
+  };
+  const lineHeight = cfg.get<number>("lineHeight", 0);
+  return {
+    preset: cfg.get<PresetName>("preset", "github"),
+    textSize: explicit<TextSize>("textSize"),
+    contentWidth: explicit<ContentWidth>("contentWidth"),
+    fontFamily: cfg.get<string>("fontFamily", ""),
+    headingFontFamily: cfg.get<string>("headingFontFamily", ""),
+    lineHeight: lineHeight > 0 ? lineHeight : undefined,
+  };
 }
 
 /** Resolved typography from penmark.* settings (v1.0 polish). */
-function configuredTypography(): TypographySettings {
-  const settings = configuredPreviewSettings();
-  return resolveTypography({
-    ...settings,
-    lineHeight: settings.lineHeight > 0 ? settings.lineHeight : undefined,
-  });
+export function configuredTypography(): TypographySettings {
+  return resolveTypography(rawTypographyConfig());
 }
 
+/**
+ * The dependency runs raw reader -> configuredTypography -> here. It must not
+ * become circular: configuredTypography no longer calls this.
+ */
 function configuredPreviewSettings(): PreviewSettingsState {
   const cfg = vscode.workspace.getConfiguration("penmark");
-  const lineHeight = cfg.get<number>("lineHeight", 0);
+  const typography = configuredTypography();
   return {
     theme: configuredTheme(),
-    preset: cfg.get<PresetName>("preset", "github"),
-    textSize: cfg.get<TextSize>("textSize", "medium"),
-    contentWidth: configuredContentWidth(),
+    preset: typography.preset,
+    textSize: typography.textSize,
+    contentWidth: typography.contentWidth,
     codeBlockWrap: configuredCodeBlockWrap(),
     highlightIntensity: configuredHighlightIntensity(),
-    lineHeight,
+    lineHeight: cfg.get<number>("lineHeight", 0),
   };
 }
 
