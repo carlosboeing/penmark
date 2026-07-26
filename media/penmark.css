@@ -1397,6 +1397,34 @@ body.pmk-hl-strong {
   font-size: 12px;
 }
 
+/* Full-width secondary action at the foot of the settings panel. Hands off to
+ * the host, which opens the native settings UI filtered to penmark.*. */
+.pmk-settings-open-all {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  box-sizing: border-box;
+  color: var(--pmk-color-fg);
+  background-color: var(--pmk-copy-btn-bg);
+  border: 1px solid var(--pmk-ui-border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pmk-settings-open-all:hover {
+  background-color: var(--pmk-topbar-btn-hover-bg);
+}
+
+.pmk-settings-open-all:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 1px;
+}
+
 /* The slide-in drawer panel — lives in <body>, slides in from the right edge. */
 .pmk-drawer {
   position: fixed;

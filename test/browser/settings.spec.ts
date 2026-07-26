@@ -83,3 +83,14 @@ test("settings panel posts updates and applies immediate preview feedback", asyn
     value: "strong",
   });
 });
+
+test("open-all settings button is styled, not a raw browser button", async ({ page }) => {
+  await renderDoc(page, "light");
+  await page.locator(".pmk-topbar-settings").click();
+
+  const button = page.locator(".pmk-settings-open-all");
+  await expect(button).toBeVisible();
+
+  const radius = await button.evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
+  expect(radius).not.toBe("0px");
+});
