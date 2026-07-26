@@ -344,16 +344,25 @@ test("at 900px both panels overlay without reserving document padding", async ({
   expect(await page.evaluate(() => parseFloat(getComputedStyle(document.body).paddingRight))).toBe(0);
 });
 
-test("at 620px the open comments panel spans calc(100vw - 24px)", async ({ page }) => {
+test("at 620px the comments panel leaves the document visible beside it", async ({ page }) => {
   await page.setViewportSize({ width: 620, height: 900 });
   await renderLayoutFixture(page);
-
   await openCommentsPanel(page);
-  const geom = await page.evaluate(() => ({
-    width: document.querySelector(".pmk-drawer")!.getBoundingClientRect().width,
-    expected: document.documentElement.clientWidth - 24,
-  }));
-  expect(Math.abs(geom.width - geom.expected)).toBeLessThanOrEqual(1);
+
+  const box = await page.locator(".pmk-drawer").boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(255);
+  expect(box!.width).toBeLessThanOrEqual(275);
+});
+
+test("at 480px both panels dock to the bottom as a full-width sheet", async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 800 });
+  await renderLayoutFixture(page);
+  await openCommentsPanel(page);
+
+  const box = await page.locator(".pmk-drawer").boundingBox();
+  expect(box!.width).toBe(480);
+  expect(box!.y).toBeGreaterThan(200);
+  await expect(page.locator("#penmark-topbar")).toBeVisible();
 });
 
 test("panels use no scrim and preserve the live root without re-rendering", async ({ page }) => {
@@ -559,4 +568,24 @@ test("golden: comments panel at narrow width", async ({ page }) => {
   await expect(page).toHaveScreenshot("adaptive-comments-narrow.png", {
     maxDiffPixelRatio: 0,
   });
+});
+
+test("topbar toggles paint an active state while their surface is open", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await renderReviewFixture(page);
+
+  const settings = page.locator("[data-pmk-topbar-control='settings']");
+  // Park the pointer away from the button for every read: clicking leaves it
+  // hovering, and the hover rule alone changes the background, which would make
+  // this pass against a build that paints no active state at all.
+  await page.mouse.move(0, 0);
+  const closedBg = await settings.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  await settings.click();
+  await expect(settings).toHaveAttribute("aria-expanded", "true");
+  await page.mouse.move(0, 0);
+  const openBg = await settings.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  expect(openBg).not.toBe(closedBg);
+  expect(openBg).toBe("rgb(221, 244, 255)"); // --pmk-topbar-btn-active-bg, light theme
 });

@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as vscode from "vscode";
+import { __setConfig } from "../../test/setup/vscode-mock.js";
 import {
   handleAddComment,
   handleResolveComment,
@@ -12,6 +13,10 @@ import {
   previewManager,
   pushConfiguredPreviewUpdates,
   enqueueMutation,
+  openPenmarkSettings,
+  configuredTypography,
+  configuredContentWidth,
+  hostSupportsSettingsUi,
 } from "./previewPanel.js";
 import type { PanelEntry } from "./previewPanel.js";
 
@@ -477,6 +482,11 @@ describe("handleUpdateSetting — preview settings panel host wiring", () => {
 
     expect(seam.workspace._configUpdates.map((u) => [u.key, u.value])).toEqual([
       ["preset", "reading"],
+      // Picking a preset clears the three knobs it owns, so a knob the user set
+      // earlier cannot keep overriding every preset they choose afterwards.
+      ["textSize", undefined],
+      ["contentWidth", undefined],
+      ["lineHeight", undefined],
       ["textSize", "large"],
       ["contentWidth", "comfortable"],
       ["comments.highlightIntensity", "strong"],
@@ -630,7 +640,9 @@ describe("openPenmarkSettings — host wiring", () => {
     } as unknown as vscode.WebviewPanel;
     const context = {
       extensionUri: vscode.Uri.file("/extension"),
+      extension: { id: "local.penmark-markdown-review" },
     } as vscode.ExtensionContext;
+    const query = "@ext:local.penmark-markdown-review";
 
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand");
     const openExternal = vi.spyOn(vscode.env, "openExternal");
@@ -640,7 +652,7 @@ describe("openPenmarkSettings — host wiring", () => {
 
       receiveMessage!({ v: 1, type: "openPenmarkSettings" });
       expect(executeCommand).toHaveBeenCalledTimes(1);
-      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "penmark");
+      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", query);
 
       executeCommand.mockClear();
       // Nearby URI-like fields must not redirect the fixed target, and a wrong
@@ -655,7 +667,7 @@ describe("openPenmarkSettings — host wiring", () => {
       receiveMessage!({ v: 2, type: "openPenmarkSettings" });
 
       expect(executeCommand).toHaveBeenCalledTimes(1);
-      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "penmark");
+      expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", query);
       // No URI is ever built or opened for this message — the settings hand-off
       // must not depend on a product-specific vscode:// scheme.
       expect(openExternal).not.toHaveBeenCalled();
@@ -666,5 +678,126 @@ describe("openPenmarkSettings — host wiring", () => {
       workspace.onDidChangeConfiguration = originalConfigListener;
       window.onDidChangeTextEditorVisibleRanges = originalVisibleRangeListener;
     }
+  });
+});
+
+describe("openPenmarkSettings", () => {
+  it("targets the settings UI with an @ext: query derived from the extension id", async () => {
+    const calls: Array<[string, unknown]> = [];
+    const spy = vi
+      .spyOn(vscode.commands, "executeCommand")
+      .mockImplementation((id: string, arg?: unknown) => {
+        calls.push([id, arg]);
+        return Promise.resolve(undefined);
+      });
+
+    await openPenmarkSettings("local.penmark-markdown-review");
+
+    expect(calls).toEqual([
+      ["workbench.action.openSettings", "@ext:local.penmark-markdown-review"],
+    ]);
+    spy.mockRestore();
+  });
+
+  it("falls back to the JSON settings editor when the settings UI command rejects", async () => {
+    const calls: string[] = [];
+    const spy = vi.spyOn(vscode.commands, "executeCommand").mockImplementation((id: string) => {
+      calls.push(id);
+      if (id === "workbench.action.openSettings") return Promise.reject(new Error("no"));
+      return Promise.resolve(undefined);
+    });
+
+    await openPenmarkSettings();
+
+    expect(calls).toContain("workbench.action.openSettings");
+    expect(calls).toContain("workbench.action.openSettingsJson");
+    spy.mockRestore();
+  });
+
+  it("warns when every settings command rejects", async () => {
+    const spy = vi
+      .spyOn(vscode.commands, "executeCommand")
+      .mockRejectedValue(new Error("no such command"));
+    const warn = vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined);
+
+    await openPenmarkSettings();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    warn.mockRestore();
+  });
+});
+
+describe("preset resolution", () => {
+  beforeEach(() => {
+    seam.__resetConfig();
+    seam.workspace._configUpdates.length = 0;
+  });
+
+  it("lets the preset supply textSize when the knob is unset", () => {
+    __setConfig("penmark", { preset: "reading" });
+    expect(configuredTypography().textSize).toBe("large");
+  });
+
+  it("lets an explicitly set knob override the preset", () => {
+    __setConfig("penmark", { preset: "reading", textSize: "small" });
+    expect(configuredTypography().textSize).toBe("small");
+  });
+
+  it("resolves contentWidth from the preset for the shell class", () => {
+    __setConfig("penmark", { preset: "compact" });
+    expect(configuredContentWidth()).toBe("full");
+  });
+
+  it("clears the knobs a preset owns when the preset changes", async () => {
+    __setConfig("penmark", { textSize: "small", contentWidth: "wide", lineHeight: 1.9 });
+    await handleUpdateSetting("preset", "focus");
+
+    const cleared = seam.workspace._configUpdates
+      .filter((u) => u.value === undefined)
+      .map((u) => u.key);
+    expect(cleared).toEqual(expect.arrayContaining(["textSize", "contentWidth", "lineHeight"]));
+  });
+
+  it("does not clear knobs when a non-preset setting changes", async () => {
+    await handleUpdateSetting("textSize", "large");
+    expect(seam.workspace._configUpdates.filter((u) => u.value === undefined)).toHaveLength(0);
+  });
+});
+
+describe("settings-UI capability by host", () => {
+  const env = vscode.env as unknown as { appName: string; uriScheme: string };
+  const original = { appName: env.appName, uriScheme: env.uriScheme };
+  afterEach(() => {
+    env.appName = original.appName;
+    env.uriScheme = original.uriScheme;
+  });
+
+  it("advertises the settings UI in VS Code", () => {
+    env.appName = "Visual Studio Code";
+    env.uriScheme = "vscode";
+    expect(hostSupportsSettingsUi()).toBe(true);
+  });
+
+  it("advertises the settings UI in Cursor", () => {
+    env.appName = "Cursor";
+    env.uriScheme = "cursor";
+    expect(hostSupportsSettingsUi()).toBe(true);
+  });
+
+  it("withholds it in Antigravity, by appName or by uriScheme", () => {
+    env.appName = "Antigravity";
+    env.uriScheme = "vscode";
+    expect(hostSupportsSettingsUi()).toBe(false);
+
+    env.appName = "Some Fork";
+    env.uriScheme = "antigravity";
+    expect(hostSupportsSettingsUi()).toBe(false);
+  });
+
+  it("defaults to advertising it when the host reports nothing", () => {
+    env.appName = "";
+    env.uriScheme = "";
+    expect(hostSupportsSettingsUi()).toBe(true);
   });
 });

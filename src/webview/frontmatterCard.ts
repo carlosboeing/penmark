@@ -6,7 +6,7 @@ import type { FrontmatterFields } from "../core/render/frontmatter.js";
 
 const CARD_ID = "pmk-frontmatter-card";
 
-const PRIORITY_KEYS = ["title", "status", "date", "author", "tags"];
+const PRIORITY_KEYS = ["title", "status", "date", "author", "authors", "tags"];
 
 function formatValue(value: string | string[] | undefined): string {
   if (value === undefined) return "";
@@ -60,10 +60,14 @@ export function renderFrontmatterCard(fields: FrontmatterFields | undefined): vo
   const dl = document.createElement("dl");
   dl.className = "pmk-frontmatter-fields";
   for (const key of keys) {
+    // Skip keys with no value, so a genuinely empty key no longer renders as a
+    // bare label with nothing beside it.
+    const value = formatValue(fields[key]);
+    if (!value) continue;
     const dt = document.createElement("dt");
     dt.textContent = key;
     const dd = document.createElement("dd");
-    dd.textContent = formatValue(fields[key]);
+    dd.textContent = value;
     dl.append(dt, dd);
   }
   details.appendChild(dl);

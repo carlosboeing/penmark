@@ -25,27 +25,53 @@ export interface FrontmatterFields {
 
 /**
  * Parse common YAML frontmatter fields (line-oriented, no full YAML engine).
- * Supports `key: value` scalars and `tags: [a, b]` inline lists.
+ *
+ * Supported: `key: value` scalars, `key: [a, b]` inline lists, and block
+ * sequences of scalars:
+ *
+ *     authors:
+ *       - Carlos Boeing
+ *       - claude-opus-5
+ *
+ * NOT supported, deliberately: nested maps, multiline scalars (`|`, `>`),
+ * anchors, aliases. A real YAML engine would handle those, but bundle size is a
+ * project requirement and js-yaml costs roughly 30KB to serve shapes this
+ * codebase does not use.
  */
 export function parseFrontmatterFields(raw: string | null): FrontmatterFields {
   if (!raw) return {};
   const fields: FrontmatterFields = {};
+  const unquote = (s: string): string => s.trim().replace(/^['"]|['"]$/g, "");
+  let sequenceKey: string | null = null;
+
   for (const line of raw.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
+
+    // A block-sequence item continues the key that opened with an empty value.
+    const item = /^-\s+(.*)$/.exec(trimmed);
+    if (item && sequenceKey) {
+      const list = Array.isArray(fields[sequenceKey]) ? (fields[sequenceKey] as string[]) : [];
+      const value = unquote(item[1] ?? "");
+      if (value) fields[sequenceKey] = [...list, value];
+      continue;
+    }
+
     const m = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(trimmed);
     if (!m) continue;
     const key = m[1] as string;
     const value = (m[2] ?? "").trim();
+
     if (value.startsWith("[") && value.endsWith("]")) {
-      const items = value
-        .slice(1, -1)
-        .split(",")
-        .map((s) => s.trim().replace(/^['"]|['"]$/g, ""))
-        .filter(Boolean);
-      fields[key] = items;
+      sequenceKey = null;
+      fields[key] = value.slice(1, -1).split(",").map(unquote).filter(Boolean);
+    } else if (value === "") {
+      // May open a block sequence. Stays "" if no items follow.
+      sequenceKey = key;
+      fields[key] = "";
     } else {
-      fields[key] = value.replace(/^['"]|['"]$/g, "");
+      sequenceKey = null;
+      fields[key] = unquote(value);
     }
   }
   return fields;

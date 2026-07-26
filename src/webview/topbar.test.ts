@@ -75,18 +75,18 @@ describe("installTopbar", () => {
     expect(onToggleSettings).toHaveBeenCalledTimes(1);
   });
 
-  it("renders a Search control that reports its active state and opens the find surface", () => {
-    const onOpenFind = vi.fn();
+  it("renders a Search control that reports its active state and toggles the find surface", () => {
+    const onToggleFind = vi.fn();
     installTopbar(topbar(), "test.md", undefined, undefined, undefined, undefined, {
       open: true,
-      onOpenFind,
+      onToggleFind,
     });
 
     const search = topbar().querySelector(".pmk-topbar-find") as HTMLButtonElement;
     expect(search.getAttribute("aria-label")).toBe("Search document");
     expect(search.getAttribute("aria-pressed")).toBe("true");
     search.click();
-    expect(onOpenFind).toHaveBeenCalledOnce();
+    expect(onToggleFind).toHaveBeenCalledOnce();
   });
 
   it("uses aria-hidden bundled SVGs while button names remain independent of labels", () => {

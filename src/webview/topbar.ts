@@ -65,7 +65,7 @@ export interface TopbarExportOpts {
 
 export interface TopbarFindOpts {
   open: boolean;
-  onOpenFind: () => void;
+  onToggleFind: () => void;
 }
 
 export function installTopbar(
@@ -147,7 +147,7 @@ export function installTopbar(
     nameButton(button, "Search document");
     button.setAttribute("aria-pressed", String(findOpts.open));
     button.append(staticIcon(ICON_PATHS.find), visibleLabel("Search"));
-    button.addEventListener("click", () => findOpts.onOpenFind());
+    button.addEventListener("click", () => findOpts.onToggleFind());
     actions.appendChild(button);
   }
 

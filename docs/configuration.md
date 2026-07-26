@@ -2,9 +2,9 @@
 
 Penmark is configured through standard editor settings (the Settings UI, or `settings.json`). All settings live under the `penmark.*` namespace. They can be set at user or workspace scope, and apply to the preview the next time it is opened.
 
-The preview top bar also includes **Preview settings**, a webview-native panel for the most common reading controls (theme, typography preset, text size, content width, code wrapping, comment-highlight intensity). Changes made there are persisted to the same `penmark.*` settings and reflected in the open preview immediately where possible. An **Open all Penmark settings** link at the bottom of the panel opens the full Settings UI filtered to `penmark.*` for less-common options like font family and line height.
+The preview top bar also includes **Preview settings**, a webview-native panel for the most common reading controls (theme, typography preset, text size, content width, code wrapping, comment-highlight intensity). Changes made there are persisted to the same `penmark.*` settings and reflected in the open preview immediately where possible. An **Open all Penmark settings** link at the bottom of the panel opens the full Settings UI filtered to `penmark.*` for less-common options like font family and line height. The link is not shown in Antigravity, where the settings command never surfaces an editor — open Settings there yourself and search for "penmark".
 
-The Settings panel and comments drawer are adaptive side surfaces. At 1050px or wider the open Comments drawer reserves 342px of layout space beside the document (Settings always overlays, at any width); below 1050px both panels overlay the content; below 700px the open panel takes near the full viewport width. Only one of those panels is open at a time, and the document root persists across every open/close — no re-render. The Search surface joins the same lifecycle coordinator, so `Esc` closes the topmost open Penmark surface and returns focus to the control that opened it. If your OS is set to reduce motion, Penmark's own panel, control, highlight transitions, and search navigation scroll skip animation — native Find and dialogs are unaffected. Search has no setting: open it from the top bar or `penmark.find` command.
+The Settings panel and comments drawer are adaptive side surfaces. At 1050px or wider the open Comments drawer reserves 342px of layout space beside the document (Settings always overlays, at any width); below 1050px both panels overlay the content, narrowing proportionally so the document stays visible beside them; below 560px both dock to the bottom as a sheet, leaving the top of the document readable above. Only one of those panels is open at a time, and the document root persists across every open/close — no re-render. The Search surface joins the same lifecycle coordinator, so `Esc` closes the topmost open Penmark surface and returns focus to the control that opened it. If your OS is set to reduce motion, Penmark's own panel, control, highlight transitions, and search navigation scroll skip animation — native Find and dialogs are unaffected. Search has no setting: open it from the top bar or `penmark.find` command.
 
 ## Settings
 
@@ -16,7 +16,7 @@ The Settings panel and comments drawer are adaptive side surfaces. At 1050px or 
 | `penmark.contentWidth` | `comfortable` \| `wide` \| `full` | `full` | How wide the content column may grow. All options stay responsive and shrink to fit a narrow pane; this only caps the maximum width. |
 | `penmark.codeBlockWrap` | boolean | `true` | Visually wrap long lines in fenced code blocks. Disable to preserve horizontal layout and scrolling. |
 | `penmark.comments.highlightIntensity` | `subtle` \| `medium` \| `strong` | `medium` | How strongly commented spans are tinted. Highlights are always shown when comments exist; this only sets the intensity. Applied when the preview is (re)opened. |
-| `penmark.preset` | `github` \| `reading` \| `compact` \| `focus` \| `print` \| `custom` | `github` | Typography preset bundling font, size, line height, and content width. |
+| `penmark.preset` | `github` \| `reading` \| `compact` \| `focus` \| `custom` | `github` | Typography preset bundling font, size, line height, heading scale, and content width. Picking one clears `textSize`, `contentWidth` and `lineHeight` so the preset can supply them. |
 | `penmark.textSize` | `small` \| `medium` \| `large` \| `x-large` | `medium` | Body text size; heading sizes scale proportionally. |
 | `penmark.fontFamily` | string | `""` | CSS `font-family` for body text. Empty uses the preset default. |
 | `penmark.headingFontFamily` | string | `""` | CSS `font-family` for headings. Empty uses the preset default. |
@@ -43,12 +43,19 @@ The Settings panel and comments drawer are adaptive side surfaces. At 1050px or 
 
 ### `penmark.preset` values
 
-- `github` — match the GitHub/built-in preview reading experience (default).
-- `reading` — serif body, larger text, relaxed line height.
-- `compact` — dense layout for reference docs.
-- `focus` — narrow measure, large text for distraction-free reading.
-- `print` — high-contrast conservative type.
-- `custom` — individual knobs below take effect.
+Each preset sets body size, line height, body and heading fonts, column width, and a heading scale that controls how strongly headings stand out. Every preset differs from every other on at least two of those.
+
+| Preset | Best for | Body | Body size | Line height | Column | h1 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `github` | Seeing the document as it reads on GitHub (default) | System sans | 16px | 1.5 | Full | 32px |
+| `reading` | Reading long-form prose end to end | Georgia serif | 18px | 1.75 | Comfortable | 36px |
+| `compact` | Skimming a long, dense technical document | System sans | 14px | 1.3 | Full | 22px |
+| `focus` | A narrow pane, or reading at a distance | System sans | 20px | 1.65 | Comfortable | 48px |
+| `custom` | Individual knobs below take effect | — | — | — | — | — |
+
+Picking a preset clears `penmark.textSize`, `penmark.contentWidth` and `penmark.lineHeight`, so the preset can supply them. Setting any of those afterwards overrides the preset for that knob alone.
+
+`print` was removed: export is a separate always-light pipeline with its own `penmark.export.*` settings, so a print *preview* preset duplicated it. An existing `print` value falls back to `github`.
 
 ## Keyboard shortcuts (preview webview)
 
@@ -78,4 +85,4 @@ When the preview panel has focus:
 
 Workspace settings (`.vscode/settings.json`) override user settings, so you can pin a per-project preview style.
 
-Theme, content width, typography preset, text size, code wrapping, and highlight intensity are exposed in the preview settings panel for quick adjustment; line height and other less-common options are one click away via the panel's "Open all Penmark settings" link. Settings changed outside the preview generally take effect when the preview is next opened. If a change does not appear, close and reopen the Penmark preview.
+Theme, content width, typography preset, text size, code wrapping, and highlight intensity are exposed in the preview settings panel for quick adjustment; line height and other less-common options are one click away via the panel's "Open all Penmark settings" link (absent in Antigravity — open Settings and search for "penmark"). Settings changed outside the preview generally take effect when the preview is next opened. If a change does not appear, close and reopen the Penmark preview.

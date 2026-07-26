@@ -2,7 +2,7 @@
   "name": "penmark-markdown-review",
   "displayName": "Penmark — Markdown Review Comments & Preview",
   "description": "Markdown preview with inline review comments — Google-Docs-style commenting on rendered markdown, built for reviewing AI-authored docs in the IDE.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -105,7 +105,6 @@
             "reading",
             "compact",
             "focus",
-            "print",
             "custom"
           ],
           "default": "github",

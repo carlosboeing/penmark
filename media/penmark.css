@@ -30,8 +30,36 @@ body {
   position: relative;
   --pmk-document-gutter: clamp(20px, 5vw, 64px);
   --pmk-document-block-space: 32px;
+  /* Shared by the settings panel, the comments drawer, and the document space
+   * reserved for an open drawer, so the push distance and the panel width
+   * cannot disagree. No change at 1280px; 260px at 620px. */
+  --pmk-panel-width: clamp(260px, 40vw, 342px);
   background-color: var(--pmk-color-bg);
   color: var(--pmk-color-fg);
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Noto Sans",
+    Helvetica,
+    Arial,
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji";
+  font-size: 16px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Document typography. Scoped to the document surfaces so the topbar, panels
+ * and find surface keep the UI font — a reader's serif body font must not leak
+ * into the chrome. The card's own font-size is set in its rule below, because
+ * it carries a 0.9 ratio that a shared declaration here would lose to source
+ * order. */
+#penmark-root,
+.pmk-frontmatter-card {
   font-family: var(
     --pmk-font-family,
     -apple-system,
@@ -44,11 +72,11 @@ body {
     "Apple Color Emoji",
     "Segoe UI Emoji"
   );
-  font-size: var(--pmk-text-size-base, 16px);
   line-height: var(--pmk-line-height, 1.5);
-  word-wrap: break-word;
-  -ms-text-size-adjust: 100%;
-  -webkit-text-size-adjust: 100%;
+}
+
+#penmark-root {
+  font-size: var(--pmk-text-size-base, 16px);
 }
 
 /* ---------------------------------------------------------------------------
@@ -146,7 +174,11 @@ body {
   background-color: var(--pmk-topbar-btn-hover-bg);
 }
 
-.pmk-topbar-btn[data-active="true"] {
+/* Topbar toggles report state through aria-pressed (Search) or aria-expanded
+ * (Settings, Comments). A previous `data-active` selector matched nothing —
+ * no code ever set that attribute on a topbar button. */
+.pmk-topbar-btn[aria-pressed="true"],
+.pmk-topbar-btn[aria-expanded="true"] {
   background-color: var(--pmk-topbar-btn-active-bg);
   border-color: var(--pmk-topbar-btn-active-fg);
   color: var(--pmk-topbar-btn-active-fg);
@@ -220,6 +252,14 @@ body {
   background-color: var(--pmk-copy-btn-hover-bg);
 }
 
+/* Toggle buttons inside the find surface (match case) report aria-pressed;
+ * this is what paints it. Same three tokens as .pmk-settings-option. */
+.pmk-find-surface button[aria-pressed="true"] {
+  color: var(--pmk-topbar-btn-active-fg);
+  background-color: var(--pmk-topbar-btn-active-bg);
+  border-color: var(--pmk-topbar-btn-active-fg);
+}
+
 .pmk-find-input:focus-visible,
 .pmk-find-surface button:focus-visible {
   outline: 2px solid var(--pmk-ui-focus);
@@ -273,7 +313,7 @@ body {
 #penmark-root {
   padding: var(--pmk-document-block-space) var(--pmk-document-gutter);
   width: 100%;
-  max-width: 1600px;
+  max-width: var(--pmk-content-max-width, 1600px);
   margin: 0 auto;
 }
 
@@ -292,16 +332,19 @@ body {
   }
 }
 
-body.pmk-content-comfortable #penmark-root {
-  max-width: 860px;
+/* One property, two boxes. The frontmatter card is a SIBLING of #penmark-root,
+ * so a `body.pmk-content-* #penmark-root` descendant rule could never reach it
+ * and the card stayed at the full-width cap while the prose narrowed. */
+body.pmk-content-comfortable {
+  --pmk-content-max-width: 860px;
 }
 
-body.pmk-content-wide #penmark-root {
-  max-width: 1200px;
+body.pmk-content-wide {
+  --pmk-content-max-width: 1200px;
 }
 
-body.pmk-content-full #penmark-root {
-  max-width: 1600px;
+body.pmk-content-full {
+  --pmk-content-max-width: 1600px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1249,8 +1292,7 @@ body.pmk-hl-strong {
   right: 0;
   bottom: 0;
   z-index: 7;
-  width: 342px;
-  max-width: calc(100vw - 24px);
+  width: var(--pmk-panel-width);
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-ui-elevated);
@@ -1265,7 +1307,10 @@ body.pmk-hl-strong {
   transform: translateX(0);
 }
 
-.pmk-settings-head {
+/* The settings panel and the comments drawer share one header treatment.
+ * Selector lists rather than duplicated blocks, so the two cannot drift. */
+.pmk-settings-head,
+.pmk-drawer-bar {
   flex: none;
   display: flex;
   align-items: center;
@@ -1275,12 +1320,14 @@ body.pmk-hl-strong {
   border-bottom: 1px solid var(--pmk-ui-border-muted);
 }
 
-.pmk-settings-title {
+.pmk-settings-title,
+.pmk-drawer-title {
   font-size: 13px;
   font-weight: 650;
 }
 
-.pmk-settings-close {
+.pmk-settings-close,
+.pmk-drawer-close {
   appearance: none;
   cursor: pointer;
   font: inherit;
@@ -1292,12 +1339,14 @@ body.pmk-hl-strong {
   padding: 4px 10px;
 }
 
-.pmk-settings-close:hover {
+.pmk-settings-close:hover,
+.pmk-drawer-close:hover {
   background-color: var(--pmk-topbar-btn-hover-bg);
   color: var(--pmk-color-fg);
 }
 
 .pmk-settings-close:focus-visible,
+.pmk-drawer-close:focus-visible,
 .pmk-settings-option:focus-visible,
 .pmk-settings-line-height:focus-visible {
   outline: 2px solid var(--pmk-ui-focus);
@@ -1378,15 +1427,44 @@ body.pmk-hl-strong {
   font-size: 12px;
 }
 
+/* Full-width secondary action at the foot of the settings panel. Hands off to
+ * the host, which opens the native settings UI filtered to penmark.*. */
+.pmk-settings-open-all {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  box-sizing: border-box;
+  color: var(--pmk-color-fg);
+  background-color: var(--pmk-copy-btn-bg);
+  border: 1px solid var(--pmk-ui-border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pmk-settings-open-all:hover {
+  background-color: var(--pmk-topbar-btn-hover-bg);
+}
+
+.pmk-settings-open-all:focus-visible {
+  outline: 2px solid var(--pmk-ui-focus);
+  outline-offset: 1px;
+}
+
 /* The slide-in drawer panel — lives in <body>, slides in from the right edge. */
 .pmk-drawer {
   position: fixed;
-  top: 0;
+  /* Below the 40px sticky topbar (z-index 100), which would otherwise paint
+   * over the drawer header. Matches .pmk-settings-panel. */
+  top: 40px;
   right: 0;
   bottom: 0;
   z-index: 6;
-  width: 342px;
-  max-width: calc(100vw - 24px);
+  width: var(--pmk-panel-width);
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-ui-elevated);
@@ -1413,12 +1491,33 @@ body.pmk-hl-strong {
   }
 }
 
-/* Below 700px both panels span nearly the full viewport (no reserved space). */
-@media (max-width: 699px) {
-  .pmk-drawer,
-  .pmk-settings-panel {
-    width: calc(100vw - 24px);
-    max-width: calc(100vw - 24px);
+/* Below 560px a side panel serves neither the panel nor the document, so both
+ * panels dock to the bottom as a sheet. It overlays rather than pushing, so the
+ * top of the document stays visible and scrollable while the sheet is open.
+ *
+ * width/max-width must be reset: the base rules give both panels a definite
+ * width, and an absolutely positioned box with left, right AND a width is
+ * over-constrained — the browser would discard `right` and pin the sheet to the
+ * left edge instead of spanning the viewport. */
+@media (max-width: 559px) {
+  .pmk-settings-panel,
+  .pmk-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    height: min(60vh, 420px);
+    border-left: none;
+    border-top: 1px solid var(--pmk-ui-border);
+    border-radius: 10px 10px 0 0;
+    transform: translateY(100%);
+  }
+
+  .pmk-settings-panel[data-open],
+  .pmk-drawer[data-open] {
+    transform: translateY(0);
   }
 }
 
@@ -1427,40 +1526,12 @@ body.pmk-hl-strong {
  * transition) so opening a panel never animates the document reflow. */
 @media (min-width: 1050px) {
   body[data-pmk-drawer-open] {
-    padding-right: 342px;
+    padding-right: var(--pmk-panel-width);
   }
 }
 
-.pmk-drawer-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--pmk-ui-border-muted);
-}
-.pmk-drawer-title {
-  font-weight: 600;
-  font-size: 13px;
-}
-.pmk-drawer-close {
-  appearance: none;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--pmk-color-fg-muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 3px 6px;
-}
-.pmk-drawer-close:hover {
-  background-color: var(--pmk-topbar-btn-hover-bg);
-}
-.pmk-drawer-close:focus-visible {
-  outline: 2px solid var(--pmk-ui-focus);
-  outline-offset: 1px;
-}
+/* .pmk-drawer-bar, .pmk-drawer-title and .pmk-drawer-close are styled with
+ * their .pmk-settings-* counterparts above. */
 
 .pmk-visually-hidden {
   position: absolute;
@@ -1637,12 +1708,18 @@ body.pmk-hl-strong {
 .pmk-frontmatter-card {
   margin: 12px auto 0;
   width: calc(100% - var(--pmk-document-gutter) - var(--pmk-document-gutter));
-  max-width: calc(1600px - var(--pmk-document-gutter) - var(--pmk-document-gutter));
+  /* The card aligns to the root's TEXT column while the root carries the
+   * gutters as its own padding, so the card's cap is the column minus two
+   * gutters. Taking the variable raw would leave the card two gutters wider
+   * than the prose beneath it — the exact misalignment this removes. */
+  max-width: calc(
+    var(--pmk-content-max-width, 1600px) - var(--pmk-document-gutter) - var(--pmk-document-gutter)
+  );
   padding: 10px 14px;
   border: 1px solid var(--pmk-ui-border-muted);
   border-radius: 8px;
   background-color: var(--pmk-ui-panel);
-  font-size: 0.9em;
+  font-size: calc(0.9 * var(--pmk-text-size-base, 16px));
 }
 
 .pmk-frontmatter-card summary {

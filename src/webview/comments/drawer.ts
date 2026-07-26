@@ -163,7 +163,7 @@ export function ensureDrawer(cfg: DrawerConfig): HTMLElement {
   close.type = "button";
   close.className = "pmk-drawer-close";
   close.setAttribute("aria-label", "Close comments drawer");
-  close.textContent = "✕"; // ✕
+  close.textContent = "Close";
   close.addEventListener("click", () => closeDrawer());
   head.append(title, close);
 

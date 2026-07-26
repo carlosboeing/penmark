@@ -296,7 +296,6 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
         value === "reading" ||
         value === "compact" ||
         value === "focus" ||
-        value === "print" ||
         value === "custom"
       ) {
         next.preset = value;
@@ -323,22 +322,31 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
       if (typeof value === "number" && Number.isFinite(value)) next.lineHeight = value;
       break;
   }
-  _previewSettings = next;
-  const root = getRoot();
-  if (
-    root &&
-    (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth")
-  ) {
-    applyTypography(
-      root,
-      resolveTypography({
-        preset: next.preset,
-        textSize: next.textSize,
-        lineHeight: next.lineHeight > 0 ? next.lineHeight : undefined,
-        contentWidth: next.contentWidth,
-      }),
-    );
+  if (key === "preset" || key === "textSize" || key === "lineHeight" || key === "contentWidth") {
+    // A preset owns textSize, contentWidth and lineHeight. When the user picks
+    // one, those knobs must be left undefined so the preset supplies them —
+    // exactly what the host does by clearing them. Passing the values carried
+    // in `next` would pin the outgoing preset's knobs onto the incoming one, so
+    // presets would appear to half-apply and re-picking one would shift the
+    // document again.
+    const ownedByPreset = key === "preset";
+    const resolved = resolveTypography({
+      preset: next.preset,
+      textSize: ownedByPreset ? undefined : next.textSize,
+      lineHeight: ownedByPreset || next.lineHeight <= 0 ? undefined : next.lineHeight,
+      contentWidth: ownedByPreset ? undefined : next.contentWidth,
+    });
+    // Mirror the resolved values back into panel state so the segmented
+    // controls highlight what the document is actually showing.
+    if (ownedByPreset) {
+      next.textSize = resolved.textSize;
+      next.contentWidth = resolved.contentWidth;
+      next.lineHeight = 0; // 0 means "unset — the preset decides", as in config.
+    }
+    applyTypography(resolved);
+    applyContentWidth(resolved.contentWidth);
   }
+  _previewSettings = next;
   renderSettingsPanel(next);
   if (key === "theme") {
     applyTheme(next.theme);
@@ -461,9 +469,15 @@ function refreshTopbar(): void {
     _lastReadingMeta,
     {
       open: _findSurface?.isOpen() ?? false,
-      onOpenFind: () => {
+      onToggleFind: () => {
+        const surface = findSurface();
+        if (surface.isOpen()) {
+          // close() dispatches pmk-find-closed, which refreshes the topbar.
+          surface.close();
+          return;
+        }
         const opener = document.querySelector<HTMLElement>("[data-pmk-topbar-control='find']");
-        findSurface().open(opener);
+        surface.open(opener);
         refreshTopbar();
       },
     },
@@ -701,6 +715,9 @@ window.addEventListener("message", (event: MessageEvent) => {
       _lastComments = msg.comments ?? [];
       _lastAttention = msg.attention ?? 0;
       const settingsPanel = ensureSettingsPanel({
+        // Stamped on <body> by the shell (html.ts) from the host's product
+        // identity. Absent means the host supports the settings UI.
+        canOpenSettingsUi: document.body.dataset.pmkSettingsUi !== "false",
         post: (m) => vscode.postMessage(m),
         applyLocal: applyPreviewSettingLocally,
       });
@@ -732,7 +749,7 @@ window.addEventListener("message", (event: MessageEvent) => {
       refreshTopbar();
 
       if (msg.typography) {
-        applyTypography(root, msg.typography);
+        applyTypography(msg.typography);
       }
       renderFrontmatterCard(msg.frontmatter);
       installTaskCheckboxHandler(root);
@@ -811,8 +828,7 @@ window.addEventListener("message", (event: MessageEvent) => {
     }
 
     case "setTypography": {
-      const root = getRoot();
-      if (root) applyTypography(root, msg.typography);
+      applyTypography(msg.typography);
       break;
     }
 

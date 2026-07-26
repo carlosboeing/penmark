@@ -2,6 +2,31 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-07-26 (worktree-panel-typography-bug-bash)
+
+### Four distinct typography presets
+
+Presets all shared one heading scale, so they differed only in body size, line height, column width, and whether the body was serif. Compact and Focus were the same typeface at two sizes — a text-size slider wearing a preset's clothes.
+
+- **Hierarchy is now its own axis** — a per-preset scale applies to h1–h3, so presets differ in how strongly headings stand out and not just in how big the body text is. At the four defaults h1 is 32/36/22/48px against body text of 16/18/14/20px. The scale deliberately leaves h4–h6 alone, so flattening can never push a heading below its own body text.
+- **The four** — **GitHub** (familiar default, matching how the document reads on GitHub), **Reading** (long-form prose: serif body, narrow measure, 1.75 line height), **Compact** (skimming a dense technical document: small, tight, flat hierarchy), **Focus** (narrow pane or reading at a distance: large text, strong hierarchy). Each differs from every other on at least two axes.
+- **Print retired** — export is a separate always-light pipeline with its own settings, so a print *preview* preset duplicated it without helping anyone read. An existing `penmark.preset: "print"` falls back to GitHub.
+- **Presets apply cleanly when switched** — the webview's immediate feedback still passed the outgoing preset's own text size and width into the new one, so a preset half-applied and then shifted again when the host corrected it; re-picking the selected preset moved the document a second time. A picked preset now supplies all three of the knobs it owns.
+
+### Panel, search and typography bug bash
+
+Ten defects found in manual testing of the adaptive review surface, in-preview find, and the v1.0 typography and frontmatter polish. Three were dead code — a CSS selector or class nothing matched — and two were variable-scope bugs where a custom property was set on a descendant of the element meant to consume it.
+
+- **Toggles look pressed again** — the match-case button in search and all three top-bar toggles reported `aria-pressed` or `aria-expanded` correctly, but nothing painted them. The search surface had no pressed rule at all, and the top bar's rule keyed off a `data-active` attribute no code ever sets.
+- **Search button closes the surface** — clicking **Search** while search was open re-focused it instead of closing it. It now toggles, matching Settings and Comments. The palette command and keybinding still only open.
+- **Comments drawer has a visible header** — the drawer had a title and close control all along, sitting at `top: 0` under the 40px sticky top bar. It now starts below the bar, and its header shares one rule with the settings panel so the two cannot drift.
+- **Open all Penmark settings looks like a button, and is hidden where it cannot work** — `.pmk-settings-open-all` had no CSS rule anywhere, so it rendered as a raw browser button among styled controls. The command behind it is now awaited and logged, falls back to the JSON settings editor, and warns if both fail. In Antigravity it does not appear at all: that host registers the settings commands and reports no error, yet never surfaces an editor, and a button that silently does nothing is worse than no button. VS Code and Cursor are unaffected — open Settings and search for "penmark" on Antigravity.
+- **Panels stop covering the document** — below 700px both panels spanned `calc(100vw - 24px)`, leaving 24px of document visible. Panel width is now `clamp(260px, 40vw, 342px)`, unchanged at 1280px, and below 560px both panels dock to the bottom as a sheet so the document stays readable above them. This supersedes the 2026-07-23 entry's `calc(100vw - 24px)` behaviour.
+- **Text size changes body text** — `applyTypography` set its custom properties on `#penmark-root` while the `body` rule consuming them is an ancestor, and custom properties inherit downward only. Body always fell back to 16px, so text size appeared to affect headings alone and the serif presets never took effect. The document declarations now live on the document surfaces, so a reader's serif body font cannot leak into the chrome.
+- **Presets do something** — `cfg.get(key, default)` always returns a value, so an unset knob was never undefined and a preset could never supply one; Compact and Focus differed from GitHub in nothing at all. Unset knobs now stay undefined, and picking a preset clears the three knobs it owns.
+- **Frontmatter card aligns with the prose** — the card hardcoded the full-width 1600px cap and is a sibling of the preview root, so the content-width rules never reached it. Both boxes now derive from one property, the card keeping its gutter compensation.
+- **Frontmatter lists render their values** — the parser handled scalars and inline lists only, so block sequences (`authors:` followed by `- name` lines) rendered as labels with no value. It now parses block sequences of scalars, accepts `authors` as a priority key, and skips keys with no value instead of showing a bare label.
+
 ## 2026-07-25 (fix/find-search-and-topbar-theme)
 
 ### Search fixes and a single home for theme selection

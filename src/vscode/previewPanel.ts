@@ -15,6 +15,7 @@ import type {
 import {
   resolveTypography,
   type PresetName,
+  type RawTypographyConfig,
   type TextSize,
   type TypographySettings,
 } from "../core/settings/typography.js";
@@ -31,7 +32,7 @@ import {
 } from "./comments.js";
 import { buildReviewPrompt } from "../core/comments/exportPrompt.js";
 import { exportDefaultsFromSettings } from "./exportSettings.js";
-import { logReconcileCorruption } from "./outputChannel.js";
+import { logReconcileCorruption, penmarkOutput } from "./outputChannel.js";
 
 // The markdown-it render stack (src/vscode/render.ts → markdown-it + plugins) is
 // LAZY-loaded so it is NOT evaluated at activation — keeping activate() within
@@ -163,8 +164,8 @@ function configuredScrollSync(): boolean {
  * class on the shell and live-updated via `setContentWidth` (see html.ts +
  * media/penmark.css).
  */
-function configuredContentWidth(): ContentWidth {
-  return vscode.workspace.getConfiguration("penmark").get<ContentWidth>("contentWidth", "full");
+export function configuredContentWidth(): ContentWidth {
+  return configuredTypography().contentWidth;
 }
 
 function configuredCodeBlockWrap(): boolean {
@@ -184,7 +185,7 @@ function configuredHighlightIntensity(): HighlightIntensity {
 
 const VALID_SETTING_VALUES = {
   theme: ["light", "dark", "auto"],
-  preset: ["github", "reading", "compact", "focus", "print", "custom"],
+  preset: ["github", "reading", "compact", "focus", "custom"],
   textSize: ["small", "medium", "large", "x-large"],
   contentWidth: ["comfortable", "wide", "full"],
   "comments.highlightIntensity": ["subtle", "medium", "strong"],
@@ -216,28 +217,61 @@ export async function handleUpdateSetting(
   await vscode.workspace
     .getConfiguration("penmark")
     .update(key, value, vscode.ConfigurationTarget.Global);
+
+  // A preset owns these three knobs. Without clearing them, an explicitly set
+  // knob overrides every preset forever, so presets appear to do nothing for
+  // anyone who has touched the settings panel.
+  if (key === "preset") {
+    const cfg = vscode.workspace.getConfiguration("penmark");
+    for (const owned of ["textSize", "contentWidth", "lineHeight"]) {
+      await cfg.update(owned, undefined, vscode.ConfigurationTarget.Global);
+    }
+  }
+}
+
+/**
+ * Raw typography config. Uses inspect() rather than get(key, default) because
+ * get() with a default ALWAYS returns a value, so a preset could never supply
+ * one — the bug this exists to fix. An undefined here means "user has not set
+ * this knob", which is what lets resolveTypography fall back to the preset.
+ */
+function rawTypographyConfig(): RawTypographyConfig {
+  const cfg = vscode.workspace.getConfiguration("penmark");
+  const explicit = <T>(key: string): T | undefined => {
+    const i = cfg.inspect<T>(key);
+    return i?.globalValue ?? i?.workspaceValue ?? i?.workspaceFolderValue;
+  };
+  const lineHeight = cfg.get<number>("lineHeight", 0);
+  return {
+    preset: cfg.get<PresetName>("preset", "github"),
+    textSize: explicit<TextSize>("textSize"),
+    contentWidth: explicit<ContentWidth>("contentWidth"),
+    fontFamily: cfg.get<string>("fontFamily", ""),
+    headingFontFamily: cfg.get<string>("headingFontFamily", ""),
+    lineHeight: lineHeight > 0 ? lineHeight : undefined,
+  };
 }
 
 /** Resolved typography from penmark.* settings (v1.0 polish). */
-function configuredTypography(): TypographySettings {
-  const settings = configuredPreviewSettings();
-  return resolveTypography({
-    ...settings,
-    lineHeight: settings.lineHeight > 0 ? settings.lineHeight : undefined,
-  });
+export function configuredTypography(): TypographySettings {
+  return resolveTypography(rawTypographyConfig());
 }
 
+/**
+ * The dependency runs raw reader -> configuredTypography -> here. It must not
+ * become circular: configuredTypography no longer calls this.
+ */
 function configuredPreviewSettings(): PreviewSettingsState {
   const cfg = vscode.workspace.getConfiguration("penmark");
-  const lineHeight = cfg.get<number>("lineHeight", 0);
+  const typography = configuredTypography();
   return {
     theme: configuredTheme(),
-    preset: cfg.get<PresetName>("preset", "github"),
-    textSize: cfg.get<TextSize>("textSize", "medium"),
-    contentWidth: configuredContentWidth(),
+    preset: typography.preset,
+    textSize: typography.textSize,
+    contentWidth: typography.contentWidth,
     codeBlockWrap: configuredCodeBlockWrap(),
     highlightIntensity: configuredHighlightIntensity(),
-    lineHeight,
+    lineHeight: cfg.get<number>("lineHeight", 0),
   };
 }
 
@@ -662,6 +696,62 @@ export function enqueueMutation(entry: PanelEntry, op: () => Promise<void>): voi
     });
 }
 
+/**
+ * Whether this host can be handed off to the native settings UI.
+ *
+ * Antigravity registers both settings commands and reports no error when we
+ * invoke one, yet no settings editor appears — four hypotheses about why have
+ * now been wrong, and the remaining suspect (the focus context a webview
+ * message handler runs in) is not something the extension can influence. Rather
+ * than ship a button that silently does nothing there, the button is withheld
+ * on that host and users open Settings themselves.
+ *
+ * Matching is a narrow, case-insensitive "antigravity" against both the product
+ * name and the URI scheme, so the failure mode is safe in both directions: an
+ * unrecognised host keeps the button (status quo), and no VS Code or Cursor
+ * build can match by accident.
+ */
+export function hostSupportsSettingsUi(): boolean {
+  const marks = [vscode.env.appName ?? "", vscode.env.uriScheme ?? ""];
+  return !marks.some((mark) => mark.toLowerCase().includes("antigravity"));
+}
+
+/**
+ * Open the native settings UI filtered to penmark.*.
+ *
+ * The target is FIXED — nothing from the webview message influences it, so a
+ * compromised webview cannot redirect the user.
+ *
+ * The `@ext:` query is the documented filter form and is confirmed working in
+ * Antigravity's settings editor, where the previous bare "penmark" query
+ * produced nothing at all. Every step is awaited and logged: the original bug
+ * was invisible for three rounds of investigation because the call discarded
+ * its promise with `void`.
+ */
+export async function openPenmarkSettings(extensionId?: string): Promise<void> {
+  const out = penmarkOutput();
+  const query = `@ext:${extensionId ?? "local.penmark-markdown-review"}`;
+  const attempts: Array<[string, string | undefined]> = [
+    ["workbench.action.openSettings", query],
+    ["workbench.action.openSettingsJson", undefined],
+  ];
+
+  for (const [command, arg] of attempts) {
+    try {
+      await (arg === undefined
+        ? vscode.commands.executeCommand(command)
+        : vscode.commands.executeCommand(command, arg));
+      return;
+    } catch (err) {
+      out.appendLine(`[settings] ${command} failed: ${String(err)}`);
+    }
+  }
+
+  void vscode.window.showWarningMessage(
+    'Penmark could not open the settings editor. Open Settings and search for "penmark".',
+  );
+}
+
 async function postRender(entry: PanelEntry, document: vscode.TextDocument): Promise<void> {
   // Track which document this panel is currently previewing so we can re-post
   // it when the webview signals `ready` (race-free handshake, T5).
@@ -720,6 +810,7 @@ function setupPanelEntry(
     context.extensionUri,
     configuredContentWidth(),
     configuredHighlightIntensity(),
+    hostSupportsSettingsUi(),
   );
   panel.webview.html = html;
 
@@ -808,13 +899,9 @@ function setupPanelEntry(
       }
 
       case "openPenmarkSettings": {
-        // Open the native settings UI filtered to penmark.*. The target is
-        // FIXED — any fields on the message are ignored, so a compromised
-        // webview cannot redirect the user to an arbitrary target. Uses the
-        // openSettings command rather than a vscode:// URI because the product
-        // URI scheme differs per IDE (cursor://, …); the command works
-        // identically in VS Code, Cursor, and Antigravity.
-        void vscode.commands.executeCommand("workbench.action.openSettings", "penmark");
+        // Any fields on the message are ignored — see openPenmarkSettings for
+        // why the target is fixed and how the fallback chain is logged.
+        void openPenmarkSettings(context.extension.id);
         break;
       }
 
