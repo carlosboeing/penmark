@@ -22,7 +22,9 @@ Each IDE is a VS Code fork with its own CLI binary. Use the UI path if the CLI i
 | --- | --- | --- |
 | VS Code | `code --install-extension penmark-markdown-review-<version>.vsix` | Extensions view -> `...` menu -> **Install from VSIX...** |
 | Cursor | `cursor --install-extension penmark-markdown-review-<version>.vsix` | Extensions view -> `...` menu -> **Install from VSIX...** |
-| Antigravity | `antigravity --install-extension penmark-markdown-review-<version>.vsix` | Extensions view -> `...` menu -> **Install from VSIX...** |
+| Antigravity | `antigravity-ide --install-extension penmark-markdown-review-<version>.vsix` | Extensions view -> `...` menu -> **Install from VSIX...** |
+
+Antigravity does not put its CLI on your `PATH` by default, and the binary is named `antigravity-ide`, not `antigravity`. On macOS it lives at `/Applications/Antigravity IDE.app/Contents/Resources/app/bin/antigravity-ide` — call it by full path, or use the UI. Note that `agy` is Antigravity's *agent* CLI, a different tool with no `--install-extension`.
 
 ## 3. Reload
 
@@ -39,3 +41,5 @@ Download the newer VSIX, uninstall the current Penmark build, install the new on
 ## Building from source
 
 To build the VSIX yourself, clone the repo and run `npm run package` — it produces `penmark-markdown-review-<version>.vsix` in the repo root. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the dev setup, prerequisites, and test layers.
+
+If you are developing Penmark and want the build in every IDE on your machine, `npm run install:local` packages it and installs it into each one it finds (VS Code, VS Code Insiders, Cursor, Windsurf, Antigravity), then reads the version back to confirm each install took. Add `--dry-run` to see what it would do, or `--no-build` to install an existing VSIX without repackaging. Reload each IDE window afterwards.

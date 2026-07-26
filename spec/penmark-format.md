@@ -126,7 +126,7 @@ The entry grammar, line by line:
 |---|---|
 | Line 1 | `pmk:c <ID>` — the literal `<!--pmk:c ` followed by the ID. In v1 nothing else appears on line 1. (v2 replies append ` re <parent-id>`; a v1 writer MUST NOT emit it. See §5.3.) |
 | Line 2 | `<author> (human\|agent) · <timestamp>` — the meta line (§5.2.1). |
-| Quote lines | Zero or more lines each beginning with `> `, holding the advisory quote (§5.2.2). |
+| Quote lines | Zero or more lines each beginning with `> `, or a bare `>` for an empty line, holding the advisory quote (§5.2.2). |
 | Blank line | Exactly one blank line separates the quote from the body. |
 | Body | One or more lines of plain prose, terminated by the closing `-->` of the HTML comment. |
 
@@ -147,6 +147,10 @@ The entry grammar, line by line:
 - The quote is the lines beginning with `> `, holding a snapshot of the commented text **at comment time**. It is rendered as a Markdown blockquote shape but lives inside the HTML comment, so it is invisible.
 - The quote is **advisory only** (ADR 0006): it powers the "edited since commented" indicator, the degradation-ladder fallback (§8.2), and orphan/content-removed context. It is maintained by tooling, never by hand. A mismatch between the quote and the current span text is **not** an orphan and MUST NOT be treated as one.
 - A quote spanning multiple source lines is written as one `> ` line per source line.
+- An **empty** quote line is written as a bare `>`, with no trailing space. A writer MUST NOT emit `"> "` for an empty line: that leaves trailing whitespace, and Prettier, markdownlint MD009 and editor trim-on-save all strip it — so the padded form is rewritten the moment the document is saved. A reader MUST accept both forms; documents written before this rule contain the padded one.
+- A reader MUST tolerate leading whitespace on an entry's lines. A review block appended directly after a list is a lazy continuation of the last list item, and a reflowing tool may indent it to the list content column. The indent to strip is the whitespace preceding the entry's own `<!--`, removed from each line that carries it — a reflow often stops at the first blank line, leaving the body unindented.
+
+> Rationale (informative): both rules close a defect where a document saved through an ordinary formatter came back with every entry unreadable. The comments were still on disk, but the parser rejected them, so they vanished from the preview and the drawer with no warning. A format whose validity depends on trailing whitespace surviving a save is not a format that survives contact with real editors.
 
 #### 5.2.3 Anchor type is not stored
 
@@ -170,7 +174,7 @@ The HTML-comment terminator is `-->`, and `--` may not legally appear inside an 
 A conforming writer MUST maintain all of the following:
 
 1. **Atomic mutation.** Adding a comment inserts the anchor and the entry in a single edit (one undo step). Resolving/deleting removes the anchor(s) and the entry in a single edit. Resolve and delete are the same operation (ADR 0002).
-2. **Review block lifecycle.** The review block is created on the first comment and removed entirely when the last comment is removed. It is always the last meaningful content in the file (§5.1).
+2. **Review block lifecycle.** The review block is created on the first comment and removed entirely when the last comment is removed. It is always the last meaningful content in the file (§5.1). A writer separates the block from the body with a blank line, so the block is a standalone HTML block rather than a lazy continuation of whatever precedes it; removing the block removes that separator again, leaving the body ending in exactly one newline.
 3. **Marker pair integrity.** A writer MUST NOT emit, or leave behind, half of a span pair or half of a range pair except as the transient result of destructive user edits the reconcile pass then cleans up. A writer MUST NOT re-ID, duplicate, or split an existing anchor.
 4. **ID validity.** Every emitted ID conforms to §3.
 5. **Escaping.** Every emitted entry conforms to §6.
@@ -291,6 +295,7 @@ Every normative rule below is exercised by at least one fixture. Cells list the 
 | 5.2 | Entry: `pmk:c ID`, meta line, quote, blank, body | 01–11, 13, 14 |
 | 5.2.1 | Meta line `author (human\|agent) · timestamp` | 01–11, 13, 14 |
 | 5.2.2 | Advisory quote as `> ` lines; multi-line quote | 01–11, 14 (multi-line: 06) |
+| 5.2.2 | Empty quote line as bare `>`; formatter survival; indented entry | `formatterSurvival.test.ts` (Prettier + trim over the whole corpus) |
 | 5.2.3 | Anchor type not stored in entry | 03, 04 (mix of block/range/span entries, no kind field) |
 | 6 | `&#45;&#45;` escaping + `--production` round-trip | 05 |
 | 7 | Writer invariants (well-formed corpus is the witness) | 01–11, 13 |

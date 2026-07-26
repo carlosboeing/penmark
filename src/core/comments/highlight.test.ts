@@ -33,6 +33,7 @@ function recon(...pairs: Array<[string, CommentState]>): ReconcileResult {
     strayClosers: [],
     reviewBlockMisplaced: false,
     secondReviewBlock: false,
+    unreadableReviewData: [],
     attentionCount: needsAttention.length,
   };
 }

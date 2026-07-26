@@ -2,7 +2,7 @@
   "name": "penmark-markdown-review",
   "displayName": "Penmark — Markdown Review Comments & Preview",
   "description": "Markdown preview with inline review comments — Google-Docs-style commenting on rendered markdown, built for reviewing AI-authored docs in the IDE.",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -294,6 +294,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"*.{json,mjs,ts}\"",
     "build:production": "node esbuild.mjs --production",
     "package": "npm run build:production && vsce package",
+    "install:local": "node scripts/install-local.mjs",
     "test:unit": "vitest run --coverage",
     "test:browser": "playwright test",
     "test:ext": "tsx test/ext/runTests.ts",

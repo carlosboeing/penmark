@@ -13,5 +13,9 @@
   ],
   "reviewBlockMisplaced": false,
   "secondReviewBlock": false,
-  "attentionCount": 2
+  "unreadableReviewData": [
+    "§5.1-malformed-review-header",
+    "§5.1-malformed-review-header"
+  ],
+  "attentionCount": 4
 }

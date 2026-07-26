@@ -36,6 +36,8 @@ export interface ReconcileSummary {
   strayClosers: { id: string; index: number }[];
   reviewBlockMisplaced: boolean;
   secondReviewBlock: boolean;
+  /** Rules only: the offsets move whenever a fixture is edited. */
+  unreadableReviewData: string[];
   attentionCount: number;
 }
 
@@ -64,6 +66,7 @@ export function summarize(text: string): ReconcileSummary {
     strayClosers: result.strayClosers,
     reviewBlockMisplaced: result.reviewBlockMisplaced,
     secondReviewBlock: result.secondReviewBlock,
+    unreadableReviewData: result.unreadableReviewData.map((c) => c.rule),
     attentionCount: result.attentionCount,
   };
 }
