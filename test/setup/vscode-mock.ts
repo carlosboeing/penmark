@@ -85,6 +85,9 @@ export const env = {
   openExternal(): Promise<boolean> {
     return Promise.resolve(true);
   },
+  /** Host product identity. Tests overwrite these to simulate a fork. */
+  appName: "Visual Studio Code",
+  uriScheme: "vscode",
 };
 
 export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;

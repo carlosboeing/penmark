@@ -39,6 +39,7 @@ export function buildShellHtml(
   extensionUri: vscode.Uri,
   contentWidth: ContentWidth = "full",
   highlightIntensity: HighlightIntensity = "medium",
+  canOpenSettingsUi = true,
 ): string {
   const csp = [
     `default-src 'none'`,
@@ -68,7 +69,7 @@ export function buildShellHtml(
   <title>Penmark Preview</title>
 ${cssLinks}
 </head>
-<body class="pmk-content-${contentWidth} pmk-hl-${highlightIntensity}">
+<body class="pmk-content-${contentWidth} pmk-hl-${highlightIntensity}"${canOpenSettingsUi ? "" : ' data-pmk-settings-ui="false"'}>
   <div id="penmark-topbar"></div>
   <div id="penmark-root"></div>
   <script nonce="${nonce}" src="${webview.asWebviewUri(scriptUri).toString()}"></script>

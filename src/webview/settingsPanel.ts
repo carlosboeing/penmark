@@ -12,6 +12,11 @@ type ApplyLocal = (key: PreviewSettingKey, value: PreviewSettingValue) => void;
 interface SettingsConfig {
   post: PostMessage;
   applyLocal: ApplyLocal;
+  /**
+   * Whether the host can hand off to its native settings UI. Absent means yes:
+   * an unrecognised host keeps the button rather than silently losing it.
+   */
+  canOpenSettingsUi?: boolean;
 }
 
 interface SettingsInternals {
@@ -266,7 +271,11 @@ export function renderSettingsPanel(state: PreviewSettingsState): void {
   for (const group of GROUPS) {
     _settings.content.appendChild(segmentedGroup(state, group));
   }
-  _settings.content.appendChild(openAllSettingsButton());
+  // Withheld on hosts that accept the settings command but never surface an
+  // editor — a button that does nothing is worse than no button.
+  if (_settings.cfg.canOpenSettingsUi !== false) {
+    _settings.content.appendChild(openAllSettingsButton());
+  }
   if (
     focused &&
     (document.activeElement === document.body || document.activeElement === document.documentElement)

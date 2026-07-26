@@ -697,6 +697,26 @@ export function enqueueMutation(entry: PanelEntry, op: () => Promise<void>): voi
 }
 
 /**
+ * Whether this host can be handed off to the native settings UI.
+ *
+ * Antigravity registers both settings commands and reports no error when we
+ * invoke one, yet no settings editor appears — four hypotheses about why have
+ * now been wrong, and the remaining suspect (the focus context a webview
+ * message handler runs in) is not something the extension can influence. Rather
+ * than ship a button that silently does nothing there, the button is withheld
+ * on that host and users open Settings themselves.
+ *
+ * Matching is a narrow, case-insensitive "antigravity" against both the product
+ * name and the URI scheme, so the failure mode is safe in both directions: an
+ * unrecognised host keeps the button (status quo), and no VS Code or Cursor
+ * build can match by accident.
+ */
+export function hostSupportsSettingsUi(): boolean {
+  const marks = [vscode.env.appName ?? "", vscode.env.uriScheme ?? ""];
+  return !marks.some((mark) => mark.toLowerCase().includes("antigravity"));
+}
+
+/**
  * Open the native settings UI filtered to penmark.*.
  *
  * The target is FIXED — nothing from the webview message influences it, so a
@@ -790,6 +810,7 @@ function setupPanelEntry(
     context.extensionUri,
     configuredContentWidth(),
     configuredHighlightIntensity(),
+    hostSupportsSettingsUi(),
   );
   panel.webview.html = html;
 

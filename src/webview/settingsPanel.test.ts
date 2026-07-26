@@ -172,3 +172,27 @@ describe("settingsPanel", () => {
     expect(document.activeElement).toBe(external);
   });
 });
+
+describe("open-all settings button by host capability", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("renders the button when the host supports the settings UI", () => {
+    ensureSettingsPanel({ post: vi.fn(), applyLocal: vi.fn(), canOpenSettingsUi: true });
+    renderSettingsPanel(SETTINGS);
+    expect(document.querySelector(".pmk-settings-open-all")).not.toBeNull();
+  });
+
+  it("omits the button when the host does not", () => {
+    ensureSettingsPanel({ post: vi.fn(), applyLocal: vi.fn(), canOpenSettingsUi: false });
+    renderSettingsPanel(SETTINGS);
+    expect(document.querySelector(".pmk-settings-open-all")).toBeNull();
+  });
+
+  it("renders the button when the host says nothing", () => {
+    ensureSettingsPanel({ post: vi.fn(), applyLocal: vi.fn() });
+    renderSettingsPanel(SETTINGS);
+    expect(document.querySelector(".pmk-settings-open-all")).not.toBeNull();
+  });
+});

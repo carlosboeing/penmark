@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as vscode from "vscode";
 import { __setConfig } from "../../test/setup/vscode-mock.js";
 import {
@@ -16,6 +16,7 @@ import {
   openPenmarkSettings,
   configuredTypography,
   configuredContentWidth,
+  hostSupportsSettingsUi,
 } from "./previewPanel.js";
 import type { PanelEntry } from "./previewPanel.js";
 
@@ -761,5 +762,42 @@ describe("preset resolution", () => {
   it("does not clear knobs when a non-preset setting changes", async () => {
     await handleUpdateSetting("textSize", "large");
     expect(seam.workspace._configUpdates.filter((u) => u.value === undefined)).toHaveLength(0);
+  });
+});
+
+describe("settings-UI capability by host", () => {
+  const env = vscode.env as unknown as { appName: string; uriScheme: string };
+  const original = { appName: env.appName, uriScheme: env.uriScheme };
+  afterEach(() => {
+    env.appName = original.appName;
+    env.uriScheme = original.uriScheme;
+  });
+
+  it("advertises the settings UI in VS Code", () => {
+    env.appName = "Visual Studio Code";
+    env.uriScheme = "vscode";
+    expect(hostSupportsSettingsUi()).toBe(true);
+  });
+
+  it("advertises the settings UI in Cursor", () => {
+    env.appName = "Cursor";
+    env.uriScheme = "cursor";
+    expect(hostSupportsSettingsUi()).toBe(true);
+  });
+
+  it("withholds it in Antigravity, by appName or by uriScheme", () => {
+    env.appName = "Antigravity";
+    env.uriScheme = "vscode";
+    expect(hostSupportsSettingsUi()).toBe(false);
+
+    env.appName = "Some Fork";
+    env.uriScheme = "antigravity";
+    expect(hostSupportsSettingsUi()).toBe(false);
+  });
+
+  it("defaults to advertising it when the host reports nothing", () => {
+    env.appName = "";
+    env.uriScheme = "";
+    expect(hostSupportsSettingsUi()).toBe(true);
   });
 });

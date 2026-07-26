@@ -715,6 +715,9 @@ window.addEventListener("message", (event: MessageEvent) => {
       _lastComments = msg.comments ?? [];
       _lastAttention = msg.attention ?? 0;
       const settingsPanel = ensureSettingsPanel({
+        // Stamped on <body> by the shell (html.ts) from the host's product
+        // identity. Absent means the host supports the settings UI.
+        canOpenSettingsUi: document.body.dataset.pmkSettingsUi !== "false",
         post: (m) => vscode.postMessage(m),
         applyLocal: applyPreviewSettingLocally,
       });

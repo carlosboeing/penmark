@@ -210,3 +210,21 @@ test("frontmatter card renders block-sequence list values", async ({ page }) => 
   await expect(card).toContainText("Carlos Boeing");
   await expect(card).toContainText("Carlos Boeing, claude-opus-5");
 });
+
+test("open-all button is withheld when the shell marks the host unsupported", async ({ page }) => {
+  // The shell stamps this attribute from the host's product identity, so it is
+  // present before the webview boots. The harness serves a generic shell, so it
+  // has to be added before the first render builds the settings panel.
+  await page.goto("/");
+  await page.addInitScript(() => {
+    document.addEventListener("DOMContentLoaded", () =>
+      document.body.setAttribute("data-pmk-settings-ui", "false"),
+    );
+  });
+  await page.reload();
+  await renderDoc(page, "light");
+  await page.locator(".pmk-topbar-settings").click();
+
+  await expect(page.locator(".pmk-settings-panel")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator(".pmk-settings-open-all")).toHaveCount(0);
+});
