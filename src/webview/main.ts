@@ -296,7 +296,6 @@ function applyPreviewSettingLocally(key: PreviewSettingKey, value: PreviewSettin
         value === "reading" ||
         value === "compact" ||
         value === "focus" ||
-        value === "print" ||
         value === "custom"
       ) {
         next.preset = value;

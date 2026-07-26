@@ -47,7 +47,6 @@ const GROUPS: Array<{
       { value: "reading", label: "Reading" },
       { value: "compact", label: "Compact" },
       { value: "focus", label: "Focus" },
-      { value: "print", label: "Print" },
     ],
   },
   {

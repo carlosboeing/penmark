@@ -185,7 +185,7 @@ function configuredHighlightIntensity(): HighlightIntensity {
 
 const VALID_SETTING_VALUES = {
   theme: ["light", "dark", "auto"],
-  preset: ["github", "reading", "compact", "focus", "print", "custom"],
+  preset: ["github", "reading", "compact", "focus", "custom"],
   textSize: ["small", "medium", "large", "x-large"],
   contentWidth: ["comfortable", "wide", "full"],
   "comments.highlightIntensity": ["subtle", "medium", "strong"],
