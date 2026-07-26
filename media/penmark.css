@@ -30,6 +30,10 @@ body {
   position: relative;
   --pmk-document-gutter: clamp(20px, 5vw, 64px);
   --pmk-document-block-space: 32px;
+  /* Shared by the settings panel, the comments drawer, and the document space
+   * reserved for an open drawer, so the push distance and the panel width
+   * cannot disagree. No change at 1280px; 260px at 620px. */
+  --pmk-panel-width: clamp(260px, 40vw, 342px);
   background-color: var(--pmk-color-bg);
   color: var(--pmk-color-fg);
   font-family: var(
@@ -1261,8 +1265,7 @@ body.pmk-hl-strong {
   right: 0;
   bottom: 0;
   z-index: 7;
-  width: 342px;
-  max-width: calc(100vw - 24px);
+  width: var(--pmk-panel-width);
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-ui-elevated);
@@ -1434,8 +1437,7 @@ body.pmk-hl-strong {
   right: 0;
   bottom: 0;
   z-index: 6;
-  width: 342px;
-  max-width: calc(100vw - 24px);
+  width: var(--pmk-panel-width);
   display: flex;
   flex-direction: column;
   background-color: var(--pmk-ui-elevated);
@@ -1462,12 +1464,33 @@ body.pmk-hl-strong {
   }
 }
 
-/* Below 700px both panels span nearly the full viewport (no reserved space). */
-@media (max-width: 699px) {
-  .pmk-drawer,
-  .pmk-settings-panel {
-    width: calc(100vw - 24px);
-    max-width: calc(100vw - 24px);
+/* Below 560px a side panel serves neither the panel nor the document, so both
+ * panels dock to the bottom as a sheet. It overlays rather than pushing, so the
+ * top of the document stays visible and scrollable while the sheet is open.
+ *
+ * width/max-width must be reset: the base rules give both panels a definite
+ * width, and an absolutely positioned box with left, right AND a width is
+ * over-constrained — the browser would discard `right` and pin the sheet to the
+ * left edge instead of spanning the viewport. */
+@media (max-width: 559px) {
+  .pmk-settings-panel,
+  .pmk-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    height: min(60vh, 420px);
+    border-left: none;
+    border-top: 1px solid var(--pmk-ui-border);
+    border-radius: 10px 10px 0 0;
+    transform: translateY(100%);
+  }
+
+  .pmk-settings-panel[data-open],
+  .pmk-drawer[data-open] {
+    transform: translateY(0);
   }
 }
 
@@ -1476,7 +1499,7 @@ body.pmk-hl-strong {
  * transition) so opening a panel never animates the document reflow. */
 @media (min-width: 1050px) {
   body[data-pmk-drawer-open] {
-    padding-right: 342px;
+    padding-right: var(--pmk-panel-width);
   }
 }
 
