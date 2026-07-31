@@ -12,8 +12,11 @@ const CHIP_KEYS = ["tags", "scope"];
 
 function isFilePath(value: string): boolean {
   if (!value || typeof value !== "string") return false;
-  if (value.includes("/")) return true;
-  return /\.(md|sh|ts|js|json|py|css|html|yml|yaml|go|rs|java|kt|cs)$/i.test(value);
+  const trimmed = value.trim();
+  // Exclude strings with spaces around slashes (e.g. "John / Jane")
+  if (/\s\/\s/.test(trimmed)) return false;
+  if (trimmed.startsWith("./") || trimmed.startsWith("../") || trimmed.includes("/")) return true;
+  return /\.(md|sh|ts|js|json|py|css|html|yml|yaml|go|rs|java|kt|cs)$/i.test(trimmed);
 }
 
 function renderValueContent(key: string, rawValue: string | string[]): HTMLElement {
@@ -94,6 +97,20 @@ export function renderFrontmatterCard(fields: FrontmatterFields | undefined): vo
   const details = (existing as HTMLDetailsElement | null) ?? document.createElement("details");
   details.id = CARD_ID;
   details.className = "pmk-frontmatter-card";
+
+  if (!details.dataset.linkHandlerInstalled) {
+    details.dataset.linkHandlerInstalled = "true";
+    details.addEventListener("click", (evt) => {
+      const target = (evt.target as Element | null)?.closest("a.pmk-frontmatter-path");
+      if (!target) return;
+      evt.preventDefault();
+      const href = target.getAttribute("href") ?? "";
+      if (href) {
+        const vscode = (window as unknown as { vscode?: { postMessage: (msg: unknown) => void } }).vscode;
+        vscode?.postMessage({ v: 1, type: "openLink", href });
+      }
+    });
+  }
 
   if (fields.status && typeof fields.status === "string") {
     details.dataset.status = fields.status.toLowerCase();

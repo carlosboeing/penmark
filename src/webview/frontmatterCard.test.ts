@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderFrontmatterCard } from "./frontmatterCard.js";
 
 describe("renderFrontmatterCard", () => {
@@ -47,7 +47,7 @@ describe("renderFrontmatterCard", () => {
     const lists = card.querySelectorAll(".pmk-frontmatter-list");
     expect(lists.length).toBe(2);
 
-    const authorsList = lists[0];
+    const authorsList = lists[0]!;
     expect(Array.from(authorsList.querySelectorAll("li")).map((x) => x.textContent)).toEqual([
       "Carlos Boeing",
       "gemini-3.6-flash (agy)",
@@ -57,6 +57,27 @@ describe("renderFrontmatterCard", () => {
       (a) => (a as HTMLAnchorElement).getAttribute("href")
     );
     expect(paths).toEqual(["docs/0-brainstorms/logging.md", "skills/SKILL.md"]);
+  });
+
+  it("intercepts path clicks and dispatches openLink postMessage", () => {
+    const postMessage = vi.fn();
+    (window as unknown as { vscode?: { postMessage: (msg: unknown) => void } }).vscode = { postMessage };
+
+    renderFrontmatterCard({
+      title: "Navigation Test",
+      related: ["skills/schedule-resume/SKILL.md"],
+    });
+
+    const pathLink = document.querySelector(".pmk-frontmatter-path") as HTMLAnchorElement;
+    expect(pathLink).not.toBeNull();
+
+    pathLink.click();
+
+    expect(postMessage).toHaveBeenCalledWith({
+      v: 1,
+      type: "openLink",
+      href: "skills/schedule-resume/SKILL.md",
+    });
   });
 
   it("removes the card when no frontmatter fields are present", () => {
