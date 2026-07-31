@@ -13,10 +13,22 @@ const CHIP_KEYS = ["tags", "scope"];
 function isFilePath(value: string): boolean {
   if (!value || typeof value !== "string") return false;
   const trimmed = value.trim();
+  if (/^(javascript|data|vbscript):/i.test(trimmed)) return false;
   // Exclude strings with spaces around slashes (e.g. "John / Jane")
   if (/\s\/\s/.test(trimmed)) return false;
   if (trimmed.startsWith("./") || trimmed.startsWith("../") || trimmed.includes("/")) return true;
   return /\.(md|sh|ts|js|json|py|css|html|yml|yaml|go|rs|java|kt|cs)$/i.test(trimmed);
+}
+
+function createPathLink(path: string): HTMLAnchorElement {
+  const link = document.createElement("a");
+  link.className = "pmk-frontmatter-path";
+  link.dataset.path = path;
+  link.setAttribute("href", "#");
+  const code = document.createElement("code");
+  code.textContent = path;
+  link.appendChild(code);
+  return link;
 }
 
 function renderValueContent(key: string, rawValue: string | string[]): HTMLElement {
@@ -45,13 +57,7 @@ function renderValueContent(key: string, rawValue: string | string[]): HTMLEleme
       const li = document.createElement("li");
       li.className = "pmk-frontmatter-list-item";
       if (isFilePath(item)) {
-        const link = document.createElement("a");
-        link.className = "pmk-frontmatter-path";
-        link.href = item;
-        const code = document.createElement("code");
-        code.textContent = item;
-        link.appendChild(code);
-        li.appendChild(link);
+        li.appendChild(createPathLink(item));
       } else {
         li.textContent = item;
       }
@@ -61,13 +67,7 @@ function renderValueContent(key: string, rawValue: string | string[]): HTMLEleme
   }
 
   if (isFilePath(rawValue)) {
-    const link = document.createElement("a");
-    link.className = "pmk-frontmatter-path";
-    link.href = rawValue;
-    const code = document.createElement("code");
-    code.textContent = rawValue;
-    link.appendChild(code);
-    return link;
+    return createPathLink(rawValue);
   }
 
   const span = document.createElement("span");
@@ -101,13 +101,13 @@ export function renderFrontmatterCard(fields: FrontmatterFields | undefined): vo
   if (!details.dataset.linkHandlerInstalled) {
     details.dataset.linkHandlerInstalled = "true";
     details.addEventListener("click", (evt) => {
-      const target = (evt.target as Element | null)?.closest("a.pmk-frontmatter-path");
+      const target = (evt.target as Element | null)?.closest(".pmk-frontmatter-path") as HTMLElement | null;
       if (!target) return;
       evt.preventDefault();
-      const href = target.getAttribute("href") ?? "";
-      if (href) {
+      const path = target.dataset.path || target.getAttribute("href") || "";
+      if (path && path !== "#" && !/^(javascript|data|vbscript):/i.test(path.trim())) {
         const vscode = (window as unknown as { vscode?: { postMessage: (msg: unknown) => void } }).vscode;
-        vscode?.postMessage({ v: 1, type: "openLink", href });
+        vscode?.postMessage({ v: 1, type: "openLink", href: path });
       }
     });
   }

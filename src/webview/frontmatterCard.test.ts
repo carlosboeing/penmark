@@ -54,7 +54,7 @@ describe("renderFrontmatterCard", () => {
     ]);
 
     const paths = Array.from(card.querySelectorAll(".pmk-frontmatter-path")).map(
-      (a) => (a as HTMLAnchorElement).getAttribute("href")
+      (a) => (a as HTMLElement).dataset.path
     );
     expect(paths).toEqual(["docs/0-brainstorms/logging.md", "skills/SKILL.md"]);
   });
