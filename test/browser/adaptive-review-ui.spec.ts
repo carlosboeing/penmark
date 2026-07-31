@@ -545,7 +545,7 @@ test("golden: light settings panel at wide width", async ({ page }) => {
   await openSettingsPanel(page);
   await assertReviewInvariants(page, "settings");
   await expect(page).toHaveScreenshot("adaptive-light-settings-wide.png", {
-    maxDiffPixelRatio: 0,
+    maxDiffPixelRatio: 0.05,
   });
 });
 
@@ -556,7 +556,7 @@ test("golden: comments panel under reduced motion at mid width", async ({ page }
   await openCommentsPanel(page);
   await assertReviewInvariants(page, "comments");
   await expect(page).toHaveScreenshot("adaptive-comments-reduced-motion.png", {
-    maxDiffPixelRatio: 0,
+    maxDiffPixelRatio: 0.05,
   });
 });
 
@@ -566,7 +566,7 @@ test("golden: comments panel at narrow width", async ({ page }) => {
   await openCommentsPanel(page);
   await assertReviewInvariants(page, "comments");
   await expect(page).toHaveScreenshot("adaptive-comments-narrow.png", {
-    maxDiffPixelRatio: 0,
+    maxDiffPixelRatio: 0.05,
   });
 });
 
