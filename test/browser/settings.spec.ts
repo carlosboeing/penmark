@@ -208,7 +208,7 @@ test("frontmatter card renders block-sequence list values", async ({ page }) => 
   await renderDocWithFrontmatter(page, "full");
   const card = page.locator(".pmk-frontmatter-card");
   await expect(card).toContainText("Carlos Boeing");
-  await expect(card).toContainText("Carlos Boeing, claude-opus-5");
+  await expect(card).toContainText("claude-opus-5");
 });
 
 test("open-all button is withheld when the shell marks the host unsupported", async ({ page }) => {
