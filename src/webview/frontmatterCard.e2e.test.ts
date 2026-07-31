@@ -30,12 +30,23 @@ related:
 # Body
 `;
 
-function rows(): Record<string, string> {
-  const out: Record<string, string> = {};
+function getFieldContent(key: string): string[] {
   for (const dt of document.querySelectorAll(".pmk-frontmatter-fields dt")) {
-    out[dt.textContent ?? ""] = dt.nextElementSibling?.textContent ?? "";
+    if (dt.textContent === key) {
+      const dd = dt.nextElementSibling;
+      if (!dd) return [];
+      const chips = dd.querySelectorAll(".pmk-frontmatter-chip");
+      if (chips.length > 0) {
+        return Array.from(chips).map((c) => c.textContent ?? "");
+      }
+      const listItems = dd.querySelectorAll(".pmk-frontmatter-list-item");
+      if (listItems.length > 0) {
+        return Array.from(listItems).map((li) => li.textContent ?? "");
+      }
+      return [dd.textContent ?? ""];
+    }
   }
-  return out;
+  return [];
 }
 
 describe("frontmatter document to card", () => {
@@ -43,31 +54,30 @@ describe("frontmatter document to card", () => {
     document.body.innerHTML = '<div id="penmark-root"></div>';
   });
 
-  it("renders every block-sequence key with its joined values", () => {
+  it("renders every block-sequence key with structured lists or chips", () => {
     const { frontmatter } = stripFrontmatter(DOC);
     renderFrontmatterCard(parseFrontmatterFields(frontmatter));
 
-    expect(rows()).toMatchObject({
-      title: "Panel, search and typography bug bash",
-      status: "draft",
-      authors: "Carlos Boeing, claude-opus-5 (claude-code)",
-      scope: "webview, responsive",
-      reviewed_by: "Carlos Boeing",
-      related: ".workbench/2-design/2026-07-22-adaptive-review-ui-design.md",
-    });
+    expect(getFieldContent("title")).toEqual(["Panel, search and typography bug bash"]);
+    expect(getFieldContent("status")).toEqual(["draft"]);
+    expect(getFieldContent("authors")).toEqual(["Carlos Boeing", "claude-opus-5 (claude-code)"]);
+    expect(getFieldContent("scope")).toEqual(["webview", "responsive"]);
+    expect(getFieldContent("reviewed_by")).toEqual(["Carlos Boeing"]);
+    expect(getFieldContent("related")).toEqual([".workbench/2-design/2026-07-22-adaptive-review-ui-design.md"]);
   });
 
   it("omits a key that genuinely has no value rather than showing a bare label", () => {
     const { frontmatter } = stripFrontmatter("---\ntitle: T\nauthors:\nstatus: draft\n---\n\nBody\n");
     renderFrontmatterCard(parseFrontmatterFields(frontmatter));
 
-    expect(Object.keys(rows())).toEqual(["title", "status"]);
+    const keys = Array.from(document.querySelectorAll(".pmk-frontmatter-fields dt")).map((dt) => dt.textContent);
+    expect(keys).toEqual(["title", "status"]);
   });
 
   it("handles CRLF line endings", () => {
     const { frontmatter } = stripFrontmatter(DOC.replace(/\n/g, "\r\n"));
     renderFrontmatterCard(parseFrontmatterFields(frontmatter));
 
-    expect(rows()["authors"]).toBe("Carlos Boeing, claude-opus-5 (claude-code)");
+    expect(getFieldContent("authors")).toEqual(["Carlos Boeing", "claude-opus-5 (claude-code)"]);
   });
 });

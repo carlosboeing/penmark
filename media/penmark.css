@@ -1722,6 +1722,20 @@ body.pmk-hl-strong {
   font-size: calc(0.9 * var(--pmk-text-size-base, 16px));
 }
 
+.pmk-frontmatter-card[data-status="shipped"],
+.pmk-frontmatter-card[data-status="approved"] {
+  border-left: 4px solid var(--pmk-color-success, #2da44e);
+}
+
+.pmk-frontmatter-card[data-status="draft"],
+.pmk-frontmatter-card[data-status="open"] {
+  border-left: 4px solid var(--pmk-color-warning, #d97706);
+}
+
+.pmk-frontmatter-card[data-status="superseded"] {
+  border-left: 4px solid var(--pmk-color-fg-muted, #8c959f);
+}
+
 .pmk-frontmatter-card summary {
   display: flex;
   align-items: center;
@@ -1736,7 +1750,8 @@ body.pmk-hl-strong {
 }
 
 .pmk-frontmatter-status,
-.pmk-frontmatter-tag {
+.pmk-frontmatter-tag,
+.pmk-frontmatter-chip {
   display: inline-flex;
   align-items: center;
   min-height: 20px;
@@ -1753,7 +1768,8 @@ body.pmk-hl-strong {
   border: 1px solid var(--pmk-topbar-btn-active-fg);
 }
 
-.pmk-frontmatter-tag {
+.pmk-frontmatter-tag,
+.pmk-frontmatter-chip {
   color: var(--pmk-color-fg-muted);
   background-color: var(--pmk-ui-elevated);
   border: 1px solid var(--pmk-ui-border-muted);
@@ -1768,11 +1784,53 @@ body.pmk-hl-strong {
 
 .pmk-frontmatter-fields dt {
   color: var(--pmk-color-fg-muted);
-  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  padding-top: 2px;
 }
 
 .pmk-frontmatter-fields dd {
   margin: 0;
+}
+
+.pmk-frontmatter-tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pmk-frontmatter-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style-type: disc;
+}
+
+.pmk-frontmatter-list-item {
+  margin: 2px 0;
+  line-height: 1.45;
+}
+
+.pmk-frontmatter-path {
+  color: var(--pmk-color-accent);
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.pmk-frontmatter-path code {
+  font-family: var(--pmk-font-family-mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
+  font-size: 0.85em;
+  padding: 1px 5px;
+  background-color: var(--pmk-ui-elevated);
+  border: 1px solid var(--pmk-ui-border-muted);
+  border-radius: 4px;
+  color: var(--pmk-color-accent);
+}
+
+.pmk-frontmatter-path:hover code {
+  text-decoration: underline;
+  border-color: var(--pmk-color-accent);
 }
 
 .pmk-image-lightbox-img {
