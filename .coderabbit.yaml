@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+reviews:
+  profile: "chill"
+  high_level_summary: true
+  auto_title_placeholder: "@coderabbitai summary"
+  poem: false
+  review_status: true
+  path_filters:
+    - "!dist/**"
+    - "!node_modules/**"
+    - "!*.vsix"
+    - "!test/golden/**"
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: ["*"]
+chat:
+  auto_reply: true
