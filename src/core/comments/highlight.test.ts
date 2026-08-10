@@ -161,6 +161,44 @@ describe("injectHighlights — a span crossing block boundaries", () => {
     expect(out).not.toMatch(/<textarea>[^<]*<\/mark>/);
   });
 
+  it("treats <textarea/> as an opening tag, the way a browser does", () => {
+    // The '/' in an HTML start tag is ignored, so <textarea/> still opens RCDATA.
+    // Honouring it would resume scanning inside the element's own text.
+    const html =
+      `<li><!--pmk:s abcdefgh-->before</li>\n` +
+      `<li><textarea/>literal <div> text</textarea></li>\n` +
+      `<li>after<!--/pmk:s abcdefgh--></li>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out).toContain(`<textarea/>literal <div> text</textarea>`);
+    expect(out).not.toMatch(/<textarea\/>[^<]*<\/mark>/);
+  });
+
+  it("lets <plaintext> run to the end of the extent without splicing marks", () => {
+    // <plaintext> has no end tag: everything after it is text, `</plaintext>`
+    // included. Nothing after it can be highlighted, so the run simply ends.
+    const html =
+      `<li><!--pmk:s abcdefgh-->before</li>\n` +
+      `<li><plaintext>x</plaintext><div>y</div>after<!--/pmk:s abcdefgh--></li>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out).toContain(`<plaintext>x</plaintext><div>y</div>after`);
+    expect(out.slice(out.indexOf("<plaintext>"))).not.toContain("<mark");
+    expect(out.slice(out.indexOf("<plaintext>"))).not.toContain("</mark>");
+  });
+
+  it.each(["svg", "template"])(
+    "ignores a fake end tag inside a comment in a <%s> subtree",
+    (tag) => {
+      const html =
+        `<li><!--pmk:s abcdefgh-->before</li>\n` +
+        `<li><${tag}><!-- </${tag}> --><i>kept</i></${tag}></li>\n` +
+        `<li>after<!--/pmk:s abcdefgh--></li>`;
+      const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+      expect(out).toContain(`<${tag}><!-- </${tag}> --><i>kept</i></${tag}>`);
+      // The mark must not close inside the subtree it opened outside of.
+      expect(out).not.toMatch(new RegExp(`<!-- </${tag}> --></mark>`));
+    },
+  );
+
   it("keeps a self-contained subtree whole instead of splitting inside it", () => {
     const html = `<p><!--pmk:s abcdefgh-->a<svg viewBox="0 0 1 1"><title>t</title><rect/></svg>b<!--/pmk:s abcdefgh--></p>`;
     const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
@@ -290,6 +328,29 @@ describe("injectHighlights — the browser's view of a split span", () => {
     const doc = domOf(listSpan(`<dialog><p>raw dialog text</p></dialog>`));
     const dialog = doc.querySelector("dialog")!;
     expect(dialog.querySelector("p")?.textContent).toBe("raw dialog text");
+  });
+
+  it("keeps a rect inside an svg whose comment holds a fake end tag", () => {
+    const doc = domOf(listSpan(`<svg viewBox="0 0 1 1"><!-- </svg> --><rect/></svg>`));
+    const svg = doc.querySelector("svg")!;
+    expect(svg.querySelector("rect")).not.toBeNull();
+  });
+
+  it("does not change a self-closed textarea's value relative to rendering alone", () => {
+    // markdown-it has no HTML parser, so `<textarea/>` goes down its INLINE path
+    // and the renderer's own per-text-node spans land inside the element's text.
+    // That predates comments entirely (it reproduces with none in the document),
+    // so the contract here is narrower: injecting a highlight must not make the
+    // value any worse than the renderer already left it.
+    const markdown = listSpan(`<textarea/>literal <div> text</textarea>`);
+    // Removing the anchors shifts every source offset, so compare without them.
+    const value = (doc: Document): string =>
+      doc.querySelector("textarea")!.textContent!.replace(/ data-pmk-soff="\d+"/g, "");
+    const plain = new JSDOM(
+      `<body>${createRenderer({}).render(markdown.replace(/<!--[\s\S]*?-->/g, ""))}</body>`,
+    ).window.document;
+    expect(value(domOf(markdown))).toBe(value(plain));
+    expect(value(domOf(markdown))).not.toContain("mark");
   });
 
   it("highlights every item of a span across list items", () => {

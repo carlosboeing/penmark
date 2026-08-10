@@ -133,7 +133,6 @@ const OPAQUE_TAGS: ReadonlySet<string> = new Set([
   "noembed",
   "noframes",
   "iframe",
-  "plaintext",
   "svg",
   "math",
   "template",
@@ -153,8 +152,15 @@ const RAW_TEXT_TAGS: ReadonlySet<string> = new Set([
   "noembed",
   "noframes",
   "iframe",
-  "plaintext",
 ]);
+
+/**
+ * Foreign-content roots. These are the ONLY elements where XML self-closing
+ * syntax means anything: in an HTML start tag the `/` is ignored, so
+ * `<textarea/>` opens RCDATA exactly as `<textarea>` does, and treating it as
+ * empty would resume scanning inside the element's own text.
+ */
+const SELF_CLOSABLE_TAGS: ReadonlySet<string> = new Set(["svg", "math"]);
 
 /** Start of an HTML tag: `<name` or `</name`. Sticky — the caller sets lastIndex. */
 const TAG_NAME = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/y;
@@ -199,22 +205,25 @@ function readTag(html: string, at: number): Tag | null {
 
 /**
  * Offset just past the end tag matching the opaque element `tag`, or the end of
- * `html` when it is never closed (`<plaintext>`, or truncated markup).
+ * `html` when it is never closed (truncated markup).
  */
 function endOfOpaque(html: string, tag: Tag): number {
-  if (tag.selfClosing) return tag.end;
-  if (RAW_TEXT_TAGS.has(tag.name)) {
-    // Names come from OPAQUE_TAGS, so they are safe to inline into a pattern.
-    const close = new RegExp(`</${tag.name}(?:\\s[^>]*)?>`, "gi");
-    close.lastIndex = tag.end;
-    const m = close.exec(html);
-    return m === null ? html.length : m.index + m[0].length;
-  }
+  if (tag.selfClosing && SELF_CLOSABLE_TAGS.has(tag.name)) return tag.end;
+  if (RAW_TEXT_TAGS.has(tag.name)) return endOfRawText(html, tag);
+
+  // Foreign subtrees and <template> nest, so count depth. Comments and CDATA
+  // sections are skipped whole: a `<!-- </svg> -->` inside the subtree is text,
+  // and letting it close the element resumes scanning inside a live subtree.
   let depth = 1;
   let i = tag.end;
   while (i < html.length && depth > 0) {
     const lt = html.indexOf("<", i);
     if (lt === -1) return html.length;
+    const skipped = skipNonTag(html, lt);
+    if (skipped !== null) {
+      i = skipped;
+      continue;
+    }
     const inner = readTag(html, lt);
     if (inner === null) {
       i = lt + 1;
@@ -224,6 +233,45 @@ function endOfOpaque(html: string, tag: Tag): number {
     i = inner.end;
   }
   return i;
+}
+
+/**
+ * Offset just past a comment or CDATA section starting at `at`, or null when
+ * `at` is neither. CDATA is legal inside the foreign subtrees this scanner
+ * consumes, and both may contain text that looks like an end tag.
+ */
+function skipNonTag(html: string, at: number): number | null {
+  if (html.startsWith("<!--", at)) {
+    const close = html.indexOf("-->", at + 4);
+    return close === -1 ? html.length : close + 3;
+  }
+  if (html.startsWith("<![CDATA[", at)) {
+    const close = html.indexOf("]]>", at + 9);
+    return close === -1 ? html.length : close + 3;
+  }
+  return null;
+}
+
+/**
+ * Offset just past the end tag closing raw-text element `tag`. The end tag is
+ * the first `</name` followed by whitespace, `/` or `>`; anything else is text,
+ * so `</scriptish>` does not close a `<script>`. Scanned rather than matched
+ * with a constructed pattern so no regex is ever built from a tag name.
+ */
+function endOfRawText(html: string, tag: Tag): number {
+  const needle = `</${tag.name}`;
+  const haystack = html.toLowerCase();
+  let i = tag.end;
+  for (;;) {
+    const at = haystack.indexOf(needle, i);
+    if (at === -1) return html.length;
+    const next = html.charAt(at + needle.length);
+    if (next === ">" || next === "/" || next === "" || /\s/.test(next)) {
+      const gt = html.indexOf(">", at);
+      return gt === -1 ? html.length : gt + 1;
+    }
+    i = at + needle.length;
+  }
 }
 
 /**
@@ -268,6 +316,14 @@ function markInlineRuns(inner: string, open: string): string {
     if (inner.charAt(i) === "<") {
       const tag = readTag(inner, i);
       if (tag !== null) {
+        if (!tag.closing && tag.name === "plaintext") {
+          // <plaintext> has no end tag: every byte after it is text, `</plaintext>`
+          // included. Nothing further can be highlighted, so close the run and
+          // emit the remainder untouched rather than splice marks into that text.
+          flush();
+          out += inner.slice(i);
+          return out;
+        }
         if (!tag.closing && OPAQUE_TAGS.has(tag.name)) {
           const end = endOfOpaque(inner, tag);
           run += inner.slice(i, end);
