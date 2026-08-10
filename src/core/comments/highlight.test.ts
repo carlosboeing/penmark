@@ -319,6 +319,9 @@ describe("injectHighlights — the browser's view of a split span", () => {
   const listSpan = (raw: string): string =>
     `- <!--pmk:s abcdefgh-->before\n\n  ${raw}\n\n  after<!--/pmk:s abcdefgh-->\n`;
 
+  /** The same document with no anchors in it, for before/after comparisons. */
+  const listPlain = (raw: string): string => `- before\n\n  ${raw}\n\n  after\n`;
+
   it("leaves a textarea's value exactly as authored", () => {
     const doc = domOf(listSpan(`<textarea>literal <div> text</textarea>`));
     expect(doc.querySelector("textarea")!.textContent).toBe("literal <div> text");
@@ -342,15 +345,14 @@ describe("injectHighlights — the browser's view of a split span", () => {
     // That predates comments entirely (it reproduces with none in the document),
     // so the contract here is narrower: injecting a highlight must not make the
     // value any worse than the renderer already left it.
-    const markdown = listSpan(`<textarea/>literal <div> text</textarea>`);
-    // Removing the anchors shifts every source offset, so compare without them.
+    const raw = `<textarea/>literal <div> text</textarea>`;
+    // Dropping the anchors shifts every source offset, so compare without them.
     const value = (doc: Document): string =>
       doc.querySelector("textarea")!.textContent!.replace(/ data-pmk-soff="\d+"/g, "");
-    const plain = new JSDOM(
-      `<body>${createRenderer({}).render(markdown.replace(/<!--[\s\S]*?-->/g, ""))}</body>`,
-    ).window.document;
-    expect(value(domOf(markdown))).toBe(value(plain));
-    expect(value(domOf(markdown))).not.toContain("mark");
+    const plain = new JSDOM(`<body>${createRenderer({}).render(listPlain(raw))}</body>`).window
+      .document;
+    expect(value(domOf(listSpan(raw)))).toBe(value(plain));
+    expect(value(domOf(listSpan(raw)))).not.toContain("mark");
   });
 
   it("highlights every item of a span across list items", () => {
