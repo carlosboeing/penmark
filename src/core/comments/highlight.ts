@@ -126,11 +126,6 @@ function readTag(html: string, at: number): Tag | null {
   return { name: m[2]!.toLowerCase(), end: i };
 }
 
-/** True iff `run` holds something a highlight would actually paint. */
-function hasVisibleContent(run: string): boolean {
-  return run.replace(/<!--[\s\S]*?-->/g, "").trim() !== "";
-}
-
 /**
  * Wrap every inline run of `inner` in its own `<mark …>`, leaving block tags and
  * inter-block whitespace outside. An extent that stays within one block yields a
@@ -144,9 +139,14 @@ function hasVisibleContent(run: string): boolean {
 function markInlineRuns(inner: string, open: string): string {
   let out = "";
   let run = "";
+  // Whether the run holds anything a highlight would paint. Tracked while
+  // scanning rather than re-derived from `run`, so comment text never has to be
+  // stripped back out of a string.
+  let painted = false;
   const flush = (): void => {
-    out += hasVisibleContent(run) ? `${open}${run}</mark>` : run;
+    out += painted ? `${open}${run}</mark>` : run;
     run = "";
+    painted = false;
   };
 
   let i = 0;
@@ -154,7 +154,7 @@ function markInlineRuns(inner: string, open: string): string {
     if (inner.startsWith("<!--", i)) {
       const close = inner.indexOf("-->", i + 4);
       const end = close === -1 ? inner.length : close + 3;
-      run += inner.slice(i, end);
+      run += inner.slice(i, end); // a comment paints nothing
       i = end;
       continue;
     }
@@ -166,12 +166,15 @@ function markInlineRuns(inner: string, open: string): string {
           out += inner.slice(i, tag.end);
         } else {
           run += inner.slice(i, tag.end);
+          painted = true;
         }
         i = tag.end;
         continue;
       }
     }
-    run += inner.charAt(i);
+    const ch = inner.charAt(i);
+    run += ch;
+    if (ch.trim() !== "") painted = true;
     i++;
   }
   flush();
