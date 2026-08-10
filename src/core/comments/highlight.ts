@@ -26,7 +26,10 @@
  *
  * It is a string transform, not a DOM parse: the markers are exact,
  * fixed-length, machine-generated tokens, so id-keyed regex replacement is
- * sufficient and avoids parsing HTML on the host.
+ * sufficient and avoids parsing HTML on the host. The one place that must look
+ * at surrounding markup is the span splitter below, which scans for block-tag
+ * boundaries; it reads tags and comments precisely enough not to corrupt them,
+ * but it still builds no DOM.
  */
 
 import type { ReconcileResult } from "./reconcile.js";
@@ -40,33 +43,139 @@ const BLOCK_MARKER = new RegExp(`<!--pmk:b (${ID})-->(\\s*)<([a-zA-Z][a-zA-Z0-9-
 const ANY_PMK_MARKER = new RegExp(`<!--/?pmk:[sbr] ${ID}(?: [oc])?-->`, "g");
 
 /**
- * Block-level tags a `<mark>` must never straddle. A bullet list is ONE block, so
- * selecting a few of its items yields a span, not a range — and one `<mark>`
+ * Block-level tag names a `<mark>` must never straddle. A bullet list is ONE
+ * block, so selecting a few of its items yields a span, not a range — one `<mark>`
  * wrapped around `</li><li>` is invalid nesting. `<mark>` is not in HTML's list
  * of formatting elements, so the parser does NOT reconstruct it across the
  * boundary: it closes the mark at `</li>` and drops the stray closer, leaving
  * every item after the first unhighlighted. Splitting the extent into one
  * `<mark>` per inline run keeps the markup valid and the whole extent visible.
  */
-const BLOCK_BOUNDARY_TAG =
-  /(<\/?(?:p|div|li|ul|ol|dl|dt|dd|blockquote|pre|table|thead|tbody|tfoot|tr|td|th|h[1-6]|hr|section|article|aside|header|footer|figure|figcaption|details|summary|main|nav|form|fieldset)\b[^>]*>)/gi;
+const BLOCK_TAGS: ReadonlySet<string> = new Set([
+  "p",
+  "div",
+  "li",
+  "ul",
+  "ol",
+  "dl",
+  "dt",
+  "dd",
+  "blockquote",
+  "pre",
+  "table",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "td",
+  "th",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "hr",
+  "section",
+  "article",
+  "aside",
+  "header",
+  "footer",
+  "figure",
+  "figcaption",
+  "details",
+  "summary",
+  "main",
+  "nav",
+  "form",
+  "fieldset",
+]);
+
+/** Start of an HTML tag: `<name` or `</name`. Sticky — the caller sets lastIndex. */
+const TAG_NAME = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/y;
+
+interface Tag {
+  name: string;
+  /** Offset just past the tag's closing `>`. */
+  end: number;
+}
+
+/**
+ * Read the tag starting at `at`, or null if that is not a tag. The scan honours
+ * quoted attribute values, so a `>` inside `data-x=">"` does not end the tag —
+ * splitting there would splice a `<mark>` into the attribute and destroy the
+ * element. Raw HTML reaches here because markdown-it runs with `html: true`.
+ */
+function readTag(html: string, at: number): Tag | null {
+  TAG_NAME.lastIndex = at;
+  const m = TAG_NAME.exec(html);
+  if (m === null) return null;
+  let i = TAG_NAME.lastIndex;
+  let quote = "";
+  while (i < html.length) {
+    const ch = html.charAt(i);
+    i++;
+    if (quote !== "") {
+      if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === ">") {
+      break;
+    }
+  }
+  return { name: m[2]!.toLowerCase(), end: i };
+}
+
+/** True iff `run` holds something a highlight would actually paint. */
+function hasVisibleContent(run: string): boolean {
+  return run.replace(/<!--[\s\S]*?-->/g, "").trim() !== "";
+}
 
 /**
  * Wrap every inline run of `inner` in its own `<mark …>`, leaving block tags and
  * inter-block whitespace outside. An extent that stays within one block yields a
  * single `<mark>`, byte-identical to the un-split form.
+ *
+ * This is a scan rather than a regex split because both HTML comments and quoted
+ * attribute values can contain text that looks like a block tag. A comment's
+ * contents are carried along whole, so `<!-- note <div> inside -->` never splits
+ * a run and never has a `</mark>` spliced into it.
  */
 function markInlineRuns(inner: string, open: string): string {
-  // split() with one capture group alternates run / delimiter / run / …
-  const parts = inner.split(BLOCK_BOUNDARY_TAG);
-  if (parts.length === 1) return `${open}${inner}</mark>`;
-  return parts
-    .map((part, i) => {
-      const isBlockTag = i % 2 === 1;
-      if (isBlockTag || part.trim() === "") return part;
-      return `${open}${part}</mark>`;
-    })
-    .join("");
+  let out = "";
+  let run = "";
+  const flush = (): void => {
+    out += hasVisibleContent(run) ? `${open}${run}</mark>` : run;
+    run = "";
+  };
+
+  let i = 0;
+  while (i < inner.length) {
+    if (inner.startsWith("<!--", i)) {
+      const close = inner.indexOf("-->", i + 4);
+      const end = close === -1 ? inner.length : close + 3;
+      run += inner.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (inner.charAt(i) === "<") {
+      const tag = readTag(inner, i);
+      if (tag !== null) {
+        if (BLOCK_TAGS.has(tag.name)) {
+          flush();
+          out += inner.slice(i, tag.end);
+        } else {
+          run += inner.slice(i, tag.end);
+        }
+        i = tag.end;
+        continue;
+      }
+    }
+    run += inner.charAt(i);
+    i++;
+  }
+  flush();
+  return out;
 }
 
 /** Span states that produce a body highlight (a delimited, non-empty extent). */

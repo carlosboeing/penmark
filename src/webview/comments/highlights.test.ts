@@ -103,6 +103,26 @@ describe("installHighlights", () => {
     expect(root.querySelectorAll(".pmk-gutter-dot").length).toBe(1);
   });
 
+  it("wires one control when a split span mixes link and plain fragments", () => {
+    // The first fragment holds a link, so it takes the fallback branch and gets
+    // a separate action; the second must not then claim a direct control too.
+    const ul = document.createElement("ul");
+    ul.innerHTML =
+      `<li><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">see <a href="#x">link</a></mark></li>` +
+      `<li><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">plain tail</mark></li>`;
+    root.appendChild(ul);
+
+    installHighlights(root, [comment()], post);
+
+    // One tab stop for the whole extent: the fallback action button, and no
+    // fragment additionally claiming a direct role="button".
+    const controls = root.querySelectorAll('.pmk-highlight-action, mark.pmk-hl[role="button"]');
+    expect(controls).toHaveLength(1);
+    expect(controls[0]!.classList.contains("pmk-highlight-action")).toBe(true);
+    // The action button shares the .pmk-gutter-dot class, so count visible dots.
+    expect(root.querySelectorAll(".pmk-gutter-dot:not(.pmk-highlight-action)")).toHaveLength(1);
+  });
+
   it("opens the popover from any fragment of a split span", () => {
     const ul = document.createElement("ul");
     ul.innerHTML =

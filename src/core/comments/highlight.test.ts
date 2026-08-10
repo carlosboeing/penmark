@@ -133,6 +133,27 @@ describe("injectHighlights — a span crossing block boundaries", () => {
     );
   });
 
+  it("does not mistake a '>' inside a quoted attribute for the end of a tag", () => {
+    // Raw HTML flows through markdown-it (html:true), so an extent can contain
+    // an attribute value holding '>'. Ending the tag at the first '>' would
+    // splice the <mark> into the attribute and destroy the element.
+    const html =
+      `<li><!--pmk:s abcdefgh-->before</li>\n` +
+      `<li><div data-x=">">raw</div></li>\n` +
+      `<li>after<!--/pmk:s abcdefgh--></li>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out).toContain(`<div data-x=">">`);
+    expect(out).not.toContain(`<div data-x="><mark`);
+    expect(out.match(/<mark\b/g) ?? []).toHaveLength(3);
+  });
+
+  it("ignores block-looking tags inside an HTML comment", () => {
+    const html = `<p><!--pmk:s abcdefgh-->a<!-- note <div> inside -->b<!--/pmk:s abcdefgh--></p>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out.match(/<mark\b/g) ?? []).toHaveLength(1);
+    expect(out).toContain(`<!-- note <div> inside -->`);
+  });
+
   it("splits a span that crosses paragraphs inside one list item", () => {
     const html = `<li><!--pmk:s abcdefgh--><p>first para</p>\n<p>second para<!--/pmk:s abcdefgh--></p></li>`;
     const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
