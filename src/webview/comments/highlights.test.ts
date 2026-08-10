@@ -83,6 +83,40 @@ describe("installHighlights", () => {
     expect(p.querySelectorAll(".pmk-gutter-dot").length).toBe(1);
   });
 
+  it("gives a span split across list items one tab stop and one dot", () => {
+    // A span across list items arrives as one <mark> per item (all sharing the
+    // id), so the fragments must read as a single control, not N of them.
+    const ul = document.createElement("ul");
+    ul.innerHTML =
+      `<li><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">one</mark></li>` +
+      `<li><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">two</mark></li>` +
+      `<li><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">three</mark></li>`;
+    root.appendChild(ul);
+
+    installHighlights(root, [comment()], post);
+
+    const marks = [...root.querySelectorAll<HTMLElement>("mark.pmk-hl")];
+    expect(marks).toHaveLength(3);
+    expect(marks.filter((m) => m.getAttribute("role") === "button")).toHaveLength(1);
+    expect(marks.filter((m) => m.tabIndex === 0)).toHaveLength(1);
+    expect(marks[0]!.getAttribute("role")).toBe("button");
+    expect(root.querySelectorAll(".pmk-gutter-dot").length).toBe(1);
+  });
+
+  it("opens the popover from any fragment of a split span", () => {
+    const ul = document.createElement("ul");
+    ul.innerHTML =
+      `<li><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">one</mark></li>` +
+      `<li><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">two</mark></li>`;
+    root.appendChild(ul);
+
+    installHighlights(root, [comment({ body: "the body text" })], post);
+    root.querySelectorAll<HTMLElement>("mark.pmk-hl")[1]!.click();
+
+    expect(isPopoverOpen()).toBe(true);
+    expect(document.querySelector(".pmk-popover")!.textContent).toContain("the body text");
+  });
+
   it("opens the popover for the clicked span's comment", () => {
     const mark = seedSpan(root, "abcdefgh");
     installHighlights(root, [comment({ body: "the body text" })], post);
@@ -133,16 +167,22 @@ describe("installHighlights", () => {
     ["input", () => document.createElement("input")],
     ["select", () => document.createElement("select")],
     ["textarea", () => document.createElement("textarea")],
-    ["contenteditable", () => {
-      const el = document.createElement("span");
-      el.setAttribute("contenteditable", "true");
-      return el;
-    }],
-    ["tabindex", () => {
-      const el = document.createElement("span");
-      el.tabIndex = 0;
-      return el;
-    }],
+    [
+      "contenteditable",
+      () => {
+        const el = document.createElement("span");
+        el.setAttribute("contenteditable", "true");
+        return el;
+      },
+    ],
+    [
+      "tabindex",
+      () => {
+        const el = document.createElement("span");
+        el.tabIndex = 0;
+        return el;
+      },
+    ],
   ])("does not hijack nested %s controls", (_name, createControl) => {
     const mark = seedSpan(root, "abcdefgh");
     const control = createControl();

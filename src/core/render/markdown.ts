@@ -1,4 +1,6 @@
 import MarkdownIt from "markdown-it";
+import type StateBlock from "markdown-it/lib/rules_block/state_block.mjs";
+import htmlBlockRule from "markdown-it/lib/rules_block/html_block.mjs";
 import taskLists from "markdown-it-task-lists";
 import footnote from "markdown-it-footnote";
 import anchor from "markdown-it-anchor";
@@ -40,6 +42,23 @@ export interface RendererOptions {
   mermaid?: boolean;
 }
 
+/** A run of pmk anchor comments at the very start of a line. */
+const LEADING_ANCHORS = /^(?:<!--\/?pmk:[sbr] [a-z2-7]{8}(?: [oc])?-->)+/;
+
+/** True iff `line` leads with pmk anchors and still has content after them. */
+function anchorPrecedesContent(line: string): boolean {
+  const anchors = LEADING_ANCHORS.exec(line);
+  return anchors !== null && line.slice(anchors[0].length).trim() !== "";
+}
+
+/** The source text of block line `startLine`, past its block prefixes. */
+function lineText(state: StateBlock, startLine: number): string {
+  return state.src.slice(
+    state.bMarks[startLine]! + state.tShift[startLine]!,
+    state.eMarks[startLine]!,
+  );
+}
+
 /**
  * Create a configured markdown-it instance with the GFM-equivalent plugin set.
  *
@@ -54,6 +73,27 @@ export function createRenderer(opts: RendererOptions): MarkdownIt {
     linkify: true,
     highlight: opts.highlight ? (code, lang) => opts.highlight!(code, lang) ?? "" : undefined,
   });
+
+  // CommonMark HTML-block type 2 claims any line beginning with `<!--` as raw
+  // HTML through the closing `-->`, which freezes that line's inline markdown as
+  // literal text — a bullet whose span opener sits in front of `**Bold.**`
+  // renders the asterisks. Inline-safety snapping puts an opener at a line start
+  // routinely (selecting a bullet that opens in bold snaps left onto the `**`),
+  // so decline the block rule for a line that leads with a pmk anchor and still
+  // carries content. Those lines take the inline path instead, where html_inline
+  // passes the marker through verbatim at the exact extent (ADR 0006).
+  //
+  // Marker-only lines keep the default behaviour: `pmk:b` and `pmk:r` anchors
+  // own their line by design (§4.2), and injectHighlights matches them as
+  // standalone HTML blocks abutting the next element's open tag.
+  md.block.ruler.at(
+    "html_block",
+    (state, startLine, endLine, silent) => {
+      if (anchorPrecedesContent(lineText(state, startLine))) return false;
+      return htmlBlockRule(state, startLine, endLine, silent);
+    },
+    { alt: ["paragraph", "reference", "blockquote"] },
+  );
 
   // Task lists: [ ] / [x] syntax
   md.use(taskLists);

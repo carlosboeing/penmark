@@ -125,6 +125,65 @@ describe("createRenderer — pmk HTML comment markers", () => {
   });
 });
 
+describe("createRenderer — a span marker at a line start must not start an HTML block", () => {
+  const O = "<!--pmk:s aaaaaaaa-->";
+  const C = "<!--/pmk:s aaaaaaaa-->";
+  const render = (src: string) => createRenderer({}).render(src);
+
+  // CommonMark HTML block type 2: a line beginning with `<!--` is raw HTML until
+  // `-->`, so every inline construct on that line stays literal. Inline-safety
+  // snapping routinely pushes a span opener to the start of a block's content
+  // line (selecting a bullet that opens with bold snaps left onto the `**`), so
+  // the renderer must keep those lines on the inline path.
+  const inlineBreakers: Array<[name: string, src: string]> = [
+    ["bullet item opening with bold", `- ${O}**Bold lead.** rest of item${C}.\n`],
+    ["ordered item opening with code", `1. ${O}\`code()\` and more${C} tail\n`],
+    ["nested bullet opening with bold", `- outer\n  - ${O}**Bold.** inner${C} tail\n`],
+    ["paragraph opening with bold", `${O}**Bold lead.** rest${C}.\n`],
+    ["blockquote opening with bold", `> ${O}**Bold lead.** rest${C}.\n`],
+    ["continuation line opening with code", `First line\n${O}\`code\` and **bold**${C} tail\n`],
+    ["closer at a line start", `Lead ${O}text\n${C}**Bold** tail\n`],
+  ];
+
+  for (const [name, src] of inlineBreakers) {
+    it(`parses inline markdown in a ${name}`, () => {
+      const html = render(src);
+      expect(html).not.toContain("**");
+      expect(html).toMatch(/<strong>|<code[ >]/);
+    });
+  }
+
+  it("keeps a span marker as an HTML comment, not escaped text", () => {
+    const html = render(`- ${O}**Bold lead.** rest${C}.\n`);
+    expect(html).toContain(O);
+    expect(html).toContain(C);
+    expect(html).not.toContain("&lt;!--");
+  });
+
+  it("still emits a lone block marker as its own HTML block", () => {
+    // `pmk:b` / `pmk:r` own their line (the parser treats a shared line as
+    // corruption), and injectHighlights matches `<!--pmk:b ID-->` immediately
+    // followed by the next element's open tag. That must keep working.
+    const html = render(`<!--pmk:b aaaaaaaa-->\n# Heading\n`);
+    expect(html).toContain("<!--pmk:b aaaaaaaa-->");
+    expect(html).not.toContain("<p><!--pmk:b");
+    expect(html).toMatch(/<!--pmk:b aaaaaaaa-->\s*<h1/);
+  });
+
+  it("still emits lone range markers as their own HTML blocks", () => {
+    const html = render(`<!--pmk:r aaaaaaaa o-->\nPara text\n\n<!--pmk:r aaaaaaaa c-->\n`);
+    expect(html).toMatch(/<!--pmk:r aaaaaaaa o-->\s*<p[ >]/);
+    expect(html).toContain("<!--pmk:r aaaaaaaa c-->");
+    expect(html).not.toContain("<p><!--pmk:r");
+  });
+
+  it("leaves a non-pmk HTML comment at a line start as an HTML block", () => {
+    const html = render(`<!-- a note -->**not bold**\n`);
+    expect(html).toContain("**not bold**");
+    expect(html).not.toContain("<strong>");
+  });
+});
+
 describe("stripFrontmatter", () => {
   it("strips YAML frontmatter from output", () => {
     const md = fixture("frontmatter-doc.md");

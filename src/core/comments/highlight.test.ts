@@ -83,6 +83,69 @@ describe("injectHighlights — spans", () => {
   });
 });
 
+describe("injectHighlights — a span crossing block boundaries", () => {
+  // A bullet list is ONE block, so selecting some of its items is a span, not a
+  // range. A single <mark> spanning `</li><li>` is invalid nesting, and since
+  // <mark> is not an HTML formatting element the parser closes it at `</li>` and
+  // discards the stray closer — every item after the first loses its highlight.
+  // The extent must therefore become one <mark> per inline run.
+  const listHtml =
+    `<ul>\n` +
+    `<li><!--pmk:s abcdefgh--><strong>Bold lead.</strong> first item</li>\n` +
+    `<li>second with <code>code</code> here</li>\n` +
+    `<li>third with <em>italic</em> text<!--/pmk:s abcdefgh--></li>\n` +
+    `</ul>`;
+
+  it("emits one <mark> per list item, all carrying the same id", () => {
+    const out = injectHighlights(listHtml, recon(["abcdefgh", "intact"]));
+    const marks = out.match(/<mark class="pmk-hl" data-pmk-id="abcdefgh"/g) ?? [];
+    expect(marks).toHaveLength(3);
+    expect(out.match(/<\/mark>/g) ?? []).toHaveLength(3);
+  });
+
+  it("never lets a <mark> straddle a block tag", () => {
+    const out = injectHighlights(listHtml, recon(["abcdefgh", "intact"]));
+    for (const [, body] of out.matchAll(/<mark\b[^>]*>([\s\S]*?)<\/mark>/g)) {
+      expect(body).not.toMatch(/<\/?(?:li|ul|ol|p|div|blockquote)\b/);
+    }
+  });
+
+  it("keeps every word of the extent inside a highlight", () => {
+    const out = injectHighlights(listHtml, recon(["abcdefgh", "intact"]));
+    const highlighted = [...out.matchAll(/<mark\b[^>]*>([\s\S]*?)<\/mark>/g)]
+      .map((m) => m[1]!.replace(/<[^>]+>/g, ""))
+      .join(" ");
+    expect(highlighted).toContain("Bold lead.");
+    expect(highlighted).toContain("second with");
+    expect(highlighted).toContain("third with");
+    expect(highlighted).toContain("text");
+  });
+
+  it("does not wrap the whitespace between block tags", () => {
+    const out = injectHighlights(listHtml, recon(["abcdefgh", "intact"]));
+    expect(out).not.toMatch(/<mark\b[^>]*>\s*<\/mark>/);
+    expect(out).toContain("</li>\n<li>");
+  });
+
+  it("still emits exactly one <mark> for an extent inside a single block", () => {
+    const html = `<p>Use <!--pmk:s abcdefgh-->high <em>level</em><!--/pmk:s abcdefgh--> design.</p>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out.match(/<mark\b/g) ?? []).toHaveLength(1);
+    expect(out).toContain(
+      `<mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">high <em>level</em></mark>`,
+    );
+  });
+
+  it("splits a span that crosses paragraphs inside one list item", () => {
+    const html = `<li><!--pmk:s abcdefgh--><p>first para</p>\n<p>second para<!--/pmk:s abcdefgh--></p></li>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out.match(/<mark\b/g) ?? []).toHaveLength(2);
+    expect(out).toContain(
+      `<p><mark class="pmk-hl" data-pmk-id="abcdefgh" data-pmk-state="intact">first para</mark></p>`,
+    );
+  });
+});
+
 describe("injectHighlights — blocks", () => {
   it("tags the next block element of an intact pmk:b marker", () => {
     const html = `<!--pmk:b ddddddff-->\n<table>\n<tr><td>a</td></tr>\n</table>`;
