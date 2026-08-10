@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { JSDOM } from "jsdom";
+import { createRenderer } from "../render/markdown.js";
 import { injectHighlights } from "./highlight.js";
 import type { ReconcileResult, ReconciledComment } from "./reconcile.js";
 import type { CommentState, ParsedEntry } from "./types.js";
@@ -147,6 +149,44 @@ describe("injectHighlights — a span crossing block boundaries", () => {
     expect(out.match(/<mark\b/g) ?? []).toHaveLength(3);
   });
 
+  it("does not scan tag-looking text inside a raw-text element", () => {
+    // Inside <textarea>/<title>/<script>/<style> a "<div>" is text, not markup.
+    // Splitting there rewrites the element's own value.
+    const html =
+      `<li><!--pmk:s abcdefgh-->before</li>\n` +
+      `<li><textarea>literal <div> text</textarea></li>\n` +
+      `<li>after<!--/pmk:s abcdefgh--></li>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out).toContain(`<textarea>literal <div> text</textarea>`);
+    expect(out).not.toMatch(/<textarea>[^<]*<\/mark>/);
+  });
+
+  it("keeps a self-contained subtree whole instead of splitting inside it", () => {
+    const html = `<p><!--pmk:s abcdefgh-->a<svg viewBox="0 0 1 1"><title>t</title><rect/></svg>b<!--/pmk:s abcdefgh--></p>`;
+    const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+    expect(out).toContain(`<svg viewBox="0 0 1 1"><title>t</title><rect/></svg>`);
+    expect(out.match(/<mark\b/g) ?? []).toHaveLength(1);
+  });
+
+  it.each(["dialog", "menu", "search", "address", "x-custom"])(
+    "treats <%s> as a boundary so its children are not torn out",
+    (tag) => {
+      const html =
+        `<li><!--pmk:s abcdefgh-->before</li>\n` +
+        `<li><${tag}><p>inner</p></${tag}></li>\n` +
+        `<li>after<!--/pmk:s abcdefgh--></li>`;
+      const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
+      // The container's open tag must never sit inside a <mark> that closes
+      // before the container does — that is the crossing the browser repairs by
+      // relocating the child out of its parent.
+      expect(out).toContain(`<${tag}><p>`);
+      expect(out).not.toMatch(new RegExp(`<${tag}></mark>`));
+      for (const [, body] of out.matchAll(/<mark\b[^>]*>([\s\S]*?)<\/mark>/g)) {
+        expect(body).not.toContain(`<${tag}>`);
+      }
+    },
+  );
+
   it("ignores block-looking tags inside an HTML comment", () => {
     const html = `<p><!--pmk:s abcdefgh-->a<!-- note <div> inside -->b<!--/pmk:s abcdefgh--></p>`;
     const out = injectHighlights(html, recon(["abcdefgh", "intact"]));
@@ -223,5 +263,44 @@ describe("injectHighlights — isolation", () => {
     const html = `<p><!--pmk:s 44444444-->x<!--/pmk:s 44444444--></p>`;
     const out = injectHighlights(html, recon());
     expect(out).toBe(`<p>x</p>`);
+  });
+});
+
+describe("injectHighlights — the browser's view of a split span", () => {
+  // The string assertions above pin the markup; these pin what a browser
+  // actually builds from it, which is where the original truncation bug and the
+  // raw-text corruption both showed up.
+  function domOf(markdown: string): Document {
+    const html = injectHighlights(
+      createRenderer({}).render(markdown),
+      recon(["abcdefgh", "intact"]),
+    );
+    return new JSDOM(`<body>${html}</body>`).window.document;
+  }
+
+  const listSpan = (raw: string): string =>
+    `- <!--pmk:s abcdefgh-->before\n\n  ${raw}\n\n  after<!--/pmk:s abcdefgh-->\n`;
+
+  it("leaves a textarea's value exactly as authored", () => {
+    const doc = domOf(listSpan(`<textarea>literal <div> text</textarea>`));
+    expect(doc.querySelector("textarea")!.textContent).toBe("literal <div> text");
+  });
+
+  it("keeps a dialog's paragraph inside the dialog", () => {
+    const doc = domOf(listSpan(`<dialog><p>raw dialog text</p></dialog>`));
+    const dialog = doc.querySelector("dialog")!;
+    expect(dialog.querySelector("p")?.textContent).toBe("raw dialog text");
+  });
+
+  it("highlights every item of a span across list items", () => {
+    const doc = domOf(
+      `- <!--pmk:s abcdefgh-->**Bold.** one\n- two with \`code\`\n- three<!--/pmk:s abcdefgh-->\n`,
+    );
+    const marks = [...doc.querySelectorAll("mark[data-pmk-id='abcdefgh']")];
+    expect(marks).toHaveLength(3);
+    expect(doc.querySelectorAll("li")).toHaveLength(3);
+    for (const li of doc.querySelectorAll("li")) {
+      expect(li.querySelector("mark[data-pmk-id='abcdefgh']")).not.toBeNull();
+    }
   });
 });

@@ -27,9 +27,9 @@
  * It is a string transform, not a DOM parse: the markers are exact,
  * fixed-length, machine-generated tokens, so id-keyed regex replacement is
  * sufficient and avoids parsing HTML on the host. The one place that must look
- * at surrounding markup is the span splitter below, which scans for block-tag
- * boundaries; it reads tags and comments precisely enough not to corrupt them,
- * but it still builds no DOM.
+ * at surrounding markup is the span splitter below, which scans for element
+ * boundaries; it reads tags, comments and raw-text elements precisely enough not
+ * to corrupt them, but it still builds no DOM.
  */
 
 import type { ReconcileResult } from "./reconcile.js";
@@ -43,52 +43,117 @@ const BLOCK_MARKER = new RegExp(`<!--pmk:b (${ID})-->(\\s*)<([a-zA-Z][a-zA-Z0-9-
 const ANY_PMK_MARKER = new RegExp(`<!--/?pmk:[sbr] ${ID}(?: [oc])?-->`, "g");
 
 /**
- * Block-level tag names a `<mark>` must never straddle. A bullet list is ONE
- * block, so selecting a few of its items yields a span, not a range — one `<mark>`
- * wrapped around `</li><li>` is invalid nesting. `<mark>` is not in HTML's list
- * of formatting elements, so the parser does NOT reconstruct it across the
- * boundary: it closes the mark at `</li>` and drops the stray closer, leaving
- * every item after the first unhighlighted. Splitting the extent into one
- * `<mark>` per inline run keeps the markup valid and the whole extent visible.
+ * Elements that sit inside a line of text. A `<mark>` may contain these whole,
+ * so a highlight is not chopped up at every `<em>` or `<a>`.
+ *
+ * The classification is deliberately an INLINE allowlist rather than a list of
+ * block tags. A block list has to be exhaustive to be safe — miss `dialog`,
+ * `menu`, `search` or any custom element and the splitter emits a `<mark>` that
+ * opens inside the container and closes outside it, which the browser repairs by
+ * relocating the container's children. Anything not listed here is treated as a
+ * boundary instead: being wrong about an element costs one extra highlight
+ * fragment, never invalid markup.
  */
-const BLOCK_TAGS: ReadonlySet<string> = new Set([
-  "p",
-  "div",
-  "li",
-  "ul",
-  "ol",
-  "dl",
-  "dt",
-  "dd",
-  "blockquote",
-  "pre",
-  "table",
-  "thead",
-  "tbody",
-  "tfoot",
-  "tr",
-  "td",
-  "th",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
+const INLINE_TAGS: ReadonlySet<string> = new Set([
+  "a",
+  "abbr",
+  "acronym",
+  "b",
+  "bdi",
+  "bdo",
+  "big",
+  "br",
+  "cite",
+  "code",
+  "data",
+  "del",
+  "dfn",
+  "em",
+  "font",
+  "i",
+  "img",
+  "ins",
+  "kbd",
+  "mark",
+  "nobr",
+  "picture",
+  "q",
+  "rp",
+  "rt",
+  "rtc",
+  "ruby",
+  "s",
+  "samp",
+  "small",
+  "source",
+  "span",
+  "strike",
+  "strong",
+  "sub",
+  "sup",
+  "time",
+  "track",
+  "tt",
+  "u",
+  "var",
+  "wbr",
+]);
+
+/** Elements with no end tag — they never open a nesting level. */
+const VOID_TAGS: ReadonlySet<string> = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
   "hr",
-  "section",
-  "article",
-  "aside",
-  "header",
-  "footer",
-  "figure",
-  "figcaption",
-  "details",
-  "summary",
-  "main",
-  "nav",
-  "form",
-  "fieldset",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
+
+/**
+ * Elements whose contents must never be scanned for tag boundaries. Inside
+ * `<textarea>` or `<title>` a `<div>` is text, not markup, so splitting there
+ * would rewrite the element's own value; inside `<svg>` or `<math>` the child
+ * names are a foreign vocabulary that this HTML classification does not describe.
+ * Both are consumed whole and ride inside the current run.
+ */
+const OPAQUE_TAGS: ReadonlySet<string> = new Set([
+  "script",
+  "style",
+  "textarea",
+  "title",
+  "xmp",
+  "noembed",
+  "noframes",
+  "iframe",
+  "plaintext",
+  "svg",
+  "math",
+  "template",
+]);
+
+/**
+ * Opaque elements holding raw text: per the HTML parser the FIRST matching end
+ * tag closes them, so nesting is not counted (a `"<script>"` inside a JS string
+ * would otherwise be read as a nested element).
+ */
+const RAW_TEXT_TAGS: ReadonlySet<string> = new Set([
+  "script",
+  "style",
+  "textarea",
+  "title",
+  "xmp",
+  "noembed",
+  "noframes",
+  "iframe",
+  "plaintext",
 ]);
 
 /** Start of an HTML tag: `<name` or `</name`. Sticky — the caller sets lastIndex. */
@@ -96,6 +161,10 @@ const TAG_NAME = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)/y;
 
 interface Tag {
   name: string;
+  /** True for an end tag (`</name>`). */
+  closing: boolean;
+  /** True for an XML-style self-closing tag (`<name/>`). */
+  selfClosing: boolean;
   /** Offset just past the tag's closing `>`. */
   end: number;
 }
@@ -112,6 +181,7 @@ function readTag(html: string, at: number): Tag | null {
   if (m === null) return null;
   let i = TAG_NAME.lastIndex;
   let quote = "";
+  let prev = "";
   while (i < html.length) {
     const ch = html.charAt(i);
     i++;
@@ -122,19 +192,54 @@ function readTag(html: string, at: number): Tag | null {
     } else if (ch === ">") {
       break;
     }
+    if (quote === "") prev = ch;
   }
-  return { name: m[2]!.toLowerCase(), end: i };
+  return { name: m[2]!.toLowerCase(), closing: m[1] === "/", selfClosing: prev === "/", end: i };
 }
 
 /**
- * Wrap every inline run of `inner` in its own `<mark …>`, leaving block tags and
- * inter-block whitespace outside. An extent that stays within one block yields a
- * single `<mark>`, byte-identical to the un-split form.
+ * Offset just past the end tag matching the opaque element `tag`, or the end of
+ * `html` when it is never closed (`<plaintext>`, or truncated markup).
+ */
+function endOfOpaque(html: string, tag: Tag): number {
+  if (tag.selfClosing) return tag.end;
+  if (RAW_TEXT_TAGS.has(tag.name)) {
+    // Names come from OPAQUE_TAGS, so they are safe to inline into a pattern.
+    const close = new RegExp(`</${tag.name}(?:\\s[^>]*)?>`, "gi");
+    close.lastIndex = tag.end;
+    const m = close.exec(html);
+    return m === null ? html.length : m.index + m[0].length;
+  }
+  let depth = 1;
+  let i = tag.end;
+  while (i < html.length && depth > 0) {
+    const lt = html.indexOf("<", i);
+    if (lt === -1) return html.length;
+    const inner = readTag(html, lt);
+    if (inner === null) {
+      i = lt + 1;
+      continue;
+    }
+    if (inner.name === tag.name && !inner.selfClosing) depth += inner.closing ? -1 : 1;
+    i = inner.end;
+  }
+  return i;
+}
+
+/**
+ * Wrap every inline run of `inner` in its own `<mark …>`, leaving boundary tags
+ * and inter-block whitespace outside. An extent that stays within one block
+ * yields a single `<mark>`, byte-identical to the un-split form.
  *
- * This is a scan rather than a regex split because both HTML comments and quoted
- * attribute values can contain text that looks like a block tag. A comment's
- * contents are carried along whole, so `<!-- note <div> inside -->` never splits
- * a run and never has a `</mark>` spliced into it.
+ * The invariant is that no emitted `<mark>` may straddle an element boundary:
+ * within a mark, everything opened is closed. A boundary tag met at the top
+ * level therefore ends the current run. Inside an inline element the run keeps
+ * going and its nesting depth is tracked, so even a block tag written inside an
+ * `<a>` stays balanced within the mark rather than crossing out of it.
+ *
+ * This is a scan rather than a regex split because HTML comments, quoted
+ * attribute values and raw-text elements all contain text that looks like
+ * markup. It reads tags precisely enough not to corrupt them, but builds no DOM.
  */
 function markInlineRuns(inner: string, open: string): string {
   let out = "";
@@ -143,6 +248,8 @@ function markInlineRuns(inner: string, open: string): string {
   // scanning rather than re-derived from `run`, so comment text never has to be
   // stripped back out of a string.
   let painted = false;
+  // Open inline elements the run is currently inside.
+  let inlineDepth = 0;
   const flush = (): void => {
     out += painted ? `${open}${run}</mark>` : run;
     run = "";
@@ -161,12 +268,22 @@ function markInlineRuns(inner: string, open: string): string {
     if (inner.charAt(i) === "<") {
       const tag = readTag(inner, i);
       if (tag !== null) {
-        if (BLOCK_TAGS.has(tag.name)) {
+        if (!tag.closing && OPAQUE_TAGS.has(tag.name)) {
+          const end = endOfOpaque(inner, tag);
+          run += inner.slice(i, end);
+          painted = true;
+          i = end;
+          continue;
+        }
+        if (!INLINE_TAGS.has(tag.name) && inlineDepth === 0) {
           flush();
           out += inner.slice(i, tag.end);
         } else {
           run += inner.slice(i, tag.end);
           painted = true;
+          if (INLINE_TAGS.has(tag.name) && !VOID_TAGS.has(tag.name) && !tag.selfClosing) {
+            inlineDepth = tag.closing ? Math.max(0, inlineDepth - 1) : inlineDepth + 1;
+          }
         }
         i = tag.end;
         continue;
