@@ -112,13 +112,10 @@ describe("injectHighlights — a span crossing block boundaries", () => {
 
   it("keeps every word of the extent inside a highlight", () => {
     const out = injectHighlights(listHtml, recon(["abcdefgh", "intact"]));
-    const highlighted = [...out.matchAll(/<mark\b[^>]*>([\s\S]*?)<\/mark>/g)]
-      .map((m) => m[1]!.replace(/<[^>]+>/g, ""))
-      .join(" ");
-    expect(highlighted).toContain("Bold lead.");
-    expect(highlighted).toContain("second with");
-    expect(highlighted).toContain("third with");
-    expect(highlighted).toContain("text");
+    const bodies = [...out.matchAll(/<mark\b[^>]*>([\s\S]*?)<\/mark>/g)].map((m) => m[1]!);
+    for (const phrase of ["Bold lead.", "first item", "second with", "third with", "text"]) {
+      expect(bodies.some((body) => body.includes(phrase))).toBe(true);
+    }
   });
 
   it("does not wrap the whitespace between block tags", () => {
