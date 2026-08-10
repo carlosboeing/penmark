@@ -2,6 +2,19 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-08-10 (fix/inline-anchors-block-and-cross-block-highlights)
+
+### Commenting no longer breaks the formatting it wraps
+
+Commenting a bullet that opens in bold left the asterisks showing in the preview: `**Subscription-billed.**` rendered literally instead of bold. Reported from a real review session.
+
+- **An anchor at the start of a line no longer starts an HTML block** — CommonMark treats any line beginning with `<!--` as raw HTML through the closing `-->`, so the whole line skipped inline parsing. This was never specific to bold: inline code, links and italics on that line all rendered as source. It fired wherever inline-safety snapping pushed a span opener to the start of a block's content — bullets and ordered items (including nested ones), paragraphs, blockquotes, a paragraph's continuation line, and a closer landing at a line start. The renderer now declines the HTML-block rule for a line that leads with a pmk anchor and still carries content, so those lines take the inline path where the marker passes through verbatim at the exact extent (ADR 0006). Lines holding nothing but a marker keep the old behaviour, because `pmk:b` and `pmk:r` anchors own their line by design (§4.2), and a hand-written `<!-- note -->` still behaves as stock CommonMark.
+- **A highlight spanning list items stays visible past the first one** — a bullet list is one block, so commenting three of five bullets is a span, not a range. The single `<mark>` wrapped `</li><li>`, which is invalid nesting; because `<mark>` is not an HTML formatting element the browser closes it at `</li>` and discards the stray closer, silently dropping the highlight from every item after the first. The extent is now split into one `<mark>` per inline run, all sharing the comment id. An extent inside a single block still produces exactly one `<mark>`, byte-for-byte as before.
+- **The split reads as one control** — the fragments of a split highlight would otherwise each become a tab stop announcing the same comment. Only the first carries the keyboard affordance and the gutter dot; clicking any fragment still opens the popover, and all fragments light up together when the comment is active.
+- **Tests cover the boundary cases the fixtures missed** — the anchored-doc fixture had no line-start anchor, so no snapshot could have caught this. New tests pin each block context that broke, both marker-only-line behaviours, a non-pmk comment at a line start, and the cross-block split down to whitespace handling.
+
+Multi-block selections were already correct and are unchanged: a heading, paragraph, fenced code and list selected together still become one range wrapper with their formatting intact.
+
 ## 2026-07-26 (worktree-quote-line-formatter-hardening)
 
 ### Comments survive a format-on-save

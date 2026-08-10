@@ -51,8 +51,7 @@ function elementsWithCommentId(root: ParentNode, id: string): HTMLElement[] {
 
 function usesDirectKeyboardAction(el: HTMLElement): boolean {
   return (
-    el.matches("mark.pmk-hl, span.pmk-hl") &&
-    !el.querySelector(INTERACTIVE_DESCENDANT_SELECTOR)
+    el.matches("mark.pmk-hl, span.pmk-hl") && !el.querySelector(INTERACTIVE_DESCENDANT_SELECTOR)
   );
 }
 
@@ -61,11 +60,7 @@ function startsInInteractiveDescendant(target: HTMLElement, highlight: HTMLEleme
   return interactive !== null && interactive !== highlight && highlight.contains(interactive);
 }
 
-function addSeparateAction(
-  root: HTMLElement,
-  anchor: HTMLElement,
-  comment: WireComment,
-): void {
+function addSeparateAction(root: HTMLElement, anchor: HTMLElement, comment: WireComment): void {
   const existing = Array.from(root.querySelectorAll<HTMLElement>(".pmk-highlight-action")).find(
     (candidate) => candidate.dataset.pmkCommentAction === comment.id,
   );
@@ -83,7 +78,9 @@ function addSeparateAction(
   action.addEventListener("focus", () => anchor.classList.add("pmk-hl-keyboard-focus"));
   action.addEventListener("blur", () => anchor.classList.remove("pmk-hl-keyboard-focus"));
   action.addEventListener("click", () => {
-    const current = (_commentsByRoot.get(root) ?? []).find((candidate) => candidate.id === comment.id);
+    const current = (_commentsByRoot.get(root) ?? []).find(
+      (candidate) => candidate.id === comment.id,
+    );
     const currentAnchor = elementsWithCommentId(root, comment.id)[0];
     const currentPost = _postByRoot.get(root);
     if (current && currentAnchor && currentPost) {
@@ -115,6 +112,16 @@ export function installHighlights(
   }
 
   const activeId = getActiveCommentId();
+  // A span crossing block boundaries (some items of a bullet list) arrives as
+  // one <mark> per inline run, all sharing the id. They are one highlight, so
+  // only the FIRST fragment carries a control — otherwise a three-item extent
+  // becomes three tab stops announcing the same comment. The claim is made
+  // before choosing direct vs separate wiring, because the two branches produce
+  // different controls: a fragment holding a link takes the fallback branch, and
+  // without an up-front claim the next fragment would still take a direct one,
+  // leaving two tab stops and two dots. Clicking any fragment still opens the
+  // popover via the delegated handler below.
+  const controlWired = new Set<string>();
 
   for (const el of root.querySelectorAll<HTMLElement>("[data-pmk-id]")) {
     const id = el.getAttribute("data-pmk-id");
@@ -124,18 +131,26 @@ export function installHighlights(
 
     const directAction = usesDirectKeyboardAction(el);
     const blockHost = blockHostOf(el, root);
-    if (directAction) {
+    const ownsControl = !controlWired.has(id);
+    if (ownsControl) controlWired.add(id);
+
+    if (directAction && ownsControl) {
       addGutterDot(blockHost);
       el.setAttribute("role", "button");
       el.setAttribute("aria-label", `Open comment by ${comment.author}`);
       el.tabIndex = 0;
-    } else {
-      blockHost.classList.add("pmk-anchor");
-      if (el.matches("mark.pmk-hl, span.pmk-hl")) addGutterDot(blockHost);
+    } else if (directAction) {
+      // Continuation fragment: visible highlight, no second control.
       el.removeAttribute("role");
       el.removeAttribute("aria-label");
       el.removeAttribute("tabindex");
-      addSeparateAction(root, el, comment);
+    } else {
+      blockHost.classList.add("pmk-anchor");
+      if (ownsControl && el.matches("mark.pmk-hl, span.pmk-hl")) addGutterDot(blockHost);
+      el.removeAttribute("role");
+      el.removeAttribute("aria-label");
+      el.removeAttribute("tabindex");
+      if (ownsControl) addSeparateAction(root, el, comment);
     }
 
     if (activeId === id) {
