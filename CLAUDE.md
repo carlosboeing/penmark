@@ -13,7 +13,9 @@ Operator-facing brief for AI coding assistants working on this repo; `README.md`
 - **Roadmap**: docs/ROADMAP.md
 - **Changelog**: docs/CHANGELOG.md
 - **Architecture**: docs/architecture.md (current state); README.md `## Architecture` is the short version
-- **Working memory**: Any local working-memory folder (e.g., `.workbench/`, `.working-memory/`) containing the private build-process lifecycle (brainstorms, design specs, plans).
+- **Working memory**: `.workbench/` — a **separate private repository** (`carlosboeing/penmark-workbench`), nested here as an independent clone and gitignored above. It holds the private build-process lifecycle: brainstorms, design specs, plans, reviews.
+  - **Never cross-commit.** Plain `git …` targets **whichever repository the shell is currently inside** — this public one at the root, the private one from anywhere under `.workbench/`. From the root, `git -C .workbench …` names the private one explicitly. Nothing in git's output says which repo it resolved, so when you are not certain where the shell is, name the target with `-C`.
+  - **`scripts/githooks/pre-commit` enforces the boundary** — it refuses a commit that stages the workbench as a gitlink, or that adds workbench vocabulary to a public file. Enable it once per clone, because git will not: `git config core.hooksPath scripts/githooks`. Override a false positive with `git commit --no-verify`.
 - **Other**:
   - Compatibility floor: `engines.vscode ^1.105.0` (Cursor 1.105 base; Antigravity 1.107; verified 2026-06-11). Stable APIs only — no proposed APIs.
   - Distribution: **local-first** — VSIX sideloaded into VS Code/Cursor/Antigravity. The repository is public (source-visibility only, ADR 0004 amendment); marketplace publishing stays a deferred decision (dual publishing to MS Marketplace + Open VSX per the plan's deferred publish track if it ever happens).
