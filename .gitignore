@@ -57,8 +57,8 @@ graphify-out/
 # Local private working-memory repo (nested independent clone; never tracked or published)
 .workbench/
 
-# Local git worktrees, per the shared convention. Without these, `git add -A`
+# Local git worktrees, per the shared convention. Without this, `git add -A`
 # records a worktree as an embedded git repository rather than skipping it.
+# `.claude/worktrees/` is already covered above.
 .worktrees/
-.claude/worktrees/
 
