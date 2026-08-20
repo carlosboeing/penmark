@@ -50,7 +50,45 @@ The build-process working memory (brainstorms, discovery, phased plans, cross-mo
 
 ## Commits
 
-Conventional Commits: `<type>(<scope>): <description>`, imperative, subject ≤72 chars, body explains _why_. Reference ADRs (and, where useful, the maintainer's private design/plan docs) in the body when relevant.
+Conventional Commits: `<type>(<scope>): <description>`, imperative, subject ≤72 chars, body explains _why_. Reference ADRs in the body when relevant. Never reference a private design or plan document in any public artifact -- see the section below.
+
+## What a public artifact may say
+
+Everything this repository emits is public and permanent: commit messages, pull request titles and bodies, issue titles and bodies, review comments and release notes. A reader arrives with the repository and nothing else.
+
+The pre-commit hook cannot help here. It reads the staged diff, so it never sees a commit message, and `gh pr create --body` and `gh issue create --body` reach the GitHub API without touching git at all.
+
+**Never name a private or local source in a public artifact.** The complete list:
+
+- The workbench -- `.workbench`, `penmark-workbench`, or the bare phrase "the workbench"
+- A path to a brainstorm, design spec, plan, review or second-opinion record held there
+- The phrase "the maintainer's private design docs", or any equivalent pointer to them
+- An absolute path on a personal machine, `/Users/...` or `$HOME/...`
+- A private repository name, a client name, or an internal cost or token figure
+
+The damage is not leaked content. It is a citation the reader cannot follow. "See the design doc" tells an outsider that something exists and that they may not have it, which is worse than saying nothing.
+
+**Restate the fact instead of citing its source.** A design decision goes into the body in its own words, or into an ADR under `docs/adrs/` that the artifact then links. A record that cannot be published is described as "held locally, available on request".
+
+## Pull requests
+
+**The title is one clause under 72 characters in Conventional Commit form**, naming the change rather than the effort.
+
+**The body is written for someone who has never seen the branch, and it stands alone.**
+
+- Open with what changes and why, in two or three sentences, before any detail.
+- Cite files in this repository by path. Cite nothing outside it.
+- State verification with its output. Paste what the command printed, rather than asserting it passed.
+- Name what is deliberately out of scope, and link the issue tracking it.
+- A body reading "implements the design" has said nothing. Say what the design was.
+
+`.github/PULL_REQUEST_TEMPLATE.md` carries the shape. **`gh pr create --body` bypasses the template**, so filing from the command line means applying it by hand.
+
+## Issues
+
+**The title is one clause under 60 characters naming the change or the symptom.** Enhancement titles are imperative. Bug titles state the wrong behaviour. A title needing "and" is probably two issues.
+
+**The body says what was measured, not what was assumed.** Cite `file:line` for anything already in the code, give a rate its sample, and link the issues and ADRs it touches.
 
 ## Working principles for agent sessions
 
