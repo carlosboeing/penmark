@@ -50,7 +50,19 @@ The build-process working memory (brainstorms, discovery, phased plans, cross-mo
 
 ## Commits
 
-Conventional Commits: `<type>(<scope>): <description>`, imperative, subject ≤72 chars, body explains _why_. Reference ADRs (and, where useful, the maintainer's private design/plan docs) in the body when relevant.
+Conventional Commits: `<type>(<scope>): <description>`, imperative, subject ≤72 chars, body explains _why_. Reference ADRs in the body when relevant. Never reference a private design or plan document in any public artifact -- see the section below.
+
+## What a public artifact may say
+
+Commit messages, pull request and issue titles and bodies, review comments and release notes are public and permanent. A reader arrives with the repository and nothing else.
+
+**Never name a private or local source in one.** Not `.workbench`, not `penmark-workbench`, not the bare phrase "the workbench", not "the maintainer's private design docs" or any equivalent pointer, not a path to a document held there, not `/Users/...`, not a client name or an internal cost figure.
+
+The damage is a citation the reader cannot follow. "See the design doc" says something exists and withholds it, which is worse than saying nothing. **Restate the fact instead:** put the reasoning in the body in its own words, or in an ADR under `docs/adrs/` that the artifact then links.
+
+**No hook catches this.** `scripts/githooks/pre-commit` reads the staged diff, so it never sees a message or a body, and `gh pr create --body` reaches the GitHub API without touching git.
+
+A pull request body follows `.github/PULL_REQUEST_TEMPLATE.md`, which `gh pr create --body` bypasses. An issue title is one clause under 60 characters naming the change or the symptom. A body reading "implements the design" has said nothing -- say what the design was.
 
 ## Working principles for agent sessions
 

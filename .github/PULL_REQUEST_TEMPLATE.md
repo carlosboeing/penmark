@@ -2,7 +2,13 @@
 
 ## Summary
 
-<!-- What does this change and why? Reference the design/plan/ADR path when relevant. -->
+<!--
+What changes, and why, in two or three sentences before any detail.
+Cite files in this repository by path, and the ADR when relevant. Cite
+nothing outside it -- no private repository, no design or plan document
+held there, no path on your own machine. Restate the reasoning here
+rather than pointing at where it was written down.
+-->
 
 ## Related issue
 
@@ -21,6 +27,7 @@
 ## Checklist
 
 - [ ] Conventional Commit subject (`type(scope): description`, imperative, <= 72 chars)
+- [ ] Nothing in the body names a private repository, a design or plan document held there, or a path on a personal machine
 - [ ] Stays within the compatibility floor (`engines.vscode ^1.105.0`, stable APIs only)
 - [ ] No `vscode` imports added under `src/core/`
 - [ ] No code ported from reference repositories (see CONTRIBUTING)
