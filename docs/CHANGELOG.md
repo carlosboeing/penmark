@@ -2,6 +2,14 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-08-27 (fix/comment-ampersand-escaping)
+
+### Agent-authored character entities render as punctuation
+
+Agent-generated review comments can encode punctuation as decimal HTML character references, such as `&#45;` for a hyphen. Penmark decoded only its own paired-hyphen storage sentinel (`&#45;&#45;`), so a single reference reached the drawer and popover as visible source text. Penmark now renders any valid decimal reference as the character it denotes, using markdown-it's own validity rule so surrogates, NUL, control characters and noncharacters stay literal rather than becoming ill-formed text a save could write into the file.
+
+This rendering is a presentation pass, applied where a note is handed to the preview and where one is exported for an agent. An entry's quote is exempt: it stays byte-faithful all the way to the drawer, which renders it at the point of display. Re-anchor re-adds the same quote at a new location, so a rendered quote would be stored and could never match the document again, and the next anchor loss would orphan a comment that would otherwise recover. It is deliberately not part of the storage codec. Decoding at parse time instead would have broken two things: quote recovery matches an entry's quote against raw document bytes, so a quoted passage that itself contains a reference would stop matching and the comment would orphan; and because the writer escapes only `--`, each read-and-save cycle would strip one more level from text the user never edited. Keeping the pass at the display seam leaves the spec's round-trip guarantee intact for every string. The validity rule is written out rather than imported: pulling markdown-it's helper into the eager extension entry took `dist/extension.js` from 53 KB to 136 KB, against a sub-50 ms activation budget. A test pins the copy to markdown-it across every code point. Format spec §6 gains a non-normative reader-side rule; regression tests cover the sentinel, standalone references, each rejected range, and the three consumers that need raw bytes. Version 0.5.6.
+
 ## 2026-08-10 (fix/inline-anchors-block-and-cross-block-highlights)
 
 ### Commenting no longer breaks the formatting it wraps

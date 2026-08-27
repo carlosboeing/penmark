@@ -10,6 +10,7 @@
  * knows to locate it from the quote alone (§8).
  */
 
+import { decodeDisplayText } from "./escape.js";
 import type { ReconciledComment } from "./reconcile.js";
 
 /**
@@ -38,13 +39,17 @@ export function buildReviewPrompt(docPath: string, comments: ReconciledComment[]
     const e = rc.entry;
     const orphanNote = rc.state === "orphan" ? " (location lost — quote only)" : "";
     lines.push(`## ${i + 1}. ${e.author} (${e.provenance}) · ${e.timestamp}${orphanNote}`, "");
+    // The quote is a locator: the agent greps the file for it, so it must stay
+    // byte-faithful to the document. The body is prose for the agent to read,
+    // so agent-authored character references are rendered there.
     if (e.quote !== "") {
       for (const q of e.quote.split("\n")) lines.push(`> ${q}`);
       lines.push("");
     }
     // A comment may carry only a quote (empty body); show a placeholder so the
     // section is never a numbered comment with no visible instruction.
-    lines.push(e.body.trim() === "" ? "_(no note)_" : e.body, "");
+    const note = decodeDisplayText(e.body);
+    lines.push(note.trim() === "" ? "_(no note)_" : note, "");
   });
 
   return lines.join("\n").trimEnd() + "\n";

@@ -168,6 +168,7 @@ The HTML-comment terminator is `-->`, and `--` may not legally appear inside an 
 - A writer MUST guarantee that no unescaped `-->` (and no bare `--`) can appear inside an entry, so the entry's own terminator is always the first `-->` after the body. This is a hard writer guarantee, not best-effort.
 - The escape applies to entry text only (quote lines and body). It does not apply to the markers themselves, which contain no `--` other than their own comment delimiters.
 - Round-trip property: `decode(encode(s)) == s` for any string `s`; a body containing the literal text `--production` is stored as `&#45;&#45;production` and read back as `--production`.
+- Display decoding (non-normative, reader-side): a reader MAY additionally render any valid decimal character reference in entry text as the character it denotes when presenting an entry to a human, so that punctuation written by an agent tool (`Layer&#45;1`) reads as intended. This is a presentation pass, not part of the codec: it MUST NOT be applied before quote recovery (§8.2), which matches an entry's quote against raw document text, and MUST NOT be applied before re-encoding an entry for storage. A reader that applies it SHOULD use the HTML validity rule, leaving surrogates, NUL, C0/C1 controls and noncharacters literal.
 
 ## 7. Writer invariants (normative)
 
