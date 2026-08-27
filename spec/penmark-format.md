@@ -164,10 +164,10 @@ The format reserves threaded replies for v2: an entry may carry ` re <parent-id>
 
 The HTML-comment terminator is `-->`, and `--` may not legally appear inside an HTML comment. The format therefore escapes hyphens:
 
-- Any occurrence of the two-character sequence `--` inside an entry's quote or body MUST be written as `&#45;&#45;` (two HTML decimal character references for the hyphen). A reader decodes `&#45;&#45;` back to `--`.
+- Any occurrence of the two-character sequence `--` inside an entry's quote or body MUST be written as `&#45;&#45;` (two HTML decimal character references for the hyphen). A reader decodes valid decimal character references in entry text, including `&#45;&#45;` back to `--` and a standalone `&#45;` back to `-`. This also keeps punctuation emitted by agent tools readable in the preview.
 - A writer MUST guarantee that no unescaped `-->` (and no bare `--`) can appear inside an entry, so the entry's own terminator is always the first `-->` after the body. This is a hard writer guarantee, not best-effort.
 - The escape applies to entry text only (quote lines and body). It does not apply to the markers themselves, which contain no `--` other than their own comment delimiters.
-- Round-trip property: `decode(encode(s)) == s` for any string `s`; a body containing the literal text `--production` is stored as `&#45;&#45;production` and read back as `--production`.
+- Round-trip property: `decode(encode(s)) == s` for any string `s` that contains no literal decimal character reference; a body containing the literal text `--production` is stored as `&#45;&#45;production` and read back as `--production`. A literal decimal character reference is interpreted as its character on read.
 
 ## 7. Writer invariants (normative)
 

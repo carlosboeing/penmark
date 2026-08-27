@@ -14,13 +14,26 @@
 
 const HYPHEN_PAIR = "--";
 const ENCODED_HYPHEN_PAIR = "&#45;&#45;";
+const DECIMAL_CHARACTER_REFERENCE = /&#(\d+);/g;
 
 /** Encode entry text: every `--` becomes `&#45;&#45;` (spec §6). */
 export function encodeEntryText(s: string): string {
   return s.replaceAll(HYPHEN_PAIR, ENCODED_HYPHEN_PAIR);
 }
 
-/** Decode entry text: every `&#45;&#45;` becomes `--` (spec §6). */
+/**
+ * Decode entry text for display and editing.
+ *
+ * The paired-hyphen sentinel is a pair of decimal character references, so
+ * decoding every valid decimal reference also accepts punctuation emitted by
+ * agent tools (for example, `&#45;` for a single hyphen). Invalid references
+ * stay literal rather than being silently changed.
+ */
 export function decodeEntryText(s: string): string {
-  return s.replaceAll(ENCODED_HYPHEN_PAIR, HYPHEN_PAIR);
+  return s.replace(DECIMAL_CHARACTER_REFERENCE, (reference, decimal: string) => {
+    const codePoint = Number(decimal);
+    return Number.isSafeInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+      ? String.fromCodePoint(codePoint)
+      : reference;
+  });
 }

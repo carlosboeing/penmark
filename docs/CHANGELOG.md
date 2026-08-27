@@ -2,6 +2,12 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## 2026-08-27 (fix-comment-ampersand-escaping)
+
+### Agent-authored character entities render as punctuation
+
+Agent-generated review comments can encode punctuation as decimal HTML character references, such as `&#45;` for a hyphen. Penmark previously decoded only its own paired-hyphen storage sentinel (`&#45;&#45;`), so a single reference reached the drawer and popover as visible source text. The reader now decodes valid decimal references before rendering or editing a comment; malformed references remain literal. The format spec’s escaping rule and regression tests cover both the paired storage sentinel and standalone agent-authored references.
+
 ## 2026-08-10 (fix/inline-anchors-block-and-cross-block-highlights)
 
 ### Commenting no longer breaks the formatting it wraps

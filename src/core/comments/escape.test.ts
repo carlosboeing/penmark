@@ -31,9 +31,13 @@ describe("decodeEntryText (spec §6)", () => {
     expect(decodeEntryText("a&#45;&#45;b&#45;&#45;c")).toBe("a--b--c");
   });
 
-  it("leaves a lone &#45; untouched", () => {
-    expect(decodeEntryText("&#45;")).toBe("&#45;");
-    expect(decodeEntryText("a &#45; b")).toBe("a &#45; b");
+  it("decodes individually encoded decimal character references", () => {
+    expect(decodeEntryText("Layer&#45;1&#45;first")).toBe("Layer-1-first");
+    expect(decodeEntryText("a &#45; b")).toBe("a - b");
+  });
+
+  it("leaves invalid decimal character references literal", () => {
+    expect(decodeEntryText("&#1114112;")).toBe("&#1114112;");
   });
 });
 
@@ -46,7 +50,6 @@ describe("round-trip decode(encode(s)) === s (spec §6)", () => {
     "plain prose",
     "a-b-c",
     "",
-    "uses &#45; as an entity reference", // pre-existing single &#45;
     "---",
     "-----",
     "----->",
@@ -59,9 +62,9 @@ describe("round-trip decode(encode(s)) === s (spec §6)", () => {
     });
   }
 
-  it("round-trips realistic fuzzed strings (no literal &#45;&#45; sentinel)", () => {
-    // The escape sentinel is &#45;&#45;; the round-trip property holds for any
-    // string that does not already contain that literal sequence (spec §6).
+  it("round-trips realistic fuzzed strings without decimal character references", () => {
+    // Decimal character references are decoded for agent-authored comment
+    // compatibility, so the round-trip property excludes their literal form.
     const alphabet = "ab-> \n&#;45";
     for (let n = 0; n < 2000; n++) {
       let s = "";
@@ -69,7 +72,7 @@ describe("round-trip decode(encode(s)) === s (spec §6)", () => {
       for (let i = 0; i < len; i++) {
         s += alphabet[Math.floor(Math.random() * alphabet.length)];
       }
-      if (s.includes("&#45;&#45;")) continue;
+      if (/&#\d+;/.test(s)) continue;
       expect(decodeEntryText(encodeEntryText(s))).toBe(s);
     }
   });
