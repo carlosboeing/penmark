@@ -98,6 +98,17 @@ describe("decodeDisplayText (spec §6 display decoding)", () => {
     }
   });
 
+  it("leaves &#38; literal so a display pass cannot build a new reference", () => {
+    // Rendering &#38; would put a fresh `&` beside what follows, so this input
+    // would become the literal storage sentinel &#45;&#45; and read back as --.
+    expect(decodeDisplayText("&#38;#45;&#38;#45;")).toBe("&#38;#45;&#38;#45;");
+    expect(decodeDisplayText("&#38;")).toBe("&#38;");
+  });
+
+  it("leaves an over-long digit run literal, as the preview does", () => {
+    expect(decodeDisplayText("&#00000045;")).toBe("&#00000045;");
+  });
+
   it("leaves hex and named references literal (decimal-only by design)", () => {
     expect(decodeDisplayText("&#x2d;")).toBe("&#x2d;");
     expect(decodeDisplayText("&amp;")).toBe("&amp;");

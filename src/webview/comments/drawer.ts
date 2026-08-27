@@ -24,6 +24,7 @@ import type { WireComment, WebviewToHost } from "../../core/protocol/messages.js
 import { openCommentPopover } from "./popover.js";
 import { registerPenmarkSurface } from "../keyboard.js";
 import { prefersReducedMotion } from "../motion.js";
+import { decodeDisplayText } from "../../core/comments/escape.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
@@ -254,7 +255,10 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
 
   const quote = document.createElement("div");
   quote.className = "pmk-drawer-quote";
-  quote.textContent = c.quote;
+  // `c.quote` is byte-faithful to the document so re-anchor can store it back
+  // (see the presentation-seam note in src/vscode/comments.ts). Render it here,
+  // at the point of display, and nowhere else.
+  quote.textContent = decodeDisplayText(c.quote);
   el.appendChild(quote);
 
   const body = document.createElement("div");

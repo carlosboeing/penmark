@@ -26,6 +26,16 @@ function entry(id: string, quote: string, bodyText = "comment body"): string {
   return `<!--pmk:c ${id}\ncarlos (human) · 2026-06-12 09:02 +10:00\n> ${quote}\n\n${bodyText}\n-->`;
 }
 
+/**
+ * The quote exactly as the webview receives it. `analyzeComments` lives in
+ * src/vscode and cannot be imported here, so this mirrors its one relevant
+ * decision: the wire quote is the parsed quote, unrendered.
+ */
+function wireQuoteFor(doc: string, storedQuote: string): string {
+  const text = withReview(doc, entry("aaaaaaaa", storedQuote));
+  return run(text).comments[0]!.entry.quote;
+}
+
 describe("quote recovery survives a document that contains character references", () => {
   it("recovers a destroyed closer when the quoted passage holds a literal reference", () => {
     // A document about HTML escaping is exactly Penmark's audience. The quote is
@@ -48,6 +58,21 @@ describe("quote recovery survives a document that contains character references"
     const c = run(text).comments.find((x) => x.entry.id === "bbbbbbbb");
     expect(c?.entry.quote).toBe("&#45; here");
     expect(decodeDisplayText(c!.entry.quote)).toBe("- here");
+  });
+});
+
+describe("re-anchor keeps a comment recoverable", () => {
+  it("the quote a re-anchor stores still matches the document", () => {
+    // Re-anchor re-adds the SAME quote at a new location, so a rendered quote
+    // would be stored and could never match the source again: the next anchor
+    // loss would orphan a comment that would otherwise recover.
+    const doc = "Lead <!--pmk:s aaaaaaaa-->in. Write &#8212;force here.";
+    const stored = "Write &#8212;force here";
+    const reAnchored = wireQuoteFor(doc, stored);
+    expect(doc.includes(reAnchored)).toBe(true);
+
+    const again = withReview(doc, entry("aaaaaaaa", reAnchored));
+    expect(run(again).comments[0]?.state).toBe("degraded-recovered");
   });
 });
 

@@ -243,19 +243,26 @@ export function analyzeComments(source: string): CommentAnalysis {
   const { body } = stripFrontmatter(source);
   const frontmatterLen = source.length - body.length;
 
-  // The presentation seam: everything above this line works on entry text as the
+  // The presentation seam. Everything above this line works on entry text as the
   // document stores it, which is what reconcile needs to match quotes against the
-  // raw source (§8.2). Only here, on the way to the webview, are agent-authored
-  // character references rendered as the punctuation they denote. An explicit
-  // edit or re-anchor writes the decoded form back, which normalizes the entry
-  // once rather than decaying it on every pass.
+  // raw source (§8.2).
+  //
+  // `body` is prose, so agent-authored character references are rendered here:
+  // the popover's edit box shows the rendered form, and saving it normalizes a
+  // non-conforming entry once, on a user action.
+  //
+  // `quote` stays byte-faithful all the way to the webview. Re-anchor re-adds
+  // the SAME quote at a new location (main.ts commitReanchor), so a rendered
+  // quote would be stored as the new entry's quote and could never match the
+  // document again — the next anchor loss would orphan a comment that would
+  // otherwise recover. The drawer renders it at the point of display instead.
   const comments: WireComment[] = result.comments.map((rc) => ({
     id: rc.entry.id,
     state: rc.state,
     provenance: rc.entry.provenance,
     author: rc.entry.author,
     timestamp: rc.entry.timestamp,
-    quote: decodeDisplayText(rc.entry.quote),
+    quote: rc.entry.quote,
     body: decodeDisplayText(rc.entry.body),
     extent: toWireExtent(body, frontmatterLen, rc),
   }));
