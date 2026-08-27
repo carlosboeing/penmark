@@ -2,11 +2,13 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
-## 2026-08-27 (fix-comment-ampersand-escaping)
+## 2026-08-27 (fix/comment-ampersand-escaping)
 
 ### Agent-authored character entities render as punctuation
 
-Agent-generated review comments can encode punctuation as decimal HTML character references, such as `&#45;` for a hyphen. Penmark previously decoded only its own paired-hyphen storage sentinel (`&#45;&#45;`), so a single reference reached the drawer and popover as visible source text. The reader now decodes valid decimal references before rendering or editing a comment; malformed references remain literal. The format spec’s escaping rule and regression tests cover both the paired storage sentinel and standalone agent-authored references.
+Agent-generated review comments can encode punctuation as decimal HTML character references, such as `&#45;` for a hyphen. Penmark decoded only its own paired-hyphen storage sentinel (`&#45;&#45;`), so a single reference reached the drawer and popover as visible source text. Penmark now renders any valid decimal reference as the character it denotes, using markdown-it's own validity rule so surrogates, NUL, control characters and noncharacters stay literal rather than becoming ill-formed text a save could write into the file.
+
+This rendering is a presentation pass, applied where a comment is handed to the preview and where a note is exported for an agent. It is deliberately not part of the storage codec. Decoding at parse time instead would have broken two things: quote recovery matches an entry's quote against raw document bytes, so a quoted passage that itself contains a reference would stop matching and the comment would orphan; and because the writer escapes only `--`, each read-and-save cycle would strip one more level from text the user never edited. Keeping the pass at the display seam leaves the spec's round-trip guarantee intact for every string. Format spec §6 gains a non-normative reader-side rule; regression tests cover the sentinel, standalone references, the rejected code-point ranges, and both consumers that need raw bytes. Version 0.5.6.
 
 ## 2026-08-10 (fix/inline-anchors-block-and-cross-block-highlights)
 

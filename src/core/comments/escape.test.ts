@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encodeEntryText, decodeEntryText } from "./escape.js";
+import { encodeEntryText, decodeEntryText, decodeDisplayText } from "./escape.js";
 
 describe("encodeEntryText (spec §6)", () => {
   it("encodes every bare -- as &#45;&#45;", () => {
@@ -31,13 +31,76 @@ describe("decodeEntryText (spec §6)", () => {
     expect(decodeEntryText("a&#45;&#45;b&#45;&#45;c")).toBe("a--b--c");
   });
 
-  it("decodes individually encoded decimal character references", () => {
-    expect(decodeEntryText("Layer&#45;1&#45;first")).toBe("Layer-1-first");
-    expect(decodeEntryText("a &#45; b")).toBe("a - b");
+  it("leaves a lone &#45; untouched", () => {
+    expect(decodeEntryText("&#45;")).toBe("&#45;");
+    expect(decodeEntryText("a &#45; b")).toBe("a &#45; b");
   });
 
-  it("leaves invalid decimal character references literal", () => {
-    expect(decodeEntryText("&#1114112;")).toBe("&#1114112;");
+  it("leaves every other decimal character reference untouched", () => {
+    // The codec is not a general entity decoder: display decoding is a separate
+    // pass so that reconcile (§8.2) keeps matching quotes against raw bytes.
+    expect(decodeEntryText("use &#8212; here")).toBe("use &#8212; here");
+    expect(decodeEntryText("&#38;#45;")).toBe("&#38;#45;");
+  });
+});
+
+describe("decodeDisplayText (spec §6 display decoding)", () => {
+  it("renders agent-authored decimal character references as punctuation", () => {
+    expect(decodeDisplayText("Layer&#45;1&#45;first")).toBe("Layer-1-first");
+    expect(decodeDisplayText("a &#45; b")).toBe("a - b");
+    expect(decodeDisplayText("use &#8212; here")).toBe("use \u2014 here");
+  });
+
+  it("still renders the paired storage sentinel", () => {
+    expect(decodeDisplayText("&#45;&#45;production")).toBe("--production");
+  });
+
+  it("leaves out-of-range references literal", () => {
+    expect(decodeDisplayText("&#1114112;")).toBe("&#1114112;");
+  });
+
+  it("leaves surrogates literal so no ill-formed text can be produced", () => {
+    // String.fromCodePoint(0xD800) yields a lone surrogate, which a UTF-8 write
+    // turns into U+FFFD. markdown-it's validity rule rejects the whole range.
+    for (const cp of [0xd800, 0xdbff, 0xdc00, 0xdfff]) {
+      const reference = `&#${cp};`;
+      expect(decodeDisplayText(reference)).toBe(reference);
+    }
+  });
+
+  it("leaves NUL and C0/C1 control references literal", () => {
+    for (const cp of [0, 1, 8, 11, 31, 127, 128, 159]) {
+      const reference = `&#${cp};`;
+      expect(decodeDisplayText(reference)).toBe(reference);
+    }
+  });
+
+  it("leaves noncharacter references literal", () => {
+    expect(decodeDisplayText("&#65534;")).toBe("&#65534;");
+    expect(decodeDisplayText("&#65535;")).toBe("&#65535;");
+  });
+
+  it("never emits an unpaired surrogate for any decimal reference", () => {
+    // Sweep the whole range: a lone surrogate here would become U+FFFD the
+    // moment anything wrote it out as UTF-8.
+    for (let cp = 0; cp <= 0x10ffff; cp += 997) {
+      const out = decodeDisplayText(`&#${cp};`);
+      for (let i = 0; i < out.length; i++) {
+        const unit = out.charCodeAt(i);
+        if (unit >= 0xd800 && unit <= 0xdbff) {
+          const next = out.charCodeAt(i + 1);
+          expect(next >= 0xdc00 && next <= 0xdfff).toBe(true);
+          i++;
+        } else {
+          expect(unit >= 0xdc00 && unit <= 0xdfff).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("leaves hex and named references literal (decimal-only by design)", () => {
+    expect(decodeDisplayText("&#x2d;")).toBe("&#x2d;");
+    expect(decodeDisplayText("&amp;")).toBe("&amp;");
   });
 });
 
@@ -50,6 +113,9 @@ describe("round-trip decode(encode(s)) === s (spec §6)", () => {
     "plain prose",
     "a-b-c",
     "",
+    "uses &#45; as an entity reference", // pre-existing single &#45;
+    "uses &#8212; as an entity reference",
+    "double-encoded &#38;#45; stays put",
     "---",
     "-----",
     "----->",
@@ -62,18 +128,23 @@ describe("round-trip decode(encode(s)) === s (spec §6)", () => {
     });
   }
 
-  it("round-trips realistic fuzzed strings without decimal character references", () => {
-    // Decimal character references are decoded for agent-authored comment
-    // compatibility, so the round-trip property excludes their literal form.
+  it("round-trips realistic fuzzed strings (no literal &#45;&#45; sentinel)", () => {
+    // The escape sentinel is &#45;&#45;; the round-trip property holds for any
+    // string that does not already contain that literal sequence (spec §6).
     const alphabet = "ab-> \n&#;45";
+    let asserted = 0;
     for (let n = 0; n < 2000; n++) {
       let s = "";
       const len = Math.floor(Math.random() * 24);
       for (let i = 0; i < len; i++) {
         s += alphabet[Math.floor(Math.random() * alphabet.length)];
       }
-      if (/&#\d+;/.test(s)) continue;
+      if (s.includes("&#45;&#45;")) continue;
       expect(decodeEntryText(encodeEntryText(s))).toBe(s);
+      asserted++;
     }
+    // A floor on coverage: a regression that skipped every sample would
+    // otherwise pass this test silently.
+    expect(asserted).toBeGreaterThan(1900);
   });
 });

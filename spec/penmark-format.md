@@ -164,10 +164,11 @@ The format reserves threaded replies for v2: an entry may carry ` re <parent-id>
 
 The HTML-comment terminator is `-->`, and `--` may not legally appear inside an HTML comment. The format therefore escapes hyphens:
 
-- Any occurrence of the two-character sequence `--` inside an entry's quote or body MUST be written as `&#45;&#45;` (two HTML decimal character references for the hyphen). A reader decodes valid decimal character references in entry text, including `&#45;&#45;` back to `--` and a standalone `&#45;` back to `-`. This also keeps punctuation emitted by agent tools readable in the preview.
+- Any occurrence of the two-character sequence `--` inside an entry's quote or body MUST be written as `&#45;&#45;` (two HTML decimal character references for the hyphen). A reader decodes `&#45;&#45;` back to `--`.
 - A writer MUST guarantee that no unescaped `-->` (and no bare `--`) can appear inside an entry, so the entry's own terminator is always the first `-->` after the body. This is a hard writer guarantee, not best-effort.
 - The escape applies to entry text only (quote lines and body). It does not apply to the markers themselves, which contain no `--` other than their own comment delimiters.
-- Round-trip property: `decode(encode(s)) == s` for any string `s` that contains no literal decimal character reference; a body containing the literal text `--production` is stored as `&#45;&#45;production` and read back as `--production`. A literal decimal character reference is interpreted as its character on read.
+- Round-trip property: `decode(encode(s)) == s` for any string `s`; a body containing the literal text `--production` is stored as `&#45;&#45;production` and read back as `--production`.
+- Display decoding (non-normative, reader-side): a reader MAY additionally render any valid decimal character reference in entry text as the character it denotes when presenting an entry to a human, so that punctuation written by an agent tool (`Layer&#45;1`) reads as intended. This is a presentation pass, not part of the codec: it MUST NOT be applied before quote recovery (§8.2), which matches an entry's quote against raw document text, and MUST NOT be applied before re-encoding an entry for storage. A reader that applies it SHOULD use the HTML validity rule, leaving surrogates, NUL, C0/C1 controls and noncharacters literal.
 
 ## 7. Writer invariants (normative)
 

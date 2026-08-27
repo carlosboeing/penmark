@@ -21,6 +21,7 @@
 import { execFileSync } from "node:child_process";
 import * as vscode from "vscode";
 import { freshId } from "../core/comments/ids.js";
+import { decodeDisplayText } from "../core/comments/escape.js";
 import { parseDoc } from "../core/comments/parser.js";
 import { buildBlockMap, planAnchor } from "../core/comments/placement.js";
 import { reconcile } from "../core/comments/reconcile.js";
@@ -242,14 +243,20 @@ export function analyzeComments(source: string): CommentAnalysis {
   const { body } = stripFrontmatter(source);
   const frontmatterLen = source.length - body.length;
 
+  // The presentation seam: everything above this line works on entry text as the
+  // document stores it, which is what reconcile needs to match quotes against the
+  // raw source (§8.2). Only here, on the way to the webview, are agent-authored
+  // character references rendered as the punctuation they denote. An explicit
+  // edit or re-anchor writes the decoded form back, which normalizes the entry
+  // once rather than decaying it on every pass.
   const comments: WireComment[] = result.comments.map((rc) => ({
     id: rc.entry.id,
     state: rc.state,
     provenance: rc.entry.provenance,
     author: rc.entry.author,
     timestamp: rc.entry.timestamp,
-    quote: rc.entry.quote,
-    body: rc.entry.body,
+    quote: decodeDisplayText(rc.entry.quote),
+    body: decodeDisplayText(rc.entry.body),
     extent: toWireExtent(body, frontmatterLen, rc),
   }));
 
