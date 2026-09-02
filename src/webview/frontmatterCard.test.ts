@@ -172,6 +172,48 @@ describe("renderFrontmatterCard", () => {
     expect(reloadedCard.open).toBe(true);
   });
 
+  it("stops persisting toggle state after a render without a store", () => {
+    const stale: boolean[] = [];
+    const store = {
+      get: () => undefined,
+      set: (open: boolean) => {
+        stale.push(open);
+      },
+    };
+
+    renderFrontmatterCard({ title: "A", website: "https://example.com" }, undefined, store);
+    // A later render without a store detaches the previous one instead of
+    // silently reusing it.
+    renderFrontmatterCard({ title: "B", website: "https://example.com" });
+
+    const card = document.querySelector(".pmk-frontmatter-card") as HTMLDetailsElement;
+    card.open = true;
+    card.dispatchEvent(new Event("toggle"));
+    expect(stale).toEqual([]);
+  });
+
+  it("falls back to window.vscode after a render without postMessage", () => {
+    const injected = vi.fn();
+    renderFrontmatterCard({ website: "https://example.com" }, injected);
+
+    const viaWindow = vi.fn();
+    const win = window as unknown as { vscode?: { postMessage: (msg: unknown) => void } };
+    const original = win.vscode;
+    win.vscode = { postMessage: viaWindow };
+    try {
+      renderFrontmatterCard({ website: "https://example.org" });
+      document.querySelector<HTMLElement>(".pmk-frontmatter-path")!.click();
+      expect(viaWindow).toHaveBeenCalledWith({
+        v: 1,
+        type: "openLink",
+        href: "https://example.org",
+      });
+      expect(injected).not.toHaveBeenCalled();
+    } finally {
+      win.vscode = original;
+    }
+  });
+
   it("removes the card when no frontmatter fields are present", () => {
     renderFrontmatterCard({ title: "Draft" });
     expect(document.querySelector(".pmk-frontmatter-card")).not.toBeNull();

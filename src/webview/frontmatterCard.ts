@@ -3,7 +3,26 @@ import type { WebviewToHost } from "../core/protocol/messages.js";
 
 type PostMessage = (msg: WebviewToHost) => void;
 
-let _postMessage: PostMessage | undefined;
+export interface FrontmatterStateStore {
+  get: () => boolean | undefined;
+  set: (open: boolean) => void;
+}
+
+/**
+ * Per-card host deps, refreshed on every render. A render without deps
+ * detaches the previous ones instead of silently reusing them, so callers
+ * can never inherit another caller's postMessage or store.
+ */
+interface FrontmatterCardDeps {
+  postMessage?: PostMessage;
+  store?: FrontmatterStateStore;
+}
+
+type CardElement = HTMLDetailsElement & { _pmkDeps?: FrontmatterCardDeps };
+
+function depsOf(details: HTMLDetailsElement): FrontmatterCardDeps {
+  return (details as CardElement)._pmkDeps ?? {};
+}
 
 const CARD_ID = "pmk-frontmatter-card";
 
@@ -84,8 +103,6 @@ export interface FrontmatterStateStore {
   set: (open: boolean) => void;
 }
 
-let _store: FrontmatterStateStore | undefined;
-
 function formatValue(value: string | string[] | undefined): string {
   if (value === undefined) return "";
   if (Array.isArray(value)) return value.join(", ");
@@ -98,13 +115,6 @@ export function renderFrontmatterCard(
   postMessage?: PostMessage,
   store?: FrontmatterStateStore,
 ): void {
-  if (postMessage) {
-    _postMessage = postMessage;
-  }
-  if (store) {
-    _store = store;
-  }
-
   const existing = document.getElementById(CARD_ID) as HTMLDetailsElement | null;
   if (!fields || Object.keys(fields).length === 0) {
     existing?.remove();
@@ -119,6 +129,7 @@ export function renderFrontmatterCard(
   const details = existing ?? document.createElement("details");
   details.id = CARD_ID;
   details.className = "pmk-frontmatter-card";
+  (details as CardElement)._pmkDeps = { postMessage, store };
 
   if (!details.dataset.linkHandlerInstalled) {
     details.dataset.linkHandlerInstalled = "true";
@@ -129,14 +140,14 @@ export function renderFrontmatterCard(
       const path = target.dataset.path || target.getAttribute("href") || "";
       if (path && path !== "#" && !/^(javascript|data|vbscript):/i.test(path.trim())) {
         const post =
-          _postMessage ??
+          depsOf(details).postMessage ??
           (window as unknown as { vscode?: { postMessage: (msg: unknown) => void } }).vscode
             ?.postMessage;
         post?.({ v: 1, type: "openLink", href: path });
       }
     });
     details.addEventListener("toggle", () => {
-      _store?.set(details.open);
+      depsOf(details).store?.set(details.open);
     });
   }
 
@@ -188,7 +199,7 @@ export function renderFrontmatterCard(
   if (existing) {
     // Preserve current in-DOM state on re-render
   } else {
-    const saved = _store?.get();
+    const saved = store?.get();
     if (saved !== undefined) {
       details.open = saved;
     } else if (keys.length > 3) {
