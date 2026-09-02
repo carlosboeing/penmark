@@ -2,25 +2,41 @@ name: Release
 
 on:
   push:
+    # fnmatch intentionally selects the numeric three-component release shape;
+    # the verification job applies the exact regular-expression guard.
     tags:
-      - "v*"
-  # workflow_dispatch builds the VSIX as a workflow artifact without creating a
-  # release (useful for testing the workflow before tagging). Note: this trigger
-  # only activates once the workflow file is on the default branch.
+      - "v[0-9]*.[0-9]*.[0-9]*"
+  # Manual dispatch is verification-only. It creates a workflow artifact but
+  # never reaches the publish job below.
   workflow_dispatch:
 
+concurrency:
+  # A release run must not be cancelled after it has started producing signed
+  # provenance or publishing an immutable tag.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    name: Build + size gate + publish release
-    runs-on: ubuntu-latest
+  verify:
+    name: Verify release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      # The multi-architecture digest selects the runner's matching image.
+      image: mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
+    env:
+      PERF_MULTIPLIER: "1.5"
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -28,30 +44,244 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build production + package VSIX
+      - name: Verify release tag and default-branch ancestry
+        if: ${{ github.event_name == 'push' }}
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must match vMAJOR.MINOR.PATCH: ${TAG_NAME}"
+            exit 1
+          fi
+
+          tag_commit="$(git rev-parse "${TAG_NAME}^{commit}")"
+          if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+            echo "Tag ${TAG_NAME} does not resolve to the workflow commit"
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Tag ${TAG_NAME} is not reachable from origin/main"
+            exit 1
+          fi
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests with coverage
+        run: npm run test:unit
+
+      - name: Browser tests
+        run: npm run build && npm run test:browser
+
+      - name: Extension tests on the selected current VS Code version
+        env:
+          VSCODE_VERSION: "1.124.2"
+        run: xvfb-run -a npm run test:ext
+
+      - name: Build production and package VSIX
         run: npm run package
 
-      - name: VSIX size gate
+      - name: Verify VSIX size and contents
         run: node scripts/check-vsix-size.mjs penmark-*.vsix
 
-      - name: Upload VSIX as workflow artifact
-        uses: actions/upload-artifact@v7
+      - name: Verify versions and create checksum
+        id: package-assets
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          vsix_path="$(find . -maxdepth 1 -type f -name 'penmark-*.vsix' -print -quit)"
+          if [ -z "$vsix_path" ]; then
+            echo "No VSIX was produced"
+            exit 1
+          fi
+          vsix_name="${vsix_path#./}"
+
+          mkdir -p release-check
+          unzip -p "$vsix_name" extension/package.json > release-check/package.json
+          unzip -p "$vsix_name" extension.vsixmanifest > release-check/extension.vsixmanifest
+
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            node scripts/check-version-coherence.mjs \
+              --tag "$TAG_NAME" \
+              package.json \
+              package-lock.json \
+              release-check/package.json \
+              release-check/extension.vsixmanifest
+          else
+            node scripts/check-version-coherence.mjs \
+              --no-tag \
+              package.json \
+              package-lock.json \
+              release-check/package.json \
+              release-check/extension.vsixmanifest
+          fi
+
+          sha256sum "$vsix_name" > "${vsix_name}.sha256"
+          echo "vsix_name=$vsix_name" >> "$GITHUB_OUTPUT"
+          echo "checksum_name=${vsix_name}.sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: penmark-vsix
-          path: penmark-*.vsix
+          name: release-assets
+          path: |
+            ${{ steps.package-assets.outputs.vsix_name }}
+            ${{ steps.package-assets.outputs.checksum_name }}
+          if-no-files-found: error
           retention-days: 30
 
-      # Attach the VSIX to a GitHub Release only when triggered by a version tag.
-      # workflow_dispatch skips this step — the VSIX is available as an artifact above.
-      # NO marketplace publish steps (vsce publish / ovsx publish) — Penmark is
-      # local-first; publishing is a deferred track (ADR 0004 amendment 2026-06-12).
-      - name: Create GitHub Release and attach VSIX
-        if: startsWith(github.ref, 'refs/tags/v')
+  publish:
+    name: Publish tagged release
+    if: ${{ github.event_name == 'push' && github.ref_type == 'tag' && needs.verify.result == 'success' }}
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download verified release assets
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Validate downloaded assets
+        id: release-assets
+        run: |
+          set -euo pipefail
+          vsix_path="$(find release-assets -maxdepth 1 -type f -name 'penmark-*.vsix' -print -quit)"
+          checksum_path="$(find release-assets -maxdepth 1 -type f -name 'penmark-*.vsix.sha256' -print -quit)"
+          test -n "$vsix_path"
+          test -n "$checksum_path"
+          test "$(find release-assets -maxdepth 1 -type f -name 'penmark-*.vsix' | wc -l | tr -d ' ')" = "1"
+          test "$(find release-assets -maxdepth 1 -type f -name 'penmark-*.vsix.sha256' | wc -l | tr -d ' ')" = "1"
+          (cd release-assets && sha256sum --check "$(basename "$checksum_path")")
+          {
+            echo "vsix_path=$vsix_path"
+            echo "checksum_path=$checksum_path"
+            echo "vsix_name=$(basename "$vsix_path")"
+            echo "checksum_name=$(basename "$checksum_path")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Inspect existing release state
+        id: release-state
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
+          VSIX_NAME: ${{ steps.release-assets.outputs.vsix_name }}
+          CHECKSUM_NAME: ${{ steps.release-assets.outputs.checksum_name }}
+          CHECKSUM_PATH: ${{ steps.release-assets.outputs.checksum_path }}
         run: |
-          gh release create "${TAG_NAME}" \
-            --title "Penmark ${TAG_NAME}" \
-            --generate-notes \
-            penmark-*.vsix
+          set -euo pipefail
+          release_json=release.json
+          release_error=release-error.txt
+          set +e
+          gh release view "$TAG_NAME" --json isDraft,assets > "$release_json" 2> "$release_error"
+          view_status=$?
+          set -e
+
+          if [ "$view_status" -ne 0 ]; then
+            if grep -Eqi 'HTTP 404|release not found|not found' "$release_error"; then
+              echo "mode=missing" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            cat "$release_error" >&2
+            exit "$view_status"
+          fi
+
+          if jq -e '.isDraft == true' "$release_json" >/dev/null; then
+            echo "mode=draft" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          local_digest="$(cut -d ' ' -f 1 "$CHECKSUM_PATH")"
+          remote_digest="$(jq -r --arg name "$VSIX_NAME" '.assets[] | select(.name == $name) | .digest // empty' "$release_json")"
+          has_checksum="$(jq -r --arg name "$CHECKSUM_NAME" '[.assets[] | select(.name == $name)] | length' "$release_json")"
+          if [ "$remote_digest" != "sha256:${local_digest}" ] || [ "$has_checksum" != "1" ]; then
+            echo "Published release ${TAG_NAME} is incomplete or has a different VSIX digest; refusing to mutate it"
+            exit 1
+          fi
+
+          echo "mode=published" >> "$GITHUB_OUTPUT"
+
+      - name: Attest VSIX provenance
+        if: ${{ steps.release-state.outputs.mode != 'published' }}
+        uses: actions/attest@ce27ba3b4a9a139d9a20a4a07d69fabb52f1e5bc # v2
+        with:
+          subject-path: ${{ steps.release-assets.outputs.vsix_path }}
+
+      - name: Create or complete GitHub Release
+        if: ${{ steps.release-state.outputs.mode != 'published' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          VSIX_PATH: ${{ steps.release-assets.outputs.vsix_path }}
+          CHECKSUM_PATH: ${{ steps.release-assets.outputs.checksum_path }}
+        run: |
+          set -euo pipefail
+          version="${TAG_NAME#v}"
+          awk -v version="$version" '
+            /^## Unreleased[[:space:]]*$/ {
+              if (found) exit
+              found = 1
+              next
+            }
+            /^## v[0-9]+\.[0-9]+\.[0-9]+([[:space:]]|$)/ {
+              if (found) exit
+              if ($0 ~ "^## v" version "([[:space:]]|$)") {
+                found = 1
+                next
+              }
+            }
+            found { print }
+          ' docs/CHANGELOG.md > release-notes.md
+
+          if [ ! -s release-notes.md ]; then
+            echo "Release ${TAG_NAME}" > release-notes.md
+          fi
+
+          if [ "${{ steps.release-state.outputs.mode }}" = "draft" ]; then
+            gh release upload "$TAG_NAME" "$VSIX_PATH" "$CHECKSUM_PATH" --clobber
+            gh release edit "$TAG_NAME" --draft=false
+          else
+            gh release create "$TAG_NAME" \
+              --verify-tag \
+              --fail-on-no-commits \
+              --title "Penmark ${TAG_NAME}" \
+              --notes "$(cat release-notes.md)" \
+              --generate-notes \
+              "$VSIX_PATH" \
+              "$CHECKSUM_PATH"
+          fi
+
+      - name: Smoke-test published VSIX from a clean directory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          VSIX_NAME: ${{ steps.release-assets.outputs.vsix_name }}
+          CHECKSUM_NAME: ${{ steps.release-assets.outputs.checksum_name }}
+        run: |
+          set -euo pipefail
+          clean_dir="$(mktemp -d)"
+          trap 'rm -rf "$clean_dir"' EXIT
+          gh release download "$TAG_NAME" \
+            --pattern "$VSIX_NAME" \
+            --pattern "$CHECKSUM_NAME" \
+            --dir "$clean_dir"
+          (cd "$clean_dir" && sha256sum --check "$CHECKSUM_NAME")
+          unzip -t "$clean_dir/$VSIX_NAME" >/dev/null
