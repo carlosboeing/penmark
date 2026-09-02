@@ -241,7 +241,7 @@ jobs:
               found = 1
               next
             }
-            /^## v[0-9]+\.[0-9]+\.[0-9]+([[:space:]]|$)/ {
+            /^## / {
               if (found) exit
               if ($0 ~ "^## v" version "([[:space:]]|$)") {
                 found = 1
