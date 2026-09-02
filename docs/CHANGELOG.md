@@ -2,6 +2,14 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## Unreleased
+
+### OSS repository safeguards
+
+- CI now uses immutable action and browser-container references, explicit least-privilege permissions, timeouts, pull-request run cancellation, and a stable `required` aggregate check while preserving the full operating-system and VS Code-version matrix.
+- Release verification now accepts only three-component version tags, repeats the complete suite on the tagged commit, checks VSIX contents and version coherence, writes a checksum, creates an artifact attestation, and smoke-tests the downloaded release asset; manual dispatch remains verification-only.
+- Added public runtime dependency notices and removed internal path examples from public artifacts.
+
 ## 2026-08-27 (fix/comment-ampersand-escaping)
 
 ### Agent-authored character entities render as punctuation
@@ -151,11 +159,11 @@ Span comments (open/close tags) are now supported on individual words or text se
 
 ### Documentation split by audience
 
-`docs/` is now curated user/contributor documentation. The AI-assisted build process (brainstorms, discovery, phased plans, cross-model reviews, notes, and the anchor torture-test spike) moved to a private companion repo so it stays version-controlled but off the public repo.
+`docs/` is now curated user/contributor documentation. Internal build-process notes are kept separately so the public documentation remains focused on users and contributors.
 
 - **New user docs** — [installation](installation.md), [usage](usage.md), [configuration](configuration.md), [troubleshooting](troubleshooting.md), and [architecture](architecture.md) (distilled from the README and the v1 design), plus a [docs index](README.md).
 - **Stayed public** — ADRs, ROADMAP, this changelog, the format spec ([`spec/penmark-format.md`](../spec/penmark-format.md)), the agent guide ([`AGENTS-GUIDE.md`](../AGENTS-GUIDE.md)), the release-smoke checklists, and the concept mockups (now under `assets/`).
-- Cross-references in this changelog, the roadmap, the format spec, and `CLAUDE.md` were de-linked so the public docs stand alone — none point into the now-private content.
+- Cross-references in this changelog, the roadmap, the format spec, and `CLAUDE.md` were de-linked so the public docs stand alone.
 
 ## 2026-06-14 (later)
 
