@@ -4,6 +4,12 @@ What shipped in this project, when. Most recent first. Each entry references the
 
 ## Unreleased
 
+### Markdown links open in a Penmark tab; frontmatter card keeps its state
+
+- Relative links to markdown files now open in a new Penmark preview tab. The opener is `vscode.openWith` on `penmark.previewEditor`, with `vscode.open` as fallback. Extensionless wiki-links resolve via an existence probe: `.md` suffix first, then the workspace root.
+- `mailto:` and `ftp:` links open in the system handler. `file:` URIs open inside the IDE. Neither is resolved as a relative file path. Untitled and remote documents skip existence probing, since there is no local directory to probe.
+- The frontmatter card keeps its collapse state across preview re-renders and tab switches. Persistence is `getState`/`setState` while the tab is open. Cards with more than three keys still start collapsed. Version 0.6.0.
+
 ### OSS repository safeguards
 
 - CI now uses immutable action and browser-container references, explicit least-privilege permissions, timeouts, pull-request run cancellation, and a stable `required` aggregate check while preserving the full operating-system and VS Code-version matrix.
