@@ -302,7 +302,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@types/jsdom": "21.1.7",
     "@types/markdown-it": "14.1.2",
     "@types/markdown-it-footnote": "3.0.4",
