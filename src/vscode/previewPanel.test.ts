@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import * as path from "path";
 import * as vscode from "vscode";
 import { __setConfig } from "../../test/setup/vscode-mock.js";
 import {
@@ -799,5 +800,143 @@ describe("settings-UI capability by host", () => {
     env.appName = "";
     env.uriScheme = "";
     expect(hostSupportsSettingsUi()).toBe(true);
+  });
+});
+
+describe("openLink — link scheme routing", () => {
+  /**
+   * Drives an openLink message through the real panel message handler and
+   * records where the host routes it. Returns command/external calls in order.
+   */
+  async function openLinkCalls(
+    href: string,
+    document?: vscode.TextDocument,
+  ): Promise<{ commands: unknown[][]; externals: unknown[][] }> {
+    const commands: unknown[][] = [];
+    const externals: unknown[][] = [];
+    const executeCommand = vi
+      .spyOn(vscode.commands, "executeCommand")
+      .mockImplementation((...args: unknown[]) => {
+        commands.push(args);
+        return Promise.resolve(undefined);
+      });
+    const openExternal = vi
+      .spyOn(vscode.env, "openExternal")
+      .mockImplementation((...args: unknown[]) => {
+        externals.push(args);
+        return Promise.resolve(true);
+      });
+
+    let receiveMessage: ((message: unknown) => void) | undefined;
+    let disposePanel: (() => void) | undefined;
+    const disposable = { dispose(): void {} };
+    const panel = {
+      viewColumn: 1,
+      webview: {
+        cspSource: "test-csp",
+        html: "",
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        postMessage: async () => true,
+        onDidReceiveMessage(callback: (message: unknown) => void): vscode.Disposable {
+          receiveMessage = callback;
+          return disposable;
+        },
+      },
+      onDidDispose(callback: () => void): vscode.Disposable {
+        disposePanel = callback;
+        return disposable;
+      },
+    } as unknown as vscode.WebviewPanel;
+    const context = {
+      extensionUri: vscode.Uri.file("/extension"),
+    } as vscode.ExtensionContext;
+
+    seam.window.activeTextEditor = document ? { document } : undefined;
+    try {
+      await new PreviewPanelSerializer(context).deserializeWebviewPanel(panel, undefined);
+      expect(receiveMessage).toBeTypeOf("function");
+      receiveMessage!({ v: 1, type: "openLink", href });
+    } finally {
+      executeCommand.mockRestore();
+      openExternal.mockRestore();
+      disposePanel?.();
+    }
+    return { commands, externals };
+  }
+
+  function markdownDoc(fsPath: string): vscode.TextDocument {
+    const document = fakeDoc("# Doc\n", fsPath);
+    // Enumerable so test-local spreads (e.g. swapping the uri scheme) keep it.
+    Object.defineProperty(document, "languageId", { value: "markdown", enumerable: true });
+    return document;
+  }
+
+  it("opens https links in the system browser", async () => {
+    const { commands, externals } = await openLinkCalls("https://example.com/spec");
+    expect(externals).toHaveLength(1);
+    expect(commands).toHaveLength(0);
+  });
+
+  it("opens mailto links in the system mail client, not as a file", async () => {
+    const { commands, externals } = await openLinkCalls("mailto:review@example.com");
+    expect(externals).toHaveLength(1);
+    expect(commands).toHaveLength(0);
+  });
+
+  it("opens ftp links in the system browser, not as a file", async () => {
+    const { commands, externals } = await openLinkCalls("ftp://files.example.com/spec");
+    expect(externals).toHaveLength(1);
+    expect(commands).toHaveLength(0);
+  });
+
+  it("opens file: URIs inside the IDE without touching the filesystem", async () => {
+    const { commands, externals } = await openLinkCalls("file:///etc/hosts");
+    expect(externals).toHaveLength(0);
+    expect(commands).toContainEqual([
+      "vscode.open",
+      expect.objectContaining({ scheme: "file" }),
+    ]);
+  });
+
+  it("opens a relative markdown link in a Penmark tab", async () => {
+    const docPath = path.resolve("package.json");
+    const { commands, externals } = await openLinkCalls(
+      "docs/ROADMAP.md",
+      markdownDoc(docPath),
+    );
+    const expected = path.resolve(path.dirname(docPath), "docs/ROADMAP.md");
+    expect(externals).toHaveLength(0);
+    expect(commands).toContainEqual([
+      "vscode.openWith",
+      expect.objectContaining({ fsPath: expected }),
+      "penmark.previewEditor",
+    ]);
+  });
+
+  it("opens a relative non-markdown link inside the IDE", async () => {
+    const docPath = path.resolve("package.json");
+    const { commands } = await openLinkCalls("package.json", markdownDoc(docPath));
+    expect(commands).toContainEqual([
+      "vscode.open",
+      expect.objectContaining({ fsPath: path.resolve(path.dirname(docPath), "package.json") }),
+    ]);
+  });
+
+  it("still attempts an open for documents with no local directory", async () => {
+    // Untitled (and remote) documents have no docDir to probe: the host must
+    // not die inside the existence checks and swallow the click silently.
+    // (Regression pin: the vscode mock has no getWorkspaceFolder, so reaching
+    // the workspace fallback throws into the handler's catch-all.)
+    const base = markdownDoc("package.json");
+    const document = {
+      ...base,
+      uri: {
+        scheme: "untitled",
+        fsPath: "Untitled-1",
+        toString: () => "untitled:Untitled-1",
+      },
+    } as unknown as vscode.TextDocument;
+    const { commands } = await openLinkCalls("other.md", document);
+    expect(commands.length).toBeGreaterThan(0);
   });
 });
