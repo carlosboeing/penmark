@@ -108,10 +108,11 @@ describe("installLinkHandler", () => {
     a.dispatchEvent(evt);
 
     expect(evt.defaultPrevented).toBe(true);
-    // The href attribute value is passed (host resolves relative paths).
-    expect(mock._messages.some((m) => m.type === "openLink" && typeof m.href === "string")).toBe(
-      true,
-    );
+    expect(mock._messages).toContainEqual({
+      v: 1,
+      type: "openLink",
+      href: "./other.md",
+    });
   });
 
   it("does not fire for non-anchor elements", () => {

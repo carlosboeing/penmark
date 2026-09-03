@@ -102,3 +102,5 @@ Found a vulnerability? Please report it privately - see [`SECURITY.md`](SECURITY
 ## License
 
 [MIT](LICENSE) (c) 2026 Carlos Boeing.
+
+Runtime dependency licenses and source links are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

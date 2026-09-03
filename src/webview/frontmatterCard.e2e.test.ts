@@ -24,7 +24,7 @@ scope:
 reviewed_by:
   - Carlos Boeing
 related:
-  - .workbench/2-design/2026-07-22-adaptive-review-ui-design.md
+  - docs/adrs/0004-name-penmark-and-dual-publishing.md
 ---
 
 # Body
@@ -63,7 +63,7 @@ describe("frontmatter document to card", () => {
     expect(getFieldContent("authors")).toEqual(["Carlos Boeing", "claude-opus-5 (claude-code)"]);
     expect(getFieldContent("scope")).toEqual(["webview", "responsive"]);
     expect(getFieldContent("reviewed_by")).toEqual(["Carlos Boeing"]);
-    expect(getFieldContent("related")).toEqual([".workbench/2-design/2026-07-22-adaptive-review-ui-design.md"]);
+    expect(getFieldContent("related")).toEqual(["docs/adrs/0004-name-penmark-and-dual-publishing.md"]);
   });
 
   it("omits a key that genuinely has no value rather than showing a bare label", () => {
