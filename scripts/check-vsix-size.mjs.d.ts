@@ -8,6 +8,7 @@ export interface VsixSizeResult {
   mermaidBytes: number;
   totalBytes: number;
   entries: VsixEntry[];
+  unexpectedEntries: string[];
   passed: boolean;
 }
 
