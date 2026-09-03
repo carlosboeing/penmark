@@ -7,6 +7,7 @@ import anchor from "markdown-it-anchor";
 import GithubSlugger from "github-slugger";
 import { registerInlineSoff } from "./inlineSoff.js";
 import { registerOffsets } from "./offsets.js";
+import { registerRawText } from "./rawText.js";
 
 /**
  * Options for createRenderer.
@@ -117,6 +118,8 @@ export function createRenderer(opts: RendererOptions): MarkdownIt {
 
   // Source-position stamps (ADR 0005).
   registerOffsets(md);
+  // Raw-text elements on the inline path pass through whole (#51).
+  registerRawText(md);
   // Per-text-node source offsets (v1.0 polish).
   registerInlineSoff(md);
 
