@@ -256,3 +256,37 @@ describe("tokenizeBlockOffsets — block line ranges for anchor placement (R7)",
     expect(para?.line0).toBe(4);
   });
 });
+
+describe("createRenderer — raw-text elements on the inline path (#51)", () => {
+  const renderInline = (src: string): string => createRenderer({}).render(src);
+
+  /** Source bytes between the first raw-text open tag and its end tag. */
+  const rawValue = (html: string, tag: string): string => {
+    const m = html.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*)<\\/${tag}>`, "i"));
+    return m ? m[1]! : "";
+  };
+
+  it("leaves a self-closed textarea's value exactly as authored", () => {
+    const html = renderInline(`- before\n\n  <textarea/>literal <div> text</textarea>\n\n  after\n`);
+    expect(rawValue(html, "textarea")).toBe("literal <div> text");
+  });
+
+  it("passes an inline open/close pair through verbatim", () => {
+    const html = renderInline(`a <textarea>x & y</textarea> b\n`);
+    expect(rawValue(html, "textarea")).toBe("x & y");
+  });
+
+  it("consumes an unterminated element to the end of the block", () => {
+    const html = renderInline(`<textarea/>tail text\n`);
+    expect(html).toContain("<textarea/>tail text");
+  });
+
+  it("honours attributes with quoted angle brackets and tag-name case", () => {
+    const html = renderInline(`before <SCRIPT data-x="a>b">var x = 1 < 2;</SCRIPT> after\n`);
+    expect(html).toContain('<SCRIPT data-x="a>b">var x = 1 < 2;</SCRIPT>');
+  });
+
+  it("still stamps ordinary inline text with source offsets", () => {
+    expect(renderInline(`hello **world**\n`)).toContain("data-pmk-soff");
+  });
+});
