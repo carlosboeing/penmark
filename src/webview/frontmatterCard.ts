@@ -1,8 +1,28 @@
-/**
- * Collapsible frontmatter metadata card (v1.0 polish & type-aware lists).
- */
-
 import type { FrontmatterFields } from "../core/render/frontmatter.js";
+import type { WebviewToHost } from "../core/protocol/messages.js";
+
+type PostMessage = (msg: WebviewToHost) => void;
+
+export interface FrontmatterStateStore {
+  get: () => boolean | undefined;
+  set: (open: boolean) => void;
+}
+
+/**
+ * Per-card host deps, refreshed on every render. A render without deps
+ * detaches the previous ones instead of silently reusing them, so callers
+ * can never inherit another caller's postMessage or store.
+ */
+interface FrontmatterCardDeps {
+  postMessage?: PostMessage;
+  store?: FrontmatterStateStore;
+}
+
+type CardElement = HTMLDetailsElement & { _pmkDeps?: FrontmatterCardDeps };
+
+function depsOf(details: HTMLDetailsElement): FrontmatterCardDeps {
+  return (details as CardElement)._pmkDeps ?? {};
+}
 
 const CARD_ID = "pmk-frontmatter-card";
 
@@ -16,6 +36,7 @@ function isFilePath(value: string): boolean {
   if (/^(javascript|data|vbscript):/i.test(trimmed)) return false;
   // Exclude strings with spaces around slashes (e.g. "John / Jane")
   if (/\s\/\s/.test(trimmed)) return false;
+  if (/^(https?|ftp|file|mailto):/i.test(trimmed) || /^www\./i.test(trimmed)) return true;
   if (trimmed.startsWith("./") || trimmed.startsWith("../") || trimmed.includes("/")) return true;
   return /\.(md|sh|ts|js|json|py|css|html|yml|yaml|go|rs|java|kt|cs)$/i.test(trimmed);
 }
@@ -23,7 +44,9 @@ function isFilePath(value: string): boolean {
 function createPathLink(path: string): HTMLAnchorElement {
   const link = document.createElement("a");
   link.className = "pmk-frontmatter-path";
-  link.dataset.path = path;
+  const trimmed = path.trim();
+  const href = /^www\./i.test(trimmed) ? `https://${trimmed}` : trimmed;
+  link.dataset.path = href;
   link.setAttribute("href", "#");
   const code = document.createElement("code");
   code.textContent = path;
@@ -75,6 +98,11 @@ function renderValueContent(key: string, rawValue: string | string[]): HTMLEleme
   return span;
 }
 
+export interface FrontmatterStateStore {
+  get: () => boolean | undefined;
+  set: (open: boolean) => void;
+}
+
 function formatValue(value: string | string[] | undefined): string {
   if (value === undefined) return "";
   if (Array.isArray(value)) return value.join(", ");
@@ -82,8 +110,12 @@ function formatValue(value: string | string[] | undefined): string {
 }
 
 /** Render or update the frontmatter card above the preview root. */
-export function renderFrontmatterCard(fields: FrontmatterFields | undefined): void {
-  const existing = document.getElementById(CARD_ID);
+export function renderFrontmatterCard(
+  fields: FrontmatterFields | undefined,
+  postMessage?: PostMessage,
+  store?: FrontmatterStateStore,
+): void {
+  const existing = document.getElementById(CARD_ID) as HTMLDetailsElement | null;
   if (!fields || Object.keys(fields).length === 0) {
     existing?.remove();
     return;
@@ -94,9 +126,10 @@ export function renderFrontmatterCard(fields: FrontmatterFields | undefined): vo
     ...Object.keys(fields).filter((k) => !PRIORITY_KEYS.includes(k)),
   ];
 
-  const details = (existing as HTMLDetailsElement | null) ?? document.createElement("details");
+  const details = existing ?? document.createElement("details");
   details.id = CARD_ID;
   details.className = "pmk-frontmatter-card";
+  (details as CardElement)._pmkDeps = { postMessage, store };
 
   if (!details.dataset.linkHandlerInstalled) {
     details.dataset.linkHandlerInstalled = "true";
@@ -106,9 +139,15 @@ export function renderFrontmatterCard(fields: FrontmatterFields | undefined): vo
       evt.preventDefault();
       const path = target.dataset.path || target.getAttribute("href") || "";
       if (path && path !== "#" && !/^(javascript|data|vbscript):/i.test(path.trim())) {
-        const vscode = (window as unknown as { vscode?: { postMessage: (msg: unknown) => void } }).vscode;
-        vscode?.postMessage({ v: 1, type: "openLink", href: path });
+        const post =
+          depsOf(details).postMessage ??
+          (window as unknown as { vscode?: { postMessage: (msg: unknown) => void } }).vscode
+            ?.postMessage;
+        post?.({ v: 1, type: "openLink", href: path });
       }
+    });
+    details.addEventListener("toggle", () => {
+      depsOf(details).store?.set(details.open);
     });
   }
 
@@ -157,10 +196,17 @@ export function renderFrontmatterCard(fields: FrontmatterFields | undefined): vo
   }
   details.appendChild(dl);
 
-  if (keys.length > 3) {
-    details.open = false;
+  if (existing) {
+    // Preserve current in-DOM state on re-render
   } else {
-    details.open = true;
+    const saved = store?.get();
+    if (saved !== undefined) {
+      details.open = saved;
+    } else if (keys.length > 3) {
+      details.open = false;
+    } else {
+      details.open = true;
+    }
   }
 
   const root = document.getElementById("penmark-root");
