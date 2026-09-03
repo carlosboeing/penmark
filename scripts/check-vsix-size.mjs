@@ -1,11 +1,13 @@
 /**
- * VSIX size gate — enforces a 1 MiB budget on the "core" bundle.
+ * VSIX package gate — enforces a 1 MiB budget on the "core" bundle and an
+ * allowlist for archive entries.
  *
  * Logic:
  *   - Reads the VSIX (a zip file) and lists every entry with its compressed size.
  *   - Partitions entries into mermaid chunks (dist/webview/mermaid* — lazy-loaded
  *     and excluded from the core budget) vs everything else ("core").
- *   - Fails with exit code 1 if core > CORE_LIMIT_BYTES (1 MiB).
+ *   - Fails with exit code 1 if core > CORE_LIMIT_BYTES (1 MiB) or an entry is
+ *     outside the expected VSIX package allowlist.
  *   - Prints a per-file size table sorted by size descending, then totals.
  *
  * Usage:
@@ -20,6 +22,23 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 
 const CORE_LIMIT_BYTES = 1 * 1024 * 1024; // 1 MiB
+
+const ALLOWED_EXACT_ENTRIES = new Set([
+  "[Content_Types].xml",
+  "extension.vsixmanifest",
+  "extension/package.json",
+  "extension/readme.md",
+  "extension/README.md",
+  "extension/LICENSE.txt",
+  "extension/LICENSE",
+  "extension/THIRD_PARTY_NOTICES.md",
+]);
+
+const ALLOWED_DIST_ENTRY_PATTERNS = [
+  /^extension\/dist\/[^/]+\.(?:js|map|json)$/,
+  /^extension\/dist\/media\/[^/]+\.css$/,
+  /^extension\/dist\/webview\/[^/]+\.(?:js|map)$/,
+];
 
 /**
  * Minimal zip central-directory parser (no extra deps — built-in Buffer only).
@@ -74,8 +93,21 @@ function isMermaidChunk(name) {
 }
 
 /**
+ * Determines whether a VSIX entry is part of the published package shape.
+ * Generated JavaScript, source maps, JSON, and CSS are allowed only in the
+ * paths produced by the build; everything else must be named explicitly so
+ * accidental secrets or source files fail the release gate.
+ */
+function isAllowedVsixEntry(name) {
+  return (
+    ALLOWED_EXACT_ENTRIES.has(name) ||
+    ALLOWED_DIST_ENTRY_PATTERNS.some((pattern) => pattern.test(name))
+  );
+}
+
+/**
  * Core check function — exported for unit tests.
- * Returns { coreBytes, mermaidBytes, totalBytes, entries, passed }.
+ * Returns { coreBytes, mermaidBytes, totalBytes, entries, unexpectedEntries, passed }.
  * Does NOT call process.exit — throws on parse errors, returns result otherwise.
  */
 export function checkVsixSize(vsixPath) {
@@ -94,9 +126,12 @@ export function checkVsixSize(vsixPath) {
   }
 
   const totalBytes = coreBytes + mermaidBytes;
-  const passed = coreBytes <= CORE_LIMIT_BYTES;
+  const unexpectedEntries = entries
+    .filter((entry) => !isAllowedVsixEntry(entry.name))
+    .map((entry) => entry.name);
+  const passed = coreBytes <= CORE_LIMIT_BYTES && unexpectedEntries.length === 0;
 
-  return { coreBytes, mermaidBytes, totalBytes, entries, passed };
+  return { coreBytes, mermaidBytes, totalBytes, entries, unexpectedEntries, passed };
 }
 
 function formatBytes(n) {
@@ -128,7 +163,7 @@ function main() {
     process.exit(1);
   }
 
-  const { coreBytes, mermaidBytes, totalBytes, entries, passed } = result;
+  const { coreBytes, mermaidBytes, totalBytes, entries, unexpectedEntries, passed } = result;
 
   // Print table sorted by size descending.
   const sorted = [...entries].sort((a, b) => b.compressedSize - a.compressedSize);
@@ -141,17 +176,32 @@ function main() {
     console.log(`  ${bucket}  ${sizeStr}  ${e.name}`);
   }
   console.log("-".repeat(70));
-  console.log(`  [mermaid]  ${formatBytes(mermaidBytes).padStart(12)}  (excluded from core budget)`);
-  console.log(`  [core]     ${formatBytes(coreBytes).padStart(12)}  / ${formatBytes(CORE_LIMIT_BYTES)} limit`);
+  console.log(
+    `  [mermaid]  ${formatBytes(mermaidBytes).padStart(12)}  (excluded from core budget)`,
+  );
+  console.log(
+    `  [core]     ${formatBytes(coreBytes).padStart(12)}  / ${formatBytes(CORE_LIMIT_BYTES)} limit`,
+  );
   console.log(`  [total]    ${formatBytes(totalBytes).padStart(12)}`);
   console.log("-".repeat(70));
 
+  if (unexpectedEntries.length > 0) {
+    console.error(
+      `\nContents gate FAILED: unexpected VSIX entr${unexpectedEntries.length === 1 ? "y" : "ies"}:\n` +
+        unexpectedEntries.map((entry) => `  - ${entry}`).join("\n") +
+        "\n",
+    );
+  }
+
   if (passed) {
-    console.log(`\nSize gate PASSED: core ${formatBytes(coreBytes)} <= ${formatBytes(CORE_LIMIT_BYTES)}\n`);
+    console.log(
+      `\nPackage gate PASSED: core ${formatBytes(coreBytes)} <= ${formatBytes(CORE_LIMIT_BYTES)}\n`,
+    );
   } else {
     console.error(
-      `\nSize gate FAILED: core ${formatBytes(coreBytes)} exceeds ${formatBytes(CORE_LIMIT_BYTES)} limit.\n` +
-        `Reduce bundle size before shipping (mermaid chunks are excluded — check for accidental eager imports).\n`
+      `\nPackage gate FAILED: core ${formatBytes(coreBytes)} exceeds ${formatBytes(CORE_LIMIT_BYTES)} limit ` +
+        `or the archive contains an unexpected entry.\n` +
+        `Reduce bundle size and keep only the allowlisted VSIX contents before shipping.\n`,
     );
     process.exit(1);
   }

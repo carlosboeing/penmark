@@ -62,7 +62,7 @@ import { installTopbar, type TopbarExportOpts } from "./topbar.js";
 import { applyTypography } from "./typography.js";
 import { installImageLightbox } from "./imageLightbox.js";
 import { ensureFindSurface, type FindSurface } from "./findSurface.js";
-import { renderFrontmatterCard } from "./frontmatterCard.js";
+import { renderFrontmatterCard, type FrontmatterStateStore } from "./frontmatterCard.js";
 import { installKeyboardNav } from "./keyboard.js";
 import {
   ensureSettingsPanel,
@@ -90,6 +90,8 @@ interface PersistedState {
   commentDraft?: string;
   /** Drawer open/closed, so a reload keeps it where the user left it (R15, §5.3). */
   drawerOpen?: boolean;
+  /** Frontmatter card open/closed state, persisted while the tab is open. */
+  frontmatterOpen?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -535,6 +537,18 @@ const drawerStateStore: DrawerStateStore = {
   },
 };
 
+/** Persist the frontmatter card open/closed state across tab switches (getState/setState). */
+const frontmatterStateStore: FrontmatterStateStore = {
+  get: () => (vscode.getState() as PersistedState | undefined)?.frontmatterOpen,
+  set: (open) => {
+    const cur = (vscode.getState() as PersistedState | undefined) ?? {
+      scrollTop: 0,
+      theme: "auto",
+    };
+    vscode.setState({ ...cur, frontmatterOpen: open });
+  },
+};
+
 // --- Re-anchor "select new location" mode (R15) ------------------------------
 // Re-anchor is delete-then-add: clicking "Re-anchor" in the drawer's needs-
 // attention bucket arms this mode; the next selection resolves the orphaned
@@ -751,7 +765,11 @@ window.addEventListener("message", (event: MessageEvent) => {
       if (msg.typography) {
         applyTypography(msg.typography);
       }
-      renderFrontmatterCard(msg.frontmatter);
+      renderFrontmatterCard(
+        msg.frontmatter,
+        (m) => vscode.postMessage(m),
+        frontmatterStateStore,
+      );
       installTaskCheckboxHandler(root);
 
       // morphdom reconciles the DOM to the host's button-free HTML on every

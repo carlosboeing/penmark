@@ -82,3 +82,13 @@ codebase. Lessons yes, lines no.
    tests are required checks; the full OS x VS Code-version matrix also runs.
 6. External fork PRs run with a read-only token, so the coverage-comment step is
    skipped for them - this is expected and does not indicate a failure.
+
+## CI and release safeguards
+
+All workflow actions are pinned to full commit SHAs, with the readable action version kept as a comment beside each reference. The browser-test container is pinned by digest so a rendering image update cannot change results without a repository change. Dependabot checks both npm dependencies and GitHub Actions weekly.
+
+The `required` CI job is the stable aggregate check for the repository. It waits for lint, typecheck, unit coverage, browser goldens, package/size validation, and the complete extension matrix, and fails if any mandatory job fails, is cancelled, or is skipped.
+
+Release tags must use the `vMAJOR.MINOR.PATCH` shape and must point to a commit reachable from `main`. The release workflow repeats the complete Linux verification suite on the tagged commit, checks the VSIX contents and version, writes a SHA-256 checksum, creates an artifact attestation, and smoke-tests the asset after downloading it from the GitHub Release. Manual dispatch is verification-only and does not create a release.
+
+Penmark remains local-first: GitHub Releases are the distribution channel for VSIX files, and no marketplace or package-registry publish step is part of the workflow.

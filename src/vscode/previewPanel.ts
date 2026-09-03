@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as fs from "fs";
 import * as vscode from "vscode";
 import type {
   ContentWidth,
@@ -1003,15 +1004,61 @@ function setupPanelEntry(
           if (/^https?:\/\//i.test(href)) {
             // External URL — open in the system browser.
             void vscode.env.openExternal(vscode.Uri.parse(href, true));
+          } else if (/^(mailto|ftp):/i.test(href)) {
+            // Address links are not files — hand them to the OS default
+            // handler instead of resolving them against the document directory.
+            void vscode.env.openExternal(vscode.Uri.parse(href, true));
+          } else if (/^file:/i.test(href)) {
+            // File URIs already identify their target — parse, don't resolve.
+            void vscode.commands.executeCommand(
+              "vscode.open",
+              vscode.Uri.parse(href, true),
+            );
           } else {
             // Relative or local path — resolve against the document directory
-            // and open inside VS Code.
+            // (or workspace root as fallback) and open inside VS Code.
             const doc = entry.document;
             if (!doc) break;
             const docDir = path.dirname(doc.uri.fsPath);
-            const absolutePath = path.isAbsolute(href) ? href : path.resolve(docDir, href);
-            const fileUri = vscode.Uri.file(absolutePath);
-            void vscode.commands.executeCommand("vscode.open", fileUri);
+            let targetPath = path.isAbsolute(href) ? href : path.resolve(docDir, href);
+
+            if (!path.isAbsolute(href) && doc.uri.scheme === "file") {
+              // Existence probing only makes sense against a local directory —
+              // untitled and remote documents have none, so open the resolved
+              // path directly instead of statting nonsense locations.
+              const checkExists = (p: string): string | null => {
+                if (fs.existsSync(p)) return p;
+                if (!p.endsWith(".md") && fs.existsSync(p + ".md")) return p + ".md";
+                return null;
+              };
+
+              let resolved = checkExists(targetPath);
+              if (!resolved) {
+                const wsFolder =
+                  vscode.workspace.getWorkspaceFolder(doc.uri) ??
+                  vscode.workspace.workspaceFolders?.[0];
+                if (wsFolder) {
+                  const wsPath = path.resolve(wsFolder.uri.fsPath, href);
+                  resolved = checkExists(wsPath);
+                }
+              }
+
+              if (resolved) {
+                targetPath = resolved;
+              }
+            }
+
+            const fileUri = vscode.Uri.file(targetPath);
+
+            if (/\.(md|markdown)$/i.test(targetPath)) {
+              void vscode.commands
+                .executeCommand("vscode.openWith", fileUri, "penmark.previewEditor")
+                .then(undefined, () => {
+                  void vscode.commands.executeCommand("vscode.open", fileUri);
+                });
+            } else {
+              void vscode.commands.executeCommand("vscode.open", fileUri);
+            }
           }
         } catch {
           // Malformed href — swallow silently; we must not crash the host.

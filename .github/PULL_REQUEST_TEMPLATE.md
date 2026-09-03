@@ -23,6 +23,7 @@ rather than pointing at where it was written down.
 - [ ] `npm run test:unit`
 - [ ] `npm run test:browser` (if webview/render behavior changed)
 - [ ] `npm run test:ext` (if activation/host behavior changed)
+- [ ] `required` aggregate check is green
 
 ## Checklist
 
@@ -31,4 +32,6 @@ rather than pointing at where it was written down.
 - [ ] Stays within the compatibility floor (`engines.vscode ^1.105.0`, stable APIs only)
 - [ ] No `vscode` imports added under `src/core/`
 - [ ] No code ported from reference repositories (see CONTRIBUTING)
+- [ ] Any workflow action reference uses a full commit SHA with a version comment
+- [ ] Release workflow changes preserve exact version tags, verification-only dispatch, and local-first distribution
 - [ ] ROADMAP / CHANGELOG / ADR updated in the same commit set if user-facing behavior changed

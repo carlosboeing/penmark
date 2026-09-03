@@ -158,6 +158,19 @@ function buildUnknownChunkFixture(): Buffer {
   ]);
 }
 
+// Fixture D — an archive with an otherwise valid payload plus an unapproved
+// file. The contents gate must fail closed instead of allowing arbitrary files
+// to ride along in a release VSIX.
+function buildUnexpectedEntryFixture(): Buffer {
+  return buildZip([
+    { name: "extension/package.json", data: Buffer.alloc(10 * 1024) },
+    { name: "extension/dist/extension.js", data: Buffer.alloc(100 * 1024) },
+    { name: "extension/README.md", data: Buffer.alloc(2 * 1024) },
+    { name: "extension/LICENSE", data: Buffer.alloc(1 * 1024) },
+    { name: "extension/dist/.env", data: Buffer.from("TOKEN=must-not-ship\n") },
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Import the module under test
 // ---------------------------------------------------------------------------
@@ -218,6 +231,14 @@ describe("checkVsixSize", () => {
     // chunk-AB12CD34.js is not a mermaid* file — it must land in core and bust the gate
     expect(result.mermaidBytes).toBe(0);
     expect(result.coreBytes).toBeGreaterThan(CORE_LIMIT);
+    expect(result.passed).toBe(false);
+  });
+
+  it("fails closed when the VSIX contains an unapproved entry", () => {
+    const vsixPath = writeTmpZip("unexpected-entry.vsix", buildUnexpectedEntryFixture());
+    const result = checkVsixSize(vsixPath);
+
+    expect(result.unexpectedEntries).toEqual(["extension/dist/.env"]);
     expect(result.passed).toBe(false);
   });
 

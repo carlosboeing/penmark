@@ -4,6 +4,14 @@ The v0.1 manual cross-IDE gate (design §7), run against the **sideloaded VSIX**
 
 Run it once per IDE after every release. v0.1 is **preview-only** — there is no comment authoring yet (that is v0.5), so nothing here exercises commenting.
 
+## Automated release gate
+
+Before creating a version tag, run the complete CI suite on `main` and confirm the `required` aggregate check is green. Push only a new `vMAJOR.MINOR.PATCH` tag; the release workflow verifies that the tag points to `main`, repeats lint, typecheck, unit, browser, and extension tests on the selected Linux runner, packages the VSIX, and checks its size, allowlisted contents, and version metadata.
+
+The workflow writes a `*.vsix.sha256` checksum beside the VSIX, creates a GitHub artifact attestation, and downloads the published files into a clean directory for a checksum and ZIP smoke test. Use `gh attestation verify <path-to-vsix> --repo carlosboeing/penmark` to verify the attestation from a trusted checkout. Workflow dispatch is safe for verification and produces an artifact only; it never creates a release.
+
+Do not reuse a version tag after a failed publication. Fix the source or workflow, select the next patch version, and repeat the complete release process.
+
 ## 0. Get the VSIX
 
 Download `penmark-0.1.0.vsix` from the [GitHub Release](https://github.com/carlosboeing/penmark/releases/tag/v0.1.0) (built and attached by `.github/workflows/release.yml` on the `v0.1.0` tag).
