@@ -80,6 +80,140 @@ describe("renderFrontmatterCard", () => {
     });
   });
 
+  it("renders URLs (http, https, www) as links and normalizes www links", () => {
+    const postMessage = vi.fn();
+    renderFrontmatterCard(
+      {
+        title: "URL Test",
+        website: "https://example.com/spec",
+        mirror: "www.example.org",
+        related: ["http://localhost:3000", "skills/SKILL.md"],
+      },
+      postMessage,
+    );
+
+    const links = Array.from(document.querySelectorAll<HTMLElement>(".pmk-frontmatter-path"));
+    expect(links.map((a) => a.dataset.path)).toEqual([
+      "https://example.com/spec",
+      "https://www.example.org",
+      "http://localhost:3000",
+      "skills/SKILL.md",
+    ]);
+
+    links[0]!.click();
+    expect(postMessage).toHaveBeenCalledWith({
+      v: 1,
+      type: "openLink",
+      href: "https://example.com/spec",
+    });
+
+    links[1]!.click();
+    expect(postMessage).toHaveBeenCalledWith({
+      v: 1,
+      type: "openLink",
+      href: "https://www.example.org",
+    });
+  });
+
+  it("preserves open state in DOM on re-render and persists toggle events to store", () => {
+    let storedOpen: boolean | undefined;
+    const store = {
+      get: () => storedOpen,
+      set: (open: boolean) => {
+        storedOpen = open;
+      },
+    };
+
+    renderFrontmatterCard(
+      {
+        title: "Test",
+        status: "draft",
+        date: "2026-08-01",
+        author: "carlos",
+      },
+      undefined,
+      store,
+    );
+
+    const card = document.querySelector(".pmk-frontmatter-card") as HTMLDetailsElement;
+    expect(card.open).toBe(false); // Default false for > 3 keys
+
+    // User expands card
+    card.open = true;
+    card.dispatchEvent(new Event("toggle"));
+    expect(storedOpen).toBe(true);
+
+    // Re-render while card remains in DOM preserves DOM open state
+    renderFrontmatterCard(
+      {
+        title: "Test Updated",
+        status: "draft",
+        date: "2026-08-01",
+        author: "carlos",
+      },
+      undefined,
+      store,
+    );
+    expect(card.open).toBe(true);
+
+    // If card is removed and recreated (e.g. webview frame reload), stored state is restored
+    document.body.innerHTML = '<div id="penmark-root"></div>';
+    renderFrontmatterCard(
+      {
+        title: "Test Reloaded",
+        status: "draft",
+        date: "2026-08-01",
+        author: "carlos",
+      },
+      undefined,
+      store,
+    );
+    const reloadedCard = document.querySelector(".pmk-frontmatter-card") as HTMLDetailsElement;
+    expect(reloadedCard.open).toBe(true);
+  });
+
+  it("stops persisting toggle state after a render without a store", () => {
+    const stale: boolean[] = [];
+    const store = {
+      get: () => undefined,
+      set: (open: boolean) => {
+        stale.push(open);
+      },
+    };
+
+    renderFrontmatterCard({ title: "A", website: "https://example.com" }, undefined, store);
+    // A later render without a store detaches the previous one instead of
+    // silently reusing it.
+    renderFrontmatterCard({ title: "B", website: "https://example.com" });
+
+    const card = document.querySelector(".pmk-frontmatter-card") as HTMLDetailsElement;
+    card.open = true;
+    card.dispatchEvent(new Event("toggle"));
+    expect(stale).toEqual([]);
+  });
+
+  it("falls back to window.vscode after a render without postMessage", () => {
+    const injected = vi.fn();
+    renderFrontmatterCard({ website: "https://example.com" }, injected);
+
+    const viaWindow = vi.fn();
+    const win = window as unknown as { vscode?: { postMessage: (msg: unknown) => void } };
+    const original = win.vscode;
+    win.vscode = { postMessage: viaWindow };
+    try {
+      renderFrontmatterCard({ website: "https://example.org" });
+      document.querySelector<HTMLElement>(".pmk-frontmatter-path")!.click();
+      expect(viaWindow).toHaveBeenCalledWith({
+        v: 1,
+        type: "openLink",
+        href: "https://example.org",
+      });
+      expect(injected).not.toHaveBeenCalled();
+    } finally {
+      win.vscode = original;
+    }
+  });
+
   it("removes the card when no frontmatter fields are present", () => {
     renderFrontmatterCard({ title: "Draft" });
     expect(document.querySelector(".pmk-frontmatter-card")).not.toBeNull();
