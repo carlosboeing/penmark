@@ -4,6 +4,12 @@ What shipped in this project, when. Most recent first. Each entry references the
 
 ## Unreleased
 
+### Raw-text elements pass through the inline render path
+
+- The preview now shows the authored value of a self-closing raw-text element such as `<textarea/>`. markdown-it has no HTML parser, so that spelling used the inline path. The per-text-node source-offset spans then appeared inside the element's value as literal text.
+- A new inline rule turns a raw-text open tag and everything up to its end tag into a single token. It covers `script`, `style`, `textarea`, `title`, `xmp`, `noembed`, `noframes` and `iframe`. An element with no end tag continues to the end of the block, matching browser display.
+- The renderer still stamps ordinary inline text with source offsets, and comment highlighting is unchanged.
+
 ### Markdown links open in a Penmark tab; frontmatter card keeps its state
 
 - Relative links to markdown files now open in a new Penmark preview tab. The opener is `vscode.openWith` on `penmark.previewEditor`, with `vscode.open` as fallback. Extensionless wiki-links resolve via an existence probe: `.md` suffix first, then the workspace root.
