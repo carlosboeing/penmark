@@ -22,6 +22,11 @@ What shipped in this project, when. Most recent first. Each entry references the
 - Release verification now accepts only three-component version tags, repeats the complete suite on the tagged commit, checks VSIX contents and version coherence, writes a checksum, creates an artifact attestation, and smoke-tests the downloaded release asset; manual dispatch remains verification-only.
 - Added public runtime dependency notices and removed internal path examples from public artifacts.
 
+### Dependabot can read the lockfile again
+
+- `package-lock.json` held conflict markers inside the inner `packages[""]` version hunk. Every Dependabot update job stopped with `dependency_file_not_parseable`, so no dependency update reached a pull request.
+- The hunk now resolves to 0.6.0, which matches `package.json` and the lockfile's own top-level version.
+
 ## 2026-08-27 (fix/comment-ampersand-escaping)
 
 ### Agent-authored character entities render as punctuation
