@@ -316,7 +316,7 @@
     "esbuild": "0.28.2",
     "eslint": "10.9.1",
     "jsdom": "29.1.1",
-    "markdownlint-cli2": "0.23.2",
+    "markdownlint-cli2": "0.23.3",
     "mocha": "11.8.0",
     "prettier": "3.9.6",
     "tsx": "4.23.13",
