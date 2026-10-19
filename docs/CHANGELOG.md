@@ -120,7 +120,7 @@ Settings and Comments become one adaptive, persistent-root surface instead of tw
 - **Reduced motion** — `prefers-reduced-motion: reduce` zeroes Penmark-owned panel/control/highlight transition durations and switches comment-jump scrolling from smooth to instant; native Find and dialog motion are unaffected.
 - **Tests** — unit coverage for the settings/protocol narrowing, panel geometry, and motion-preference gating; three representative Playwright visual-regression states (wide settings, mid-width comments under reduced motion, narrow comments) replacing an exhaustive state matrix; two Mermaid goldens re-recorded for the approved responsive-width change.
 
-## 2026-07-07 (in flight — feat/export-html-pdf)
+## 2026-07-08 (feat/export-html-pdf — merged as PR #22)
 
 ### Export to HTML and PDF
 
@@ -147,7 +147,7 @@ Independent UI/UX pass for comparison against the parallel `feat/v1-polish` work
 - **Undo-safe comment edits** — comment add/resolve/edit now use the visible source editor's edit stack with explicit undo stops and no forced save, keeping review mutations as normal editor changes.
 - **Verification coverage** — added unit and Playwright coverage for settings persistence, webview interactions, HSL semantic tokens, frontmatter, comments, settings, and image lightbox states.
 
-## 2026-06-17 (in flight — feat/v1-polish)
+## 2026-06-16 (feat/v1-polish — merged as PR #10)
 
 ### v1.0 Polish — typography, lightbox, checkboxes, frontmatter, keyboard, reconcile, selection
 
