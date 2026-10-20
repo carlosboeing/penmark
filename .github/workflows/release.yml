@@ -19,6 +19,10 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   verify:
     name: Verify release
