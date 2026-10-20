@@ -19,7 +19,7 @@ What shipped in this project, when. Most recent first. Each entry references the
 ### OSS repository safeguards
 
 - CI now uses immutable action and browser-container references, explicit least-privilege permissions, timeouts, pull-request run cancellation, and a stable `required` aggregate check while preserving the full operating-system and VS Code-version matrix.
-- Release verification now runs under `bash` inside the pinned Playwright container, accepts only three-component version tags, repeats the complete suite on the tagged commit, checks VSIX contents and version coherence, writes a checksum, creates an artifact attestation, and smoke-tests the downloaded release asset; manual dispatch remains verification-only.
+- Release verification now runs under `bash` with `safe.directory`, `--shm-size=2g`, and built-in Node ZIP manifest extraction inside the pinned Playwright container, accepts only three-component version tags, repeats the complete suite on the tagged commit, checks VSIX contents and version coherence, writes a checksum, creates an artifact attestation, and smoke-tests the downloaded release asset; manual dispatch remains verification-only.
 - Added public runtime dependency notices and removed internal path examples from public artifacts.
 
 ### Dependabot can read the lockfile again
