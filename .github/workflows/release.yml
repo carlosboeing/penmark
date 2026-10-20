@@ -110,8 +110,28 @@ jobs:
           vsix_name="${vsix_path#./}"
 
           mkdir -p release-check
-          unzip -p "$vsix_name" extension/package.json > release-check/package.json
-          unzip -p "$vsix_name" extension.vsixmanifest > release-check/extension.vsixmanifest
+          node -e '
+            const fs = require("fs"), zlib = require("zlib");
+            const buf = fs.readFileSync(process.argv[1]);
+            let eocd = buf.length - 22;
+            while (eocd >= 0 && buf.readUInt32LE(eocd) !== 0x06054b50) eocd--;
+            let pos = buf.readUInt32LE(eocd + 16), end = pos + buf.readUInt32LE(eocd + 12);
+            const out = {};
+            while (pos < end && buf.readUInt32LE(pos) === 0x02014b50) {
+              const method = buf.readUInt16LE(pos + 10), cSize = buf.readUInt32LE(pos + 20);
+              const fnLen = buf.readUInt16LE(pos + 28), exLen = buf.readUInt16LE(pos + 30), cmLen = buf.readUInt16LE(pos + 32);
+              const lhOff = buf.readUInt32LE(pos + 42);
+              const name = buf.subarray(pos + 46, pos + 46 + fnLen).toString("utf8");
+              const dataOff = lhOff + 30 + buf.readUInt16LE(lhOff + 26) + buf.readUInt16LE(lhOff + 28);
+              const raw = buf.subarray(dataOff, dataOff + cSize);
+              if (name === "extension/package.json" || name === "extension.vsixmanifest") {
+                out[name] = method === 0 ? raw : zlib.inflateRawSync(raw);
+              }
+              pos += 46 + fnLen + exLen + cmLen;
+            }
+            fs.writeFileSync("release-check/package.json", out["extension/package.json"]);
+            fs.writeFileSync("release-check/extension.vsixmanifest", out["extension.vsixmanifest"]);
+          ' "$vsix_name"
 
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
             node scripts/check-version-coherence.mjs \
