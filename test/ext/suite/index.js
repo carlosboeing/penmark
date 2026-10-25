@@ -20,7 +20,10 @@ require("tsx/esm/api").register();
 
 /** @returns {Promise<void>} */
 exports.run = function () {
-  const mocha = new Mocha({ ui: "bdd", color: true, timeout: 10000 });
+  // Mocha 12 exports named `Mocha` alongside its default export in CommonJS;
+  // fall back across function / named / default shapes for cross-version compatibility.
+  const MochaConstructor = typeof Mocha === "function" ? Mocha : Mocha.Mocha || Mocha.default;
+  const mocha = new MochaConstructor({ ui: "bdd", color: true, timeout: 10000 });
 
   // activation.test.ts runs FIRST so its activation-time assertion observes a
   // cold activate() (before smoke/preview trigger the command — see T12).
