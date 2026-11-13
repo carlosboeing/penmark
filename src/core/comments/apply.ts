@@ -84,31 +84,47 @@ export function planFindings(text: string, findings: Finding[], opts: PlanOption
   let rejected = false;
   // Explicit start/end are indexes into the original file. Insertions from
   // earlier findings in this batch shift the scratch, so map those indexes
-  // forward before planning the next one.
+  // forward before planning the next one. A later entry is inserted inside the
+  // review block already appended at the original end of the file. That grows
+  // the block. It is not a new splice in the body.
   const insertions: { at: number; len: number }[] = [];
   const toScratch = (originalIndex: number): number => {
     let extra = 0;
     for (const ins of insertions) {
-      if (ins.at <= originalIndex) extra += ins.len;
+      // A splice at the original end was appended after the file. Index
+      // text.length is that end, so it stays in front of the appended text.
+      // A splice at an earlier index sits before the character that was there.
+      if (ins.at < originalIndex || (ins.at === originalIndex && ins.at < text.length)) {
+        extra += ins.len;
+      }
     }
     return originalIndex + extra;
   };
-  const toOriginal = (scratchIndex: number): number => {
+  const locate = (
+    scratchIndex: number,
+  ): { at: number; splice: { at: number; len: number } | null } => {
     const ordered = [...insertions].sort((a, b) => a.at - b.at);
     let extra = 0;
     for (const ins of ordered) {
-      if (ins.at + extra < scratchIndex) extra += ins.len;
-      else break;
+      const start = ins.at + extra;
+      if (scratchIndex <= start) return { at: scratchIndex - extra, splice: null };
+      const end = start + ins.len;
+      if (ins.len > 0 && scratchIndex < end) return { at: ins.at, splice: ins };
+      extra += ins.len;
     }
-    return scratchIndex - extra;
+    return { at: scratchIndex - extra, splice: null };
   };
   const noteEdits = (edits: TextEdit[]): void => {
-    const notes = edits.map((edit) => ({
-      at: toOriginal(edit.start),
-      len: edit.newText.length - (edit.end - edit.start),
-    }));
+    const notes: { at: number; len: number; splice: { at: number; len: number } | null }[] = [];
+    for (const edit of edits) {
+      const delta = edit.newText.length - (edit.end - edit.start);
+      if (delta === 0) continue;
+      const found = locate(edit.start);
+      notes.push({ at: found.at, len: delta, splice: found.splice });
+    }
     for (const note of notes) {
-      if (note.len !== 0) insertions.push(note);
+      if (note.splice !== null) note.splice.len += note.len;
+      else insertions.push({ at: note.at, len: note.len });
     }
   };
 

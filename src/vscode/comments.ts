@@ -209,9 +209,10 @@ export type ReanchorPlan = { kind: "move"; edits: TextEdit[] } | { kind: "replac
 
 /**
  * Plan a re-anchor. A root keeps its id: the anchor moves and every reply that
- * names it stays. A reply, or an id with no entry, is `replace` — the caller
+ * names it stays. A reply, or an id with no entry, is `replace`. The caller
  * deletes that entry and adds a new root, which is the only way a reply gains
- * a highlight. `range` is body-relative, same as {@link planAddComment}.
+ * a highlight. An uncommentable selection returns before that, so a reply is
+ * not deleted. `range` is body-relative, same as {@link planAddComment}.
  */
 export function planReanchorComment(input: {
   source: string;
@@ -221,8 +222,6 @@ export function planReanchorComment(input: {
 }): ReanchorPlan {
   const doc = parseDoc(input.source);
   const target = doc.entries.find((e) => e.id === input.id);
-  if (target === undefined || target.parentId !== undefined) return { kind: "replace" };
-
   const { body: strippedBody } = stripFrontmatter(input.source);
   const frontmatterLen = input.source.length - strippedBody.length;
   const srcRange = {
@@ -233,9 +232,10 @@ export function planReanchorComment(input: {
     input.source,
     srcRange,
     buildBlockMap(input.source, input.tokenize(input.source)),
-    target.quote,
+    target?.quote ?? "",
   );
   if ("uncommentable" in placement) return { uncommentable: true };
+  if (target === undefined || target.parentId !== undefined) return { kind: "replace" };
   return { kind: "move", edits: buildMoveAnchorEdits(input.source, doc, input.id, placement) };
 }
 

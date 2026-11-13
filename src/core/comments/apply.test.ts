@@ -95,6 +95,65 @@ describe("planFindings", () => {
     expect(written.slice(anchor?.extentStart, anchor?.extentEnd)).toBe("target words");
   });
 
+  it("keeps a third explicit range after the review block has grown", () => {
+    const text = "Alpha here.\n\nBeta target words stay.\n";
+    const at = (word: string) => ({
+      quote: word,
+      start: text.indexOf(word),
+      end: text.indexOf(word) + word.length,
+    });
+    const out = plan(text, [
+      { ...at("Alpha"), body: "First." },
+      { ...at("target words"), body: "Second." },
+      { ...at("stay"), body: "Third." },
+    ]);
+    expect(out.code).toBe(0);
+    const written = out.text ?? "";
+    const doc = parseDoc(written);
+    expect(doc.corruption).toEqual([]);
+    const third = doc.entries.find((e) => e.body === "Third.");
+    const anchor = third === undefined ? undefined : doc.anchors.get(third.id);
+    expect(anchor?.kind).toBe("span");
+    expect(written.slice(anchor?.extentStart, anchor?.extentEnd)).toBe("stay");
+  });
+
+  it("keeps an explicit range that follows a reply in the same batch", () => {
+    const text = "Alpha here.\n\nBeta target words stay.\n";
+    const alpha = text.indexOf("Alpha");
+    const stay = text.indexOf("stay");
+    const out = plan(text, [
+      { quote: "Alpha", body: "First.", start: alpha, end: alpha + "Alpha".length },
+      { quote: "Alpha", body: "A reply.", start: alpha, end: alpha + "Alpha".length },
+      { quote: "stay", body: "Third.", start: stay, end: stay + "stay".length },
+    ]);
+    expect(out.code).toBe(0);
+    expect(out.results.map((r) => r.action)).toEqual(["placed", "replied", "placed"]);
+    const written = out.text ?? "";
+    const doc = parseDoc(written);
+    expect(doc.corruption).toEqual([]);
+    const third = doc.entries.find((e) => e.body === "Third.");
+    const anchor = third === undefined ? undefined : doc.anchors.get(third.id);
+    expect(written.slice(anchor?.extentStart, anchor?.extentEnd)).toBe("stay");
+    expect(doc.anchors.has(out.results[1]?.id ?? "")).toBe(false);
+  });
+
+  it("does not extend an explicit end at the file end into the review block", () => {
+    const text = "Alpha here.\n\nBeta target words stay.\n";
+    const alpha = text.indexOf("Alpha");
+    const out = plan(text, [
+      { quote: "Alpha", body: "First.", start: alpha, end: alpha + "Alpha".length },
+      { quote: "Alpha here.", body: "Whole.", start: 0, end: text.length },
+    ]);
+    expect(out.code).toBe(0);
+    const written = out.text ?? "";
+    const doc = parseDoc(written);
+    expect(doc.corruption).toEqual([]);
+    const whole = doc.entries.find((e) => e.body === "Whole.");
+    const anchor = whole === undefined ? undefined : doc.anchors.get(whole.id);
+    expect(anchor).toBeDefined();
+    expect(written.slice(anchor?.extentStart, anchor?.extentEnd)).not.toContain("pmk:review");
+  });
+
   it("does not match a quote that runs into the review block", () => {
     const text =
       "Ends with marker\n\n" +

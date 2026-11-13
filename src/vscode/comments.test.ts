@@ -372,6 +372,23 @@ describe("planReanchorComment", () => {
     });
     expect(plan).toEqual({ kind: "replace" });
   });
+
+  it("does not replace a reply when the new selection cannot carry a comment", () => {
+    const source =
+      "See [the docs][d].\n\n[d]: https://example.com/docs\n\n" +
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c abcdefgh\ntester (human) · 2026-06-14 12:00 +10:00\n> docs\n\nnote\n-->\n" +
+      "<!--pmk:c bbbbbbbb re abcdefgh\nada (human) · 2026-11-13 12:00:00 +00:00\n> docs\n\nagreed\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const start = source.indexOf("https://example.com/docs");
+    const plan = planReanchorComment({
+      source,
+      id: "bbbbbbbb",
+      range: { start, end: start + "https://example.com/docs".length },
+      tokenize: tokenizeBlockOffsets,
+    });
+    expect(plan).toEqual({ uncommentable: true });
+  });
 });
 
 describe("analyzeComments — reconcile → wire payload (R8)", () => {
