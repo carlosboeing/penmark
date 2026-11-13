@@ -193,3 +193,18 @@ describe("conformance corpus — fixture 12 negative-malformed", () => {
     }
   });
 });
+
+describe("conformance corpus — fixture 15 reply", () => {
+  const doc = parseDoc(fixture("15-reply.md"));
+
+  it("parses one root anchor and a reply with no anchor", () => {
+    expect(doc.corruption).toHaveLength(0);
+    expect(doc.anchors.has("aaaaaaaa")).toBe(true);
+    expect(countKind(doc, "span")).toBe(1);
+    const root = doc.entries.find((e) => e.id === "aaaaaaaa");
+    const reply = doc.entries.find((e) => e.id === "bbbbbbbb");
+    expect(root?.parentId).toBeUndefined();
+    expect(reply?.parentId).toBe("aaaaaaaa");
+    expect(doc.anchors.has("bbbbbbbb")).toBe(false);
+  });
+});

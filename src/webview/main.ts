@@ -550,12 +550,9 @@ const frontmatterStateStore: FrontmatterStateStore = {
 };
 
 // --- Re-anchor "select new location" mode (R15) ------------------------------
-// Re-anchor is delete-then-add: clicking "Re-anchor" in the drawer's needs-
-// attention bucket arms this mode; the next selection resolves the orphaned
-// comment and re-adds the SAME body/quote at the new location. Two undo steps
-// for v0.5 (a single combined edit would need a new protocol message + host
-// handler — outside R15's webview-only file scope; recorded as the chosen
-// trade-off in the PR).
+// Clicking "Re-anchor" arms this mode. The next selection posts one
+// `reanchorComment`. The host moves a root's anchor and keeps its id, so
+// replies stay. A loose reply still becomes a new root.
 let _pendingReanchor: { id: string; quote: string; body: string } | null = null;
 
 /** Whether a re-anchor is awaiting a new-location selection. */
@@ -597,12 +594,11 @@ function cancelReanchor(): void {
   document.getElementById("penmark-reanchor-hint")?.removeAttribute("data-active");
 }
 
-/** Commit the armed re-anchor at `range`: resolve the orphan, re-add the body. */
+/** Commit the armed re-anchor at `range`. The host decides move versus replace. */
 function commitReanchor(range: { start: number; end: number }): void {
   if (!_pendingReanchor) return;
   const { id, quote, body } = _pendingReanchor;
-  vscode.postMessage({ v: 1, type: "resolveComment", id });
-  vscode.postMessage({ v: 1, type: "addComment", range, quote, body });
+  vscode.postMessage({ v: 1, type: "reanchorComment", id, range, quote, body });
   cancelReanchor();
 }
 

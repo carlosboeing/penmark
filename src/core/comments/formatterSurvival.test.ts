@@ -95,6 +95,17 @@ describe("serialized entries survive a formatter pass", () => {
     });
   }
 
+  it("15-reply.md: the reply entry still parses after Prettier", async () => {
+    const raw = readFileSync(resolve(CONFORMANCE, "15-reply.md"), "utf8");
+    const formatted = await prettier.format(raw, { parser: "markdown" });
+    const doc = parseDoc(formatted);
+    const reply = doc.entries.find((e) => e.id === "bbbbbbbb");
+    expect(reply?.parentId).toBe("aaaaaaaa");
+    expect(reply?.body).toBe("The source is the format spec.");
+    expect(doc.anchors.has("bbbbbbbb")).toBe(false);
+    expect(doc.anchors.has("aaaaaaaa")).toBe(true);
+  });
+
   it("a document ending in a list does not absorb the review block", async () => {
     const base = "Intro paragraph.\n\n- first item\n- last item\n";
     const written = addComment(base, "z3z3z3z3");

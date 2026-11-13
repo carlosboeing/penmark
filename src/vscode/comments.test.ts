@@ -6,6 +6,8 @@ import {
   resolveAuthor,
   existingIds,
   planAddComment,
+  planReanchorComment,
+  planReplyComment,
   planResolveComment,
   offsetEditsToWorkspaceEdit,
   analyzeComments,
@@ -282,6 +284,96 @@ describe("offsetEditsToWorkspaceEdit", () => {
   });
 });
 
+describe("planReplyComment", () => {
+  const source =
+    "Hello <!--pmk:s abcdefgh-->world<!--/pmk:s abcdefgh-->.\n\n" +
+    "<!-- pmk:review v1 -->\n" +
+    "<!--pmk:c abcdefgh\ntester (human) · 2026-06-14 12:00 +10:00\n> world\n\nnote\n-->\n" +
+    "<!-- /pmk:review -->\n";
+
+  it("appends a reply entry and does not insert another anchor", () => {
+    const edits = planReplyComment({
+      source,
+      parentId: "abcdefgh",
+      body: "agreed",
+      author: "ada",
+      timestamp: "2026-11-13 12:00:00 +00:00",
+    });
+    const out = applyEdits(source, edits);
+    expect(out).toContain("Hello <!--pmk:s abcdefgh-->world<!--/pmk:s abcdefgh-->.");
+    expect(out.match(/<!--pmk:s /g)?.length ?? 0).toBe(1);
+    const doc = parseDoc(out);
+    expect(doc.entries).toHaveLength(2);
+    const reply = doc.entries[1]!;
+    expect(reply.parentId).toBe("abcdefgh");
+    expect(reply.body).toBe("agreed");
+    expect(reply.provenance).toBe("human");
+    expect(reply.quote).toBe("world");
+    expect(doc.anchors.has(reply.id)).toBe(false);
+  });
+
+  it("does not reply onto a root that lives in a non-authoritative review block", () => {
+    const extra =
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nfirst\n-->\n" +
+      "<!-- /pmk:review -->\n\nmid\n\n" +
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c bbbbbbbb\nbob (human) · 2026-06-12 09:03 +10:00\n> q\n\nsecond\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const edits = planReplyComment({
+      source: extra,
+      parentId: "aaaaaaaa",
+      body: "no",
+      author: "ada",
+      timestamp: "2026-11-13 12:00:00 +00:00",
+    });
+    expect(edits).toEqual([]);
+  });
+});
+
+describe("planReanchorComment", () => {
+  it("moves an orphan root's anchor and keeps the reply that names it", () => {
+    const source =
+      "The sentence was rewritten.\n\n" +
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c abcdefgh\ntester (human) · 2026-06-14 12:00 +10:00\n> old words\n\nnote\n-->\n" +
+      "<!--pmk:c bbbbbbbb re abcdefgh\nada (human) · 2026-11-13 12:00:00 +00:00\n> old words\n\nagreed\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const start = source.indexOf("rewritten");
+    const plan = planReanchorComment({
+      source,
+      id: "abcdefgh",
+      range: { start, end: start + "rewritten".length },
+      tokenize: tokenizeBlockOffsets,
+    });
+    expect(plan).toMatchObject({ kind: "move" });
+    if (!("kind" in plan) || plan.kind !== "move") return;
+    const out = applyEdits(source, plan.edits);
+    expect(out).toContain("<!--pmk:s abcdefgh-->rewritten<!--/pmk:s abcdefgh-->");
+    const doc = parseDoc(out);
+    expect(doc.entries.map((e) => e.id)).toEqual(["abcdefgh", "bbbbbbbb"]);
+    expect(doc.entries[1]!.parentId).toBe("abcdefgh");
+    expect(doc.anchors.has("abcdefgh")).toBe(true);
+    expect(doc.anchors.has("bbbbbbbb")).toBe(false);
+  });
+
+  it("asks the caller to replace a reply, which has no anchor of its own", () => {
+    const source =
+      "Hello <!--pmk:s abcdefgh-->world<!--/pmk:s abcdefgh-->.\n\n" +
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c abcdefgh\ntester (human) · 2026-06-14 12:00 +10:00\n> world\n\nnote\n-->\n" +
+      "<!--pmk:c bbbbbbbb re abcdefgh\nada (human) · 2026-11-13 12:00:00 +00:00\n> world\n\nagreed\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const plan = planReanchorComment({
+      source,
+      id: "bbbbbbbb",
+      range: { start: 0, end: 5 },
+      tokenize: tokenizeBlockOffsets,
+    });
+    expect(plan).toEqual({ kind: "replace" });
+  });
+});
+
 describe("analyzeComments — reconcile → wire payload (R8)", () => {
   const intactDoc =
     "Hello <!--pmk:s abcdefgh-->world<!--/pmk:s abcdefgh-->.\n\n" +
@@ -303,6 +395,20 @@ describe("analyzeComments — reconcile → wire payload (R8)", () => {
     expect(c.extent!.startLine).toBe(0);
     expect(c.extent!.endLine).toBe(0);
     expect(c.extent!.startCol).toBeLessThan(c.extent!.endCol);
+    expect(attention).toBe(0);
+    expect(c.parentId).toBeUndefined();
+  });
+
+  it("maps a reply parent id and does not count the reply as attention", () => {
+    const withReply = intactDoc.replace(
+      "<!-- /pmk:review -->",
+      "<!--pmk:c bbbbbbbb re abcdefgh\nada (human) · 2026-11-13 12:00:00 +00:00\n> world\n\nagreed\n-->\n<!-- /pmk:review -->",
+    );
+    const { comments, attention } = analyzeComments(withReply);
+    expect(comments).toHaveLength(2);
+    expect(comments[1]!.parentId).toBe("abcdefgh");
+    expect(comments[1]!.extent).toBeNull();
+    expect(comments[1]!.state).toBe("intact");
     expect(attention).toBe(0);
   });
 

@@ -30,8 +30,8 @@ The review workflow is Penmark's differentiator: comment on rendered prose the w
 
 1. **Select to comment** — drag-select a phrase in the preview. The selection snaps to a contiguous range with a live highlight preview, and an add-comment box appears. Type your comment and confirm (Enter to submit, Esc to cancel).
 2. **Highlight + gutter dot** — the commented span gets a theme-aware highlight (intensity via `penmark.comments.highlightIntensity`) and a gutter dot.
-3. **Resolve** — click a highlight or gutter dot to open a popover (distinct colors for human vs agent authors) with the comment body and a **Resolve** action. Resolving deletes the comment; git history is the audit trail.
-4. **Drawer** — open the comments drawer to see every comment with jump-to. Comments orphaned by edits move to a **needs-attention** bucket with re-anchor and delete actions, and an amber attention chip appears in the top bar.
+3. **Resolve** — click a highlight or gutter dot to open a popover (distinct colors for human vs agent authors) with the comment body and a **Resolve** action. A root comment also has **Reply**: that note sits on the same comment and adds no second highlight. Resolving a comment deletes it, and resolving a root also deletes the replies on it; git history is the audit trail.
+4. **Drawer** — open the comments drawer to see every comment with jump-to. A reply is listed under the comment it answers. Comments orphaned by edits move to a **needs-attention** bucket with re-anchor and delete actions, and an amber attention chip appears in the top bar.
 5. **Export** — run **Penmark: Export Review as Prompt** to copy the open comments (or write them to a file) as a structured, agent-ready prompt.
 
 ## Exporting

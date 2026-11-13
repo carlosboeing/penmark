@@ -4,13 +4,12 @@ Forward view of the Penmark project: what's in flight, queued, parked, and recen
 
 ## In flight
 
-None currently active.
+- **Local review command:** a `penmark` command places findings into a markdown file. A second note on a sentence that already has a comment becomes a reply, not a second highlight. The preview nests that reply under the original comment. The review skill asks before the file is written.
 
 ## Next actions
 
 - **Dependabot PR queue triage:** 18 open PRs on GitHub — close obsolete PR #76 (`actions/attest`), review and merge routine minor/patch bumps (dompurify, brace-expansion, undici, group updates), and schedule major bumps (markdown-it 14→15, vitest 4→5, mocha 11→12, typescript 6→7).
 - **Context Menu & View Source:** review or land the context menu and "View Markdown Source" specification and implementation.
-- **Multi-surface expansion strategy:** resolve the five open product horizon conflicts between the 2026-08-27 horizon and the 2026-09-10 multi-surface vision.
 
 ## Planned release phases (per design §11)
 
@@ -18,7 +17,7 @@ None currently active.
 - **Phase 1 — Reading MVP (v0.1)**: custom webview preview panel; GitHub-style light/dark/auto themes independent of IDE theme; GFM rendering (markdown-it, host-side parse); syntax highlighting; scroll sync; code-block copy buttons; mermaid lazy render + lightbox modal; DOMPurify + nonce CSP.
 - **Phase 2 — Review MVP (v0.5)**: select-to-comment in preview; subtle highlights; comments drawer; resolve/delete; comment storage v1 (documented public spec); author identity; "copy review as prompt" + export review.md (agent handoff).
 - **Phase 3 — Polish (v1.0)**: settings (fonts, sizes, line spacing, theme presets); image lightbox; interactive task checkboxes; frontmatter metadata card; basic keyboard navigation; performance pass against budgets. *(CONTRIBUTING / CODE_OF_CONDUCT / issue+PR templates / Discussions landed early on 2026-06-14 when the repo went public.)* Dual-registry launch remains deferred *(repo is public as of 2026-06-14, but marketplace publishing is still a separate deferred decision — ADR 0004 amendments)*.
-- **Phase 4 — v2**: comment threads/replies; comment markers in TOC/scrollbar + next/prev navigation; PlantUML (Kroki, configurable server); diagram PNG/SVG export; agent integration (an agent skill, `languageModelTools`, possibly MCP); edit-mode exploration (CustomTextEditor, `priority: "option"`).
+- **Phase 4 — v2**: comment markers in TOC/scrollbar + next/prev navigation; PlantUML (Kroki, configurable server); diagram PNG/SVG export; agent integration beyond the local command (`languageModelTools`, possibly MCP); edit-mode exploration (CustomTextEditor, `priority: "option"`).
 
 ## Future considerations
 

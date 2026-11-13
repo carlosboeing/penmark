@@ -35,7 +35,7 @@ Read the entire document. Entries live in the `pmk:review` block at the end; anc
 
 ### Rule 2 — Edit prose first, then delete the marker pair and its entry together
 
-Address feedback by editing the document prose. **Text between span markers may be edited freely; keep the markers intact while you work.** Once the feedback is addressed, delete the marker pair and its matching entry **in a single edit** (one undo step, per spec §7.1).
+Address feedback by editing the document prose. **Text between span markers may be edited freely; keep the markers intact while you work.** Once the feedback is addressed, delete the marker pair, its matching entry, and every reply that names that entry **in a single edit** (one undo step, per spec §7.1). A reply left behind becomes an orphan.
 
 **Before:**
 
@@ -89,7 +89,7 @@ The <!--pmk:s w3n6d5pz-->fifty thousand requests per second peak.
 The <!--pmk:s w3n6d5pz-->sixty thousand requests per second<!--/pmk:s w3n6d5pz--> peak.
 ```
 
-If you are resolving the comment, remove **both** markers and the entry together (Rule 2) — never one marker alone.
+If you are resolving the comment, remove **both** markers, the entry, and its replies together (Rule 2) — never one marker alone.
 
 ### Rule 4 — If the anchored text is gone, leave the anchor and entry in place and report
 
@@ -116,9 +116,11 @@ If you deleted the anchored content yourself on purpose, you may leave the span 
 
 This is the "content removed" state — the markers stay paired, the comment resurfaces for a human, and nothing is silently lost.
 
-### Rule 5 — Replies are v2; append a new entry, never edit the parent
+### Rule 5 — A reply is a new entry; do not hand-write it, and never edit the parent
 
-Threaded replies are a v2 feature. In v1 you do not write them. When v2 lands, a reply is a **new** entry of the form `pmk:c <new-id> re <parent-id>`; you append it and you **never edit the parent entry**.
+A second note on a sentence that already has a comment is a **reply**, not a second highlight. The reply is a new entry, `pmk:c <new-id> re <parent-id>`, with **no** body anchor. The parent is always a root. One level only. The `penmark` command appends the reply. You **never edit the parent entry**.
+
+Do not type these lines yourself and do not mint an id. The `penmark` command writes the entry after the human agrees. The shape below is what that command leaves in the file.
 
 **Before:**
 
@@ -142,7 +144,7 @@ Add the low-level details too. [agent: done in section 3]
 -->
 ```
 
-**Right (v2 — append a separate reply entry, leave the parent verbatim):**
+**What the command leaves in the file (the parent stays verbatim):**
 
 ```
 <!--pmk:c k7m2q5ax
@@ -159,7 +161,7 @@ Done — added the token verification path in section 3.
 -->
 ```
 
-In v1, instead of replying you resolve the comment by editing the prose and deleting the entry (Rule 2).
+Do not reply to a reply. If the note is about a new sentence, it is a new root comment, again written by the `penmark` command. Resolving a thread is still Rule 2: delete the anchor, the root entry, and every reply that names that root, together.
 
 ### Rule 6 — Escape `--` as `&#45;&#45;` inside entries; keep the review block last
 
@@ -194,10 +196,10 @@ When read back, `&#45;&#45;production` decodes to `--production`. And if you app
 | Rule | One-liner |
 |---|---|
 | 1 | Read the whole file; match entries to anchors by ID. |
-| 2 | Edit prose freely between markers; delete the pair + entry together when done. |
+| 2 | Edit prose freely between markers; delete the anchor, the root entry, and its replies together when done. |
 | 3 | Never re-ID, duplicate, split, or half-delete an anchor; never edit another author's entry. |
 | 4 | If the target is gone, leave anchor + entry and report — don't guess. |
-| 5 | Replies are v2 (`re <parent-id>`); append, never edit the parent. |
+| 5 | A reply is `re <parent-id>` with no anchor; the `penmark` command appends it, and you never edit the parent. |
 | 6 | Escape `--` as `&#45;&#45;` in entries; keep `pmk:review` last. |
 
 Full normative grammar: [`spec/penmark-format.md`](spec/penmark-format.md).

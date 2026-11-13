@@ -28,7 +28,10 @@ src/
     protocol/  versioned message types shared with the webview
   vscode/      activation, commands, preview panel manager, WorkspaceEdit ops, settings, watchers
   webview/     separate esbuild entry: highlights, comment box, drawer, find fallback, mermaid loader, lightbox, theme
+  cli/         separate esbuild entry (`dist-cli/cli.js`): the `penmark` command over `src/core/comments`
 ```
+
+The `penmark` command is a separate esbuild entry over `src/core/comments`. It does not ship in the VSIX.
 
 ## Data flow
 
@@ -91,3 +94,4 @@ These are enforced in CI by a bundle-size gate and a performance test layer.
 | [0006](adrs/0006-span-anchor-wrapping-with-degradation-ladder.md) | Span-anchor wrapping pairs and the degradation ladder |
 | [0007](adrs/0007-export-via-preview-capture.md) | HTML/PDF export via preview-DOM capture; PDF via system Chromium |
 | [0008](adrs/0008-in-preview-find-fallback.md) | In-preview Find fallback for editor forks |
+| [0009](adrs/0009-replies-on-v1.md) | Replies stay on the v1 review header |

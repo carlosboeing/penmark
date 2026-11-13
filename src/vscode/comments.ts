@@ -27,7 +27,13 @@ import { buildBlockMap, planAnchor } from "../core/comments/placement.js";
 import { reconcile } from "../core/comments/reconcile.js";
 import type { ReconciledComment, ReconcileResult } from "../core/comments/reconcile.js";
 import type { NewComment, TextEdit } from "../core/comments/serializer.js";
-import { buildAddCommentEdits, buildResolveCommentEdits, buildEditCommentEdits } from "../core/comments/serializer.js";
+import {
+  buildAddCommentEdits,
+  buildAddReplyEdits,
+  buildEditCommentEdits,
+  buildMoveAnchorEdits,
+  buildResolveCommentEdits,
+} from "../core/comments/serializer.js";
 import type { ParsedDoc } from "../core/comments/types.js";
 import type { WireComment, WireExtent } from "../core/protocol/messages.js";
 import { stripFrontmatter } from "../core/render/frontmatter.js";
@@ -153,9 +159,84 @@ export function planAddComment(input: AddCommentInput): AddPlan {
   return { edits: buildAddCommentEdits(source, doc, c) };
 }
 
+export interface ReplyCommentInput {
+  source: string;
+  /** Id of the root entry this reply attaches to. */
+  parentId: string;
+  body: string;
+  author: string;
+  timestamp: string;
+}
+
+/**
+ * Plan the edits to append a reply on `parentId`. Inserts no anchor. Returns
+ * `[]` when the parent is missing, is itself a reply, sits in a non-authoritative
+ * review block, or the body is empty. Provenance is `human`: this path is the
+ * preview reply field.
+ */
+export function planReplyComment(input: ReplyCommentInput): TextEdit[] {
+  const body = input.body.trim();
+  if (body === "") return [];
+  const doc = parseDoc(input.source);
+  const parent = doc.entries.find((e) => e.id === input.parentId);
+  if (
+    parent === undefined ||
+    parent.parentId !== undefined ||
+    parent.fromExtraReviewBlock === true
+  ) {
+    return [];
+  }
+  const id = freshId(existingIds(doc));
+  const c: NewComment = {
+    placement: { kind: "span", range: { start: 0, end: 0 } },
+    author: input.author,
+    provenance: "human",
+    timestamp: input.timestamp,
+    quote: parent.quote,
+    body,
+    id,
+    parentId: input.parentId,
+  };
+  return buildAddReplyEdits(input.source, doc, c);
+}
+
 /** Plan the edits to resolve (= delete) the comment `id` from `source` (R3). */
 export function planResolveComment(source: string, id: string): TextEdit[] {
   return buildResolveCommentEdits(source, parseDoc(source), id);
+}
+
+export type ReanchorPlan = { kind: "move"; edits: TextEdit[] } | { kind: "replace" } | { uncommentable: true };
+
+/**
+ * Plan a re-anchor. A root keeps its id: the anchor moves and every reply that
+ * names it stays. A reply, or an id with no entry, is `replace` — the caller
+ * deletes that entry and adds a new root, which is the only way a reply gains
+ * a highlight. `range` is body-relative, same as {@link planAddComment}.
+ */
+export function planReanchorComment(input: {
+  source: string;
+  id: string;
+  range: { start: number; end: number };
+  tokenize: (source: string) => BlockOffset[];
+}): ReanchorPlan {
+  const doc = parseDoc(input.source);
+  const target = doc.entries.find((e) => e.id === input.id);
+  if (target === undefined || target.parentId !== undefined) return { kind: "replace" };
+
+  const { body: strippedBody } = stripFrontmatter(input.source);
+  const frontmatterLen = input.source.length - strippedBody.length;
+  const srcRange = {
+    start: input.range.start + frontmatterLen,
+    end: input.range.end + frontmatterLen,
+  };
+  const placement = planAnchor(
+    input.source,
+    srcRange,
+    buildBlockMap(input.source, input.tokenize(input.source)),
+    target.quote,
+  );
+  if ("uncommentable" in placement) return { uncommentable: true };
+  return { kind: "move", edits: buildMoveAnchorEdits(input.source, doc, input.id, placement) };
 }
 
 /** Plan the edits to edit the comment `id` with `newBody` in `source`. */
@@ -265,6 +346,7 @@ export function analyzeComments(source: string): CommentAnalysis {
     quote: rc.entry.quote,
     body: decodeDisplayText(rc.entry.body),
     extent: toWireExtent(body, frontmatterLen, rc),
+    ...(rc.entry.parentId !== undefined ? { parentId: rc.entry.parentId } : {}),
   }));
 
   return { comments, attention: result.attentionCount, result };

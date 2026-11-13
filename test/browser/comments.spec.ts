@@ -620,6 +620,58 @@ async function renderForDrawer(
   await expect(page.locator("body")).toHaveAttribute("data-theme", theme);
 }
 
+test("a reply sits under its parent and adds no second highlight", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => {
+    const h = (window as Window & { __harness?: Harness }).__harness;
+    return h !== undefined && h.messages.length > 0;
+  });
+  await page.evaluate(() => {
+    (window as Window & { __harness?: Harness }).__harness!.injectMessage({
+      v: 1,
+      type: "render",
+      html: `<p data-pmk-offset="0:1">The checkout service uses <mark class="pmk-hl" data-pmk-id="span1234" data-pmk-state="intact">eventual consistency</mark> for the read path.</p>`,
+      theme: "light",
+      docName: "architecture-hld.md",
+      comments: [
+        {
+          id: "span1234",
+          state: "intact",
+          provenance: "human",
+          author: "carlos",
+          timestamp: "2026-06-11 11:02 +10:00",
+          quote: "eventual consistency",
+          body: "Why eventual consistency on the read path?",
+          extent: { startLine: 0, startCol: 25, endLine: 0, endCol: 45 },
+        },
+        {
+          id: "reply123",
+          parentId: "span1234",
+          state: "intact",
+          provenance: "agent",
+          author: "ada",
+          timestamp: "2026-11-13 12:00:00 +00:00",
+          quote: "eventual consistency",
+          body: "Same sentence, second note.",
+          extent: null,
+        },
+      ],
+      attention: 0,
+    });
+  });
+
+  await expect(page.locator("mark.pmk-hl")).toHaveCount(1);
+  await expect(page.locator(".pmk-gutter-dot")).toHaveCount(1);
+  await expect(page.locator(".pmk-topbar-count")).toHaveText("1");
+
+  await page.locator(".pmk-topbar-comments").click();
+  const card = page.locator(".pmk-drawer-section.open .pmk-drawer-card");
+  await expect(card).toHaveCount(1);
+  await expect(card.locator(".pmk-drawer-reply")).toContainText("Same sentence, second note.");
+  await expect(page.locator(".pmk-drawer-attention")).toHaveCount(0);
+  await expect(page.locator("mark.pmk-hl")).toHaveCount(1);
+});
+
 test("the attention chip opens the drawer at the needs-attention section", async ({ page }) => {
   await renderForDrawer(page, "light");
   const chip = page.locator(".pmk-topbar-chip");

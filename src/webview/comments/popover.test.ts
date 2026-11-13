@@ -105,6 +105,42 @@ describe("openCommentPopover", () => {
     expect(avatar.textContent).toBe("C");
   });
 
+  it("Reply on a root is not the primary button and posts replyComment", () => {
+    openCommentPopover(anchorEl(), comment({ id: "root2345" }), post);
+
+    const buttons = Array.from(
+      document.querySelectorAll(".pmk-popover-actions button"),
+    ) as HTMLButtonElement[];
+    expect(buttons.map((b) => b.textContent)).toEqual(["Edit", "Reply", "Resolve"]);
+    const reply = buttons[1]!;
+    expect(reply.classList.contains("primary")).toBe(false);
+    expect(buttons[2]!.classList.contains("primary")).toBe(true);
+
+    reply.click();
+    const textarea = document.querySelector("textarea") as HTMLTextAreaElement;
+    textarea.value = "A note on the same sentence.";
+    const submit = Array.from(document.querySelectorAll(".pmk-popover-actions button")).find(
+      (b) => b.textContent === "Reply",
+    ) as HTMLButtonElement;
+    submit.click();
+
+    expect(post).toHaveBeenCalledWith({
+      v: 1,
+      type: "replyComment",
+      id: "root2345",
+      body: "A note on the same sentence.",
+    });
+    expect(isPopoverOpen()).toBe(false);
+  });
+
+  it("a reply popover has no further Reply button", () => {
+    openCommentPopover(anchorEl(), comment({ parentId: "root2345" }), post);
+    const labels = Array.from(document.querySelectorAll(".pmk-popover-actions button")).map(
+      (b) => b.textContent,
+    );
+    expect(labels).toEqual(["Edit", "Resolve"]);
+  });
+
   it("Resolve posts resolveComment with the comment id and closes the popover", () => {
     openCommentPopover(anchorEl(), comment({ id: "zzzz2345" }), post);
 

@@ -81,6 +81,23 @@ describe("buildReviewPrompt (R9)", () => {
     expect(prompt).toContain("the note");
   });
 
+  it("nests a reply under its root and counts roots only", () => {
+    const doc =
+      "The <!--pmk:s aaaaaaaa-->quoted<!--/pmk:s aaaaaaaa--> word.\n\n" +
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c aaaaaaaa\nAda (human) · 2026-06-14 09:00 +10:00\n> quoted\n\nName the source.\n-->\n" +
+      "<!--pmk:c bbbbbbbb re aaaaaaaa\nGrace (agent) · 2026-06-14 09:05 +10:00\n> quoted\n\nThe source is the spec.\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const prompt = promptFor(doc);
+    expect(prompt).toContain("There is 1 open comment.");
+    expect(prompt).toContain("## 1. Ada (human) · 2026-06-14 09:00 +10:00");
+    expect(prompt).toContain("### Reply — Grace (agent) · 2026-06-14 09:05 +10:00");
+    expect(prompt).not.toContain("## 2.");
+    const rootAt = prompt.indexOf("## 1.");
+    const replyAt = prompt.indexOf("### Reply");
+    expect(replyAt).toBeGreaterThan(rootAt);
+  });
+
   it("shows a placeholder for a comment with an empty body", () => {
     const doc =
       "Body.\n\n<!-- pmk:review v1 -->\n" +

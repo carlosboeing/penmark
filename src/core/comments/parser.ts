@@ -216,7 +216,7 @@ function parseEntry(
     );
   const line1 = lines[0] ?? "";
 
-  // Line 1: ID, optionally ` re <parent-id>` (v2, parsed-but-ignored, §5.3).
+  // Line 1: ID, optionally ` re <parent-id>` for a reply (§5.3).
   const m1 = /^([a-z2-7]{8})(?: re ([a-z2-7]{8}))?\s*$/.exec(line1);
   if (m1 === null) return null;
   const id = m1[1] as string;

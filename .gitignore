@@ -10,6 +10,7 @@ Thumbs.db
 # `git add -A` could otherwise track it).
 node_modules
 dist/
+dist-cli/
 build/
 out/
 *.vsix

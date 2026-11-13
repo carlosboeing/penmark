@@ -47,6 +47,8 @@ export interface NewComment {
   body: string;
   /** A valid §3 id, collision-free within the document (from `freshId`). */
   id: string;
+  /** Set for a reply (§5.3). The parent is a root. No anchor is inserted. */
+  parentId?: string;
 }
 
 const REVIEW_OPEN = "<!-- pmk:review v1 -->";
@@ -58,12 +60,14 @@ const REVIEW_CLOSE = "<!-- /pmk:review -->";
  * and ends with a trailing newline before the comment's `-->` terminator.
  */
 function renderEntry(
-  c: Pick<NewComment, "id" | "author" | "provenance" | "timestamp" | "quote" | "body">,
+  c: Pick<NewComment, "id" | "author" | "provenance" | "timestamp" | "quote" | "body" | "parentId">,
 ): string {
   const quoteLines = renderQuoteLines(c.quote);
   const body = encodeEntryText(c.body);
+  const idLine =
+    c.parentId !== undefined ? `<!--pmk:c ${c.id} re ${c.parentId}` : `<!--pmk:c ${c.id}`;
   return (
-    `<!--pmk:c ${c.id}\n` +
+    `${idLine}\n` +
     `${c.author} (${c.provenance}) · ${c.timestamp}\n` +
     `${quoteLines}` +
     `\n` +
@@ -161,6 +165,37 @@ export function buildAddCommentEdits(text: string, doc: ParsedDoc, c: NewComment
 }
 
 /**
+ * Append a reply entry inside the existing review block. Inserts no anchor.
+ * Returns `[]` when the document has no review block (a reply needs a parent).
+ */
+export function buildAddReplyEdits(text: string, doc: ParsedDoc, c: NewComment): TextEdit[] {
+  if (doc.review === null || c.parentId === undefined) return [];
+  const entry = renderEntry(c);
+  const insertAt = closeDelimiterStart(text, doc.review.start, doc.review.end);
+  return [{ start: insertAt, end: insertAt, newText: `${entry}\n` }];
+}
+
+/**
+ * Move a root comment's anchor to `placement`. The entry and any reply that
+ * names it stay, so the thread keeps its id. Returns `[]` when `id` is not a
+ * root entry.
+ */
+export function buildMoveAnchorEdits(
+  text: string,
+  doc: ParsedDoc,
+  id: string,
+  placement: AnchorPlacement,
+): TextEdit[] {
+  const target = doc.entries.find((e) => e.id === id);
+  if (target === undefined || target.parentId !== undefined) return [];
+  const edits: TextEdit[] = [];
+  const anchor = doc.anchors.get(id);
+  if (anchor !== undefined) edits.push(...anchorRemovalEdits(text, anchor));
+  edits.push(...anchorEdits(placement, id));
+  return edits;
+}
+
+/**
  * Offset of the closing `<!-- /pmk:review -->` delimiter within the review block
  * region `[start, end)`. The parser guarantees a closed authoritative block ends
  * exactly at the close delimiter (plus trailing whitespace), so we search back
@@ -179,18 +214,33 @@ function closeDelimiterStart(text: string, start: number, end: number): number {
  * Returns `[]` when no anchor and no entry exist for `id` (nothing to do).
  */
 export function buildResolveCommentEdits(text: string, doc: ParsedDoc, id: string): TextEdit[] {
+  const target = doc.entries.find((e) => e.id === id);
+  const childIds =
+    target !== undefined && target.parentId === undefined
+      ? doc.entries.filter((e) => e.parentId === id).map((e) => e.id)
+      : [];
+  const removeIds = new Set<string>([id, ...childIds]);
+
   const edits: TextEdit[] = [];
-
-  const anchor = doc.anchors.get(id);
-  if (anchor !== undefined) {
-    edits.push(...anchorRemovalEdits(text, anchor));
+  for (const rid of removeIds) {
+    const anchor = doc.anchors.get(rid);
+    if (anchor !== undefined) edits.push(...anchorRemovalEdits(text, anchor));
   }
 
-  const entry = doc.entries.find((e) => e.id === id);
-  if (entry !== undefined) {
-    edits.push(entryRemovalEdit(text, doc, entry));
+  const removing = doc.entries.filter((e) => removeIds.has(e.id));
+  if (removing.length === 0) return edits;
+
+  // One whole-block removal when nothing remains. Per-entry "last comment"
+  // removal reads the original entry count, so a loop would leave empty
+  // delimiters behind after the first deletion.
+  if (removing.length === doc.entries.length && doc.review !== null) {
+    edits.push(reviewBlockRemovalEdit(text, doc.review));
+    return edits;
   }
 
+  for (const entry of removing) {
+    edits.push({ start: entry.rawStart, end: lineEndAfter(text, entry.rawEnd), newText: "" });
+  }
   return edits;
 }
 
@@ -227,32 +277,20 @@ function lineEndAfter(text: string, pos: number): number {
   return pos < text.length && text.charAt(pos) === "\n" ? pos + 1 : pos;
 }
 
-/**
- * Removal edit for an entry. If it is the only entry in the block, remove the
- * whole block (delimiters and any leading/trailing newline introduced when the
- * block was created); otherwise remove just the entry and its trailing newline.
- */
-function entryRemovalEdit(text: string, doc: ParsedDoc, entry: ParsedEntry): TextEdit {
-  if (doc.entries.length === 1 && doc.review !== null) {
-    // Last comment → remove the entire review block (§7.2), along with the
-    // newlines block creation inserted before it (a terminating newline plus the
-    // blank-line separator). Strip them all and put one back, so the body is
-    // left ending in exactly one newline — POSIX-clean, and byte-identical to
-    // the pre-comment document for any body that already ended that way.
-    let start = doc.review.start;
-    let stripped = 0;
-    while (start > 0 && text.charAt(start - 1) === "\n") {
-      start -= 1;
-      stripped += 1;
-    }
-    if (stripped > 0) start += 1;
-    // The block was written with a terminating newline of its own; take it too,
-    // or it becomes the body's new trailing blank line.
-    const end = text.charAt(doc.review.end) === "\n" ? doc.review.end + 1 : doc.review.end;
-    return { start, end, newText: "" };
+/** Remove the whole review block and the blank line the writer inserted before it. */
+function reviewBlockRemovalEdit(
+  text: string,
+  review: NonNullable<ParsedDoc["review"]>,
+): TextEdit {
+  let start = review.start;
+  let stripped = 0;
+  while (start > 0 && text.charAt(start - 1) === "\n") {
+    start -= 1;
+    stripped += 1;
   }
-  // Mid-list / multi-entry: remove the entry plus its trailing newline.
-  return { start: entry.rawStart, end: lineEndAfter(text, entry.rawEnd), newText: "" };
+  if (stripped > 0) start += 1;
+  const end = text.charAt(review.end) === "\n" ? review.end + 1 : review.end;
+  return { start, end, newText: "" };
 }
 
 /**

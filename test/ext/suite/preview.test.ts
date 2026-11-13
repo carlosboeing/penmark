@@ -9,6 +9,7 @@ import type { ExtensionApi } from "../../../src/vscode/extension.js";
 import {
   handleAddComment,
   handleCopyCode,
+  handleReplyComment,
   handleResolveComment,
   maybePostRevealLine,
 } from "../../../src/vscode/previewPanel.js";
@@ -405,6 +406,43 @@ describe("T4 — webview preview panel", () => {
       const afterResolve = doc.getText();
       assert.ok(!afterResolve.includes("pmk:"), "resolve must strip all pmk markers and the entry");
       assert.ok(afterResolve.includes("The renderer uses markdown-it"), "prose must be preserved");
+    } finally {
+      await closeAll();
+    }
+  });
+
+  it("a reply appends one entry and does not add a second highlight marker", async () => {
+    const original = "The renderer uses markdown-it under the hood.\n";
+    const editor = await openMarkdownEditor(original);
+    const doc = editor.document;
+    try {
+      const start = original.indexOf("renderer");
+      await handleAddComment(
+        doc,
+        { start, end: start + "renderer".length },
+        "renderer",
+        "which one?",
+      );
+      await new Promise((r) => setTimeout(r, 500));
+
+      const id = /<!--pmk:c ([a-z2-7]{8})/.exec(doc.getText())?.[1];
+      assert.ok(id, "the root entry must expose a parseable id");
+      await handleReplyComment(doc, id!, "a second note");
+      await new Promise((r) => setTimeout(r, 500));
+
+      const after = doc.getText();
+      assert.ok(after.includes("a second note"), "reply body must be stored");
+      assert.ok(after.includes(` re ${id}`), "reply line must name the root");
+      assert.strictEqual(
+        after.match(/<!--pmk:s /g)?.length ?? 0,
+        1,
+        "a reply must not insert a second span marker",
+      );
+      assert.ok(
+        /<!--pmk:s [a-z2-7]{8}-->renderer<!--\/pmk:s [a-z2-7]{8}-->/.test(after),
+        "the root highlight must still wrap the original word",
+      );
+      assert.ok(after.includes("which one?"), "the root body must be left in place");
     } finally {
       await closeAll();
     }

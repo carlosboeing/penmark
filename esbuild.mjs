@@ -1,6 +1,6 @@
 // Dual-entry build (ADR 0001 / plan P0.2): extension host (Node/CJS) + webview (browser/ESM).
 import * as esbuild from "esbuild";
-import { writeFileSync, mkdirSync, copyFileSync, readdirSync } from "fs";
+import { writeFileSync, mkdirSync, copyFileSync, readdirSync, chmodSync } from "fs";
 import { join } from "path";
 
 const prod = process.argv.includes("--production");
@@ -73,6 +73,14 @@ const builds = [
     // mermaid.js, which the gate excludes from core.
     splitting: false,
   },
+  {
+    ...common,
+    entryPoints: ["src/cli/main.ts"],
+    outfile: "dist-cli/cli.js",
+    platform: "node",
+    format: "cjs",
+    banner: { js: "#!/usr/bin/env node" },
+  },
 ];
 
 /** Copy all *.css files from media/ into dist/media/. */
@@ -95,11 +103,12 @@ if (watch) {
   const results = await Promise.all(builds.map((b) => esbuild.build(b)));
   copyMediaCss();
   // Write metafiles alongside their output for post-build size analysis.
-  const names = ["extension", "hljs", "render", "webview", "mermaid"];
+  const names = ["extension", "hljs", "render", "webview", "mermaid", "cli"];
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
     if (result.metafile) {
       writeFileSync(`dist/meta-${names[i]}.json`, JSON.stringify(result.metafile));
     }
   }
+  chmodSync("dist-cli/cli.js", 0o755);
 }

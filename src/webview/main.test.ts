@@ -659,7 +659,7 @@ describe("main.ts message loop", () => {
     expect(document.querySelectorAll(".pmk-drawer-attention .pmk-drawer-card").length).toBe(1);
   });
 
-  it("re-anchor flow: drawer Re-anchor → select new location → posts resolveComment + addComment", () => {
+  it("re-anchor flow: drawer Re-anchor → select new location → posts reanchorComment", () => {
     // Render with an orphan plus a commentable paragraph to re-anchor onto.
     renderWith(
       [ORPHAN_C],
@@ -706,14 +706,18 @@ describe("main.ts message loop", () => {
     here.click();
 
     const posted = getMock()._messages;
-    expect(posted).toContainEqual({ v: 1, type: "resolveComment", id: "orph0001" });
-    const add = posted.find((m) => (m as { type?: string }).type === "addComment") as {
+    const moved = posted.find((m) => (m as { type?: string }).type === "reanchorComment") as {
+      id: string;
       quote: string;
       body: string;
+      range: { start: number; end: number };
     };
-    expect(add).toBeTruthy();
-    expect(add.quote).toBe("three retries with backoff"); // same quote (delete-then-add)
-    expect(add.body).toBe("Text was rewritten. Re-anchor or delete.");
+    expect(moved).toBeTruthy();
+    expect(moved.id).toBe("orph0001");
+    expect(moved.quote).toBe("three retries with backoff");
+    expect(moved.body).toBe("Text was rewritten. Re-anchor or delete.");
+    expect(moved.range.end).toBeGreaterThan(moved.range.start);
+    expect(posted.some((m) => (m as { type?: string }).type === "resolveComment")).toBe(false);
 
     // Hint cleared after commit.
     expect(document.getElementById("penmark-reanchor-hint")!.hasAttribute("data-active")).toBe(

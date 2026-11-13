@@ -29,8 +29,8 @@ export interface WireExtent {
 /**
  * Wire-shaped comment shipped host → webview. A flattened, transport-only view
  * of the parsed comment model (`ParsedEntry` + reconcile `CommentState`); the
- * webview never sees raw markdown. `extent` is null for orphan / content-removed
- * comments, which have no live span to highlight.
+ * webview never sees raw markdown. `extent` is null for a reply, and for an
+ * orphan or content-removed comment, which have no live span to highlight.
  */
 export interface WireComment {
   id: string;
@@ -41,6 +41,8 @@ export interface WireComment {
   quote: string;
   body: string;
   extent: WireExtent | null;
+  /** Set when this entry is a reply to a root. Absent on a root. */
+  parentId?: string;
 }
 
 /**
@@ -187,6 +189,15 @@ export type WebviewToHost =
     }
   | { v: 1; type: "resolveComment"; id: string }
   | { v: 1; type: "editComment"; id: string; body: string }
+  | { v: 1; type: "replyComment"; id: string; body: string }
+  | {
+      v: 1;
+      type: "reanchorComment";
+      id: string;
+      range: { start: number; end: number };
+      quote: string;
+      body: string;
+    }
   | { v: 1; type: "jumpToSource"; id: string }
   | { v: 1; type: "exportReview" }
   | { v: 1; type: "toggleTaskCheckbox"; line: number; checked: boolean }
