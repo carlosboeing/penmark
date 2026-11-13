@@ -93,10 +93,10 @@ This form is already a numbered list of the single question, placed at the end o
 
 ## Writer steps
 
-The `penmark` command writes the comments. Do not type marker lines, do not mint an id, and do not edit an existing review entry. The format rules for a file that already has comments are in [AGENTS-GUIDE.md](../../AGENTS-GUIDE.md) in the Penmark repository. This skill does not restate them.
+The `penmark` command writes the comments. Do not type marker lines, do not mint an id, and do not edit an existing review entry. The format rules for a file that already has comments are in [AGENTS-GUIDE.md](https://github.com/carlosboeing/penmark/blob/main/AGENTS-GUIDE.md). This skill does not restate them. That file is not part of this skill directory. In a Penmark checkout it is `AGENTS-GUIDE.md` at the repository root.
 
 1. Add findings only to the primary reviewed document. Source and comparison documents stay unchanged.
-2. Build one JSON object. Each finding has `quote` (the passage text) and `body` (the note). Do not include an id. `start` and `end` are optional and must travel together. They are JavaScript string indexes into the file after it is decoded as text.
+2. Build one JSON object. Each finding has `quote` (the passage text) and `body` (the note). Do not include an id. `start` and `end` are optional and must travel together. They are JavaScript string indexes into the file after it is decoded as text. A byte order mark at the start of the file is index 0.
 
 ```json
 { "findings": [ { "quote": "eventual consistency", "body": "Name the staleness bound." } ] }
@@ -133,7 +133,7 @@ Do not install the command with `npx` from a git URL. That install path is not v
 | `ambiguous-quote` | The result lists `matches`, each with `start`, `end`, and `excerpt`. Put the `start` and `end` of the passage you meant on that finding. Send `start` and `end` together. |
 | `no-match` | The quote is not in the document body. Quote the passage as it is written. |
 | `uncommentable` | That range cannot hold a comment (frontmatter, a link definition, or a blank gap). Quote a prose passage or a whole block instead. |
-| `duplicate-roots` | More than one comment already covers that passage. The result lists those `ids`. Do not add another. Say so in the summary. |
+| `duplicate-roots` | More than one comment already matches that quote. The result lists those `ids`. When the comments are on different passages, put the `start` and `end` of the passage you meant on that finding. `penmark comment locate` lists the passages. The note then becomes a reply on the comment at that passage. When the same result comes back with `start` and `end` set, the comments are on one passage. Do not add another. Say so in the summary. |
 | `empty-body` | The note is empty. Drop that finding or write the note. |
 | `bad-range` | Both `start` and `end` are present, and they are out of order, not whole numbers, or outside the file. A finding with only one of them is exit 1. |
 | `reply-to-reply` | The command only replies to a root comment. Leave the thread as it is. |

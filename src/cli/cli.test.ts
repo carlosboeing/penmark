@@ -8,6 +8,9 @@ import { run, type Io } from "./run.js";
 const ROOT = join(__dirname, "../..");
 const TSX = join(ROOT, "node_modules/.bin/tsx");
 const MAIN = join(ROOT, "src/cli/main.ts");
+/** U+FEFF, built from its code so no invisible character sits in this file. */
+const BOM = String.fromCharCode(0xfeff);
+const BOM_BYTES = [0xef, 0xbb, 0xbf];
 const dirs: string[] = [];
 
 function tempDir(): string {
@@ -252,6 +255,108 @@ describe("penmark process", () => {
       JSON.stringify({ findings: [{ quote: "a", body: "b" }] }),
     );
     expect(result.status).toBe(1);
+    expect(readFileSync(file)).toEqual(before);
+  });
+
+  it("keeps a byte order mark and reads explicit offsets against the file text", () => {
+    const dir = tempDir();
+    const file = write(
+      dir,
+      "note.md",
+      BOM + "See eventual consistency early.\n\nSee eventual consistency later.\n",
+    );
+    const before = readFileSync(file);
+    expect(Array.from(before.subarray(0, 3))).toEqual(BOM_BYTES);
+    // Buffer.toString keeps the mark, so the mark is index 0 of the file text.
+    const fileText = before.toString("utf8");
+    const start = fileText.lastIndexOf("eventual consistency");
+
+    const located = penmark(["comment", "locate", "--file", file, "--quote", "eventual consistency"]);
+    expect(located.status).toBe(0);
+    const matches = JSON.parse(located.stdout).matches as { start: number; end: number }[];
+    expect(matches.map((m) => fileText.slice(m.start, m.end))).toEqual([
+      "eventual consistency",
+      "eventual consistency",
+    ]);
+    expect(matches[1]?.start).toBe(start);
+
+    const result = penmark(
+      ["comment", "apply", "--file", file, "--author", "Ada"],
+      JSON.stringify({
+        findings: [
+          {
+            quote: "eventual consistency",
+            body: "Name the bound.",
+            start,
+            end: start + "eventual consistency".length,
+          },
+        ],
+      }),
+    );
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).results[0].action).toBe("placed");
+    const after = readFileSync(file);
+    expect(Array.from(after.subarray(0, 3))).toEqual(BOM_BYTES);
+    expect(after.subarray(3).toString("utf8")).toMatch(
+      /^See eventual consistency early\.\n\nSee <!--pmk:s [a-z2-7]{8}-->eventual consistency<!--\/pmk:s [a-z2-7]{8}--> later\.\n/,
+    );
+  });
+
+  it("lists ambiguous matches as file-text offsets behind a byte order mark", () => {
+    const dir = tempDir();
+    const file = write(
+      dir,
+      "note.md",
+      BOM + "See eventual consistency early.\n\nSee eventual consistency later.\n",
+    );
+    const before = readFileSync(file);
+    const fileText = before.toString("utf8");
+    const result = penmark(
+      ["comment", "apply", "--file", file, "--author", "Ada"],
+      JSON.stringify({ findings: [{ quote: "eventual consistency", body: "Which one?" }] }),
+    );
+    expect(result.status).toBe(2);
+    const rejected = JSON.parse(result.stdout).results[0] as {
+      reason: string;
+      matches: { start: number; end: number }[];
+    };
+    expect(rejected.reason).toBe("ambiguous-quote");
+    expect(rejected.matches.map((m) => fileText.slice(m.start, m.end))).toEqual([
+      "eventual consistency",
+      "eventual consistency",
+    ]);
+    expect(readFileSync(file)).toEqual(before);
+  });
+
+  it("refuses a frontmatter range behind a byte order mark", () => {
+    const dir = tempDir();
+    const file = write(dir, "note.md", BOM + "---\ntitle: secret\n---\n\nBody paragraph.\n");
+    const before = readFileSync(file);
+    const start = before.toString("utf8").indexOf("title: secret");
+    const result = penmark(
+      ["comment", "apply", "--file", file, "--author", "Ada"],
+      JSON.stringify({
+        findings: [{ quote: "title: secret", body: "No.", start, end: start + "title: secret".length }],
+      }),
+    );
+    expect(result.status).toBe(2);
+    expect(JSON.parse(result.stdout).results[0].reason).toBe("uncommentable");
+    expect(readFileSync(file)).toEqual(before);
+  });
+
+  it("resolve leaves the byte order mark in place", () => {
+    const dir = tempDir();
+    const file = write(dir, "note.md", BOM + "The eventual consistency model waits.\n");
+    const before = readFileSync(file);
+    const placed = penmark(
+      ["comment", "apply", "--file", file, "--author", "Ada"],
+      JSON.stringify({ findings: [{ quote: "eventual consistency", body: "Name it." }] }),
+    );
+    expect(placed.status).toBe(0);
+    expect(Array.from(readFileSync(file).subarray(0, 3))).toEqual(BOM_BYTES);
+    const id = JSON.parse(placed.stdout).results[0].id as string;
+    const resolved = penmark(["resolve", "--file", file, id]);
+    expect(resolved.status).toBe(0);
     expect(readFileSync(file)).toEqual(before);
   });
 

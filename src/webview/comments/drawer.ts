@@ -287,7 +287,19 @@ function replyRow(c: WireComment, cfg: DrawerConfig): HTMLElement {
   body.className = "pmk-drawer-body";
   body.textContent = c.body;
 
-  el.append(who, body);
+  // A native button, so Tab reaches the reply and Enter or Space opens its
+  // popover (Edit, Resolve). The button has no listener of its own: its click
+  // bubbles to the row listener below, which also serves a mouse click
+  // anywhere on the row. The action key carries the reply id, so a rebuild
+  // returns focus to this reply's button and not to a neighbour's.
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "pmk-drawer-action";
+  open.dataset.pmkDrawerAction = `reply:${c.id}`;
+  open.textContent = "Open";
+  open.setAttribute("aria-label", `Open reply by ${c.author}`);
+
+  el.append(who, body, open);
   el.addEventListener("click", () => openCommentPopover(el, c, cfg.post));
   return el;
 }

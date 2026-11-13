@@ -34,5 +34,5 @@ The command is not part of this directory. Use `penmark` when it is on `PATH`. O
 
 ## See also
 
-- [AGENTS-GUIDE.md](../../AGENTS-GUIDE.md) — rules for editing a file that already has comments
+- [AGENTS-GUIDE.md](https://github.com/carlosboeing/penmark/blob/main/AGENTS-GUIDE.md) — rules for editing a file that already has comments. The link is absolute because an installed copy of this directory has no Penmark repository around it.
 - [Skill instructions](SKILL.md)

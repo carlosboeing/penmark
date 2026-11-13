@@ -8,7 +8,13 @@
  */
 
 import { freshId } from "./ids.js";
-import { buildBlockMap, planAnchor, type AnchorPlacement, type SourceRange } from "./placement.js";
+import {
+  buildBlockMap,
+  planAnchor,
+  type AnchorPlacement,
+  type BlockSpan,
+  type SourceRange,
+} from "./placement.js";
 import { parseDoc } from "./parser.js";
 import { reconcile, type ReconciledComment } from "./reconcile.js";
 import {
@@ -270,7 +276,13 @@ function planOne(
 
   if (hasStart && hasEnd) {
     const range = { start: finding.start!, end: finding.end! };
-    const roots = matchingRoots(text, comments, needle ?? text.slice(range.start, range.end));
+    // An explicit range names one passage. The same words in another place are
+    // a different passage, so a root is a reply target only when it sits here.
+    const roots = rootsAt(
+      text,
+      range,
+      matchingRoots(text, comments, needle ?? text.slice(range.start, range.end)),
+    );
     if (roots.length >= 2) return stop(reject(quote, "duplicate-roots", { ids: idsOf(roots) }));
     if (roots.length === 1) return replyTo(text, doc, comments, roots[0]!, finding, opts);
     return place(text, doc, range, finding, opts);
@@ -354,6 +366,33 @@ function matchingRoots(text: string, comments: ReconciledComment[], needle: stri
   return comments.filter((c) => {
     if (c.entry.parentId !== undefined || c.state === "orphan") return false;
     return matchTexts(text, c).some((candidate) => normalizeWs(candidate) === key);
+  });
+}
+
+/**
+ * Keep the roots whose anchored passage overlaps `range`. A content-removed
+ * root has an empty passage and never overlaps.
+ */
+function rootsAt(
+  text: string,
+  range: SourceRange,
+  roots: ReconciledComment[],
+): ReconciledComment[] {
+  let blocks: BlockSpan[] | undefined;
+  return roots.filter((root) => {
+    let passage = root.extent;
+    if (root.anchor?.kind === "block") {
+      // A block anchor is a marker line above its block (§4.2), and its extent
+      // is that marker. The passage is the block that follows the marker.
+      blocks ??= buildBlockMap(text, tokenizeBlockOffsets(text)).blocks;
+      const markerEnd = root.anchor.openerEnd;
+      const block = blocks.find((b) => b.startOffset >= markerEnd);
+      passage = block === undefined ? undefined : { start: block.startOffset, end: block.endOffset };
+    }
+    return (
+      passage !== undefined &&
+      Math.min(passage.end, range.end) > Math.max(passage.start, range.start)
+    );
   });
 }
 

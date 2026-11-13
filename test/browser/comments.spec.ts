@@ -620,7 +620,8 @@ async function renderForDrawer(
   await expect(page.locator("body")).toHaveAttribute("data-theme", theme);
 }
 
-test("a reply sits under its parent and adds no second highlight", async ({ page }) => {
+/** Render one highlighted root comment with one reply on it. */
+async function renderWithReply(page: import("@playwright/test").Page): Promise<void> {
   await page.goto("/");
   await page.waitForFunction(() => {
     const h = (window as Window & { __harness?: Harness }).__harness;
@@ -659,6 +660,10 @@ test("a reply sits under its parent and adds no second highlight", async ({ page
       attention: 0,
     });
   });
+}
+
+test("a reply sits under its parent and adds no second highlight", async ({ page }) => {
+  await renderWithReply(page);
 
   await expect(page.locator("mark.pmk-hl")).toHaveCount(1);
   await expect(page.locator(".pmk-gutter-dot")).toHaveCount(1);
@@ -670,6 +675,34 @@ test("a reply sits under its parent and adds no second highlight", async ({ page
   await expect(card.locator(".pmk-drawer-reply")).toContainText("Same sentence, second note.");
   await expect(page.locator(".pmk-drawer-attention")).toHaveCount(0);
   await expect(page.locator("mark.pmk-hl")).toHaveCount(1);
+});
+
+test("the keyboard reaches a nested reply and resolves it", async ({ page }) => {
+  await renderWithReply(page);
+  await page.locator(".pmk-topbar-comments").click();
+  await expect(page.locator(".pmk-drawer-close")).toBeFocused();
+
+  // The reply's button is the next Tab stop after Close: the card and the
+  // reply row are not Tab stops themselves.
+  await page.keyboard.press("Tab");
+  const open = page.locator(".pmk-drawer-reply button");
+  await expect(open).toBeFocused();
+  await expect(open).toHaveAccessibleName("Open reply by ada");
+
+  await page.keyboard.press("Enter");
+  const popover = page.locator(".pmk-popover");
+  await expect(popover).toBeVisible();
+  await expect(popover.locator(".pmk-popover-btn", { hasText: "Edit" })).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect(popover.locator(".pmk-popover-btn", { hasText: "Resolve" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(popover).toHaveCount(0);
+
+  const posted = await page.evaluate(
+    () => (window as Window & { __harness?: Harness }).__harness!.messages,
+  );
+  expect(posted).toContainEqual({ v: 1, type: "resolveComment", id: "reply123" });
 });
 
 test("the attention chip opens the drawer at the needs-attention section", async ({ page }) => {

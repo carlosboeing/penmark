@@ -250,6 +250,54 @@ describe("drawer", () => {
     expect(panel().textContent?.match(/Reply to a reply\./g)?.length).toBe(1);
   });
 
+  it("gives a nested reply a native button that opens its Edit and Resolve actions", () => {
+    const reply = comment({
+      id: "reply001",
+      parentId: "open0001",
+      author: "ada",
+      body: "First reply.",
+      extent: null,
+    });
+    renderDrawer([OPEN_HUMAN, reply]);
+    openDrawer();
+
+    const button = openCards()[0]!.querySelector<HTMLButtonElement>(".pmk-drawer-reply button")!;
+    // A native button with no negative tabindex is a Tab stop, and the browser
+    // turns Enter or Space on it into the click sent below.
+    expect(button.type).toBe("button");
+    expect(button.tabIndex).toBe(0);
+    expect(button.getAttribute("aria-label")).toBe("Open reply by ada");
+
+    button.focus();
+    button.click();
+    const popover = document.querySelector<HTMLElement>(".pmk-popover")!;
+    expect(popover.getAttribute("aria-label")).toBe("Comment by ada");
+    const actions = Array.from(
+      popover.querySelectorAll<HTMLButtonElement>(".pmk-popover-actions button"),
+    );
+    expect(actions.map((b) => b.textContent)).toEqual(["Edit", "Resolve"]);
+
+    actions[1]!.click();
+    expect(post).toHaveBeenCalledWith({ v: 1, type: "resolveComment", id: "reply001" });
+    expect(document.querySelector(".pmk-popover")).toBeNull();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("returns focus to the same reply's button after a rebuild", () => {
+    const first = comment({ id: "reply001", parentId: "open0001", body: "First.", extent: null });
+    const second = comment({ id: "reply002", parentId: "open0001", body: "Second.", extent: null });
+    renderDrawer([OPEN_HUMAN, first, second]);
+    openDrawer();
+    const buttons = openCards()[0]!.querySelectorAll<HTMLButtonElement>(".pmk-drawer-reply button");
+    buttons[1]!.focus();
+
+    renderDrawer([OPEN_HUMAN, first, second]);
+    const focused = document.activeElement as HTMLElement;
+    expect(focused).not.toBe(buttons[1]);
+    expect(focused.tagName).toBe("BUTTON");
+    expect(focused.closest(".pmk-drawer-reply")?.getAttribute("data-pmk-id")).toBe("reply002");
+  });
+
   it("renders the needs-attention section listing orphan + content-removed (quote preserved)", () => {
     renderDrawer(ALL);
     const cards = attentionCards();

@@ -232,6 +232,93 @@ describe("planFindings", () => {
     expect(out.text).toBeNull();
   });
 
+  it("an explicit range replies to the root on that passage when two roots share a quote", () => {
+    const text =
+      "One <!--pmk:s aaaaaaaa-->shared phrase<!--/pmk:s aaaaaaaa-->.\n\n" +
+      "Two <!--pmk:s bbbbbbbb-->shared phrase<!--/pmk:s bbbbbbbb-->.\n\n" +
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c aaaaaaaa\nAda (human) · 2026-11-13 12:00:00 +00:00\n> shared phrase\n\nFirst.\n-->\n" +
+      "<!--pmk:c bbbbbbbb\nAda (human) · 2026-11-13 12:00:00 +00:00\n> shared phrase\n\nSecond.\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const at = (from: string) => {
+      const start = text.indexOf("shared phrase", text.indexOf(from));
+      return { quote: "shared phrase", start, end: start + "shared phrase".length };
+    };
+    const parentOf = (written: string | null, body: string) =>
+      parseDoc(written ?? "").entries.find((e) => e.body === body)?.parentId;
+
+    const onSecond = plan(text, [{ ...at("Two "), body: "On the second." }]);
+    expect(onSecond.code).toBe(0);
+    expect(onSecond.results[0]?.action).toBe("replied");
+    expect(parentOf(onSecond.text, "On the second.")).toBe("bbbbbbbb");
+
+    const onFirst = plan(text, [{ ...at("One "), body: "On the first." }]);
+    expect(onFirst.code).toBe(0);
+    expect(onFirst.results[0]?.action).toBe("replied");
+    expect(parentOf(onFirst.text, "On the first.")).toBe("aaaaaaaa");
+  });
+
+  it("an explicit range on a second passage places a root when only the first has one", () => {
+    const text =
+      "One <!--pmk:s aaaaaaaa-->shared phrase<!--/pmk:s aaaaaaaa-->.\n\n" +
+      "Two shared phrase.\n\n" +
+      "<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c aaaaaaaa\nAda (human) · 2026-11-13 12:00:00 +00:00\n> shared phrase\n\nFirst.\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const start = text.indexOf("shared phrase", text.indexOf("Two "));
+    const out = plan(text, [
+      {
+        quote: "shared phrase",
+        body: "On the second.",
+        start,
+        end: start + "shared phrase".length,
+      },
+    ]);
+    expect(out.code).toBe(0);
+    expect(out.results[0]?.action).toBe("placed");
+    const written = out.text ?? "";
+    const doc = parseDoc(written);
+    expect(doc.corruption).toEqual([]);
+    const placed = doc.entries.find((e) => e.body === "On the second.");
+    expect(placed?.parentId).toBeUndefined();
+    const anchor = placed === undefined ? undefined : doc.anchors.get(placed.id);
+    expect(anchor?.kind).toBe("span");
+    expect(written.slice(anchor?.extentStart, anchor?.extentEnd)).toBe("shared phrase");
+    expect(written).toContain("Two <!--pmk:s ");
+    expect(doc.entries.filter((e) => e.parentId === "aaaaaaaa")).toEqual([]);
+  });
+
+  it("an explicit range selects a block-anchored root by the block under its marker", () => {
+    const fence = "```\nnpm run build\n```\n";
+    const text =
+      "<!--pmk:b aaaaaaaa-->\n" +
+      fence +
+      "\nThen again:\n\n" +
+      fence +
+      "\n<!-- pmk:review v1 -->\n" +
+      "<!--pmk:c aaaaaaaa\nAda (human) · 2026-11-13 12:00:00 +00:00\n> npm run build\n\nFirst.\n-->\n" +
+      "<!-- /pmk:review -->\n";
+    const at = (from: number) => {
+      const start = text.indexOf("npm run build", from);
+      return { quote: "npm run build", start, end: start + "npm run build".length };
+    };
+
+    const onFirst = plan(text, [{ ...at(0), body: "Same block." }]);
+    expect(onFirst.code).toBe(0);
+    expect(onFirst.results[0]?.action).toBe("replied");
+    const reply = parseDoc(onFirst.text ?? "").entries.find((e) => e.body === "Same block.");
+    expect(reply?.parentId).toBe("aaaaaaaa");
+
+    const onSecond = plan(text, [{ ...at(text.indexOf("Then again")), body: "Other block." }]);
+    expect(onSecond.code).toBe(0);
+    expect(onSecond.results[0]?.action).toBe("placed");
+    const doc = parseDoc(onSecond.text ?? "");
+    expect(doc.corruption).toEqual([]);
+    const placed = doc.entries.find((e) => e.body === "Other block.");
+    expect(placed?.parentId).toBeUndefined();
+    expect(doc.anchors.get(placed?.id ?? "")?.kind).toBe("block");
+  });
+
   it("refuses an unreadable review block", () => {
     const text = "Body.\n\n<!-- pmk:review v2 -->\n<!-- /pmk:review -->\n";
     const out = plan(text, [{ quote: "Body", body: "Note." }]);

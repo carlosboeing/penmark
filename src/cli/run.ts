@@ -15,6 +15,7 @@ import {
   reviewPrompt,
   validateText,
   type Finding,
+  type QuoteMatch,
 } from "../core/comments/apply.js";
 
 export interface Io {
@@ -84,17 +85,20 @@ function applyCommand(file: string, rest: string[], args: ParsedArgs, io: Io): n
   if (author === null || author === "") return fail(io, 1, "missing author");
   if (/[\r\n]/.test(author) || author.includes("--")) return fail(io, 1, "bad author");
 
-  const planned = planFindings(first.text, findings, {
+  const planned = planFindings(first.text, toTextRanges(findings, first.bom), {
     author,
     provenance,
     timestamp: io.now(),
   });
+  const results = planned.results.map((r) =>
+    r.matches === undefined ? r : { ...r, matches: toFileMatches(r.matches, first.bom) },
+  );
   if (planned.code !== 0 || dryRun || planned.text === null) {
     emit(io, {
       file,
       dryRun,
       wrote: false,
-      results: planned.results,
+      results,
       ...(planned.corruption !== undefined ? { corruption: planned.corruption } : {}),
     });
     return planned.code;
@@ -103,11 +107,11 @@ function applyCommand(file: string, rest: string[], args: ParsedArgs, io: Io): n
   const again = readUtf8(io, file);
   if (again === null) return fail(io, 1, "file is not valid UTF-8");
   if (again.hash !== first.hash) {
-    emit(io, { file, dryRun: false, wrote: false, results: planned.results, reason: "changed" });
+    emit(io, { file, dryRun: false, wrote: false, results, reason: "changed" });
     return 3;
   }
-  io.write(file, planned.text);
-  emit(io, { file, dryRun: false, wrote: true, results: planned.results });
+  io.write(file, first.bom + planned.text);
+  emit(io, { file, dryRun: false, wrote: true, results });
   return 0;
 }
 
@@ -122,7 +126,8 @@ function locateCommand(file: string, rest: string[], args: ParsedArgs, io: Io): 
     emit(io, corruption);
     return 4;
   }
-  emit(io, locateQuote(decoded.text, quote));
+  const found = locateQuote(decoded.text, quote);
+  emit(io, { matches: toFileMatches(found.matches, decoded.bom), truncated: found.truncated });
   return 0;
 }
 
@@ -164,7 +169,7 @@ function resolveCommand(file: string, rest: string[], io: Io): number {
   const again = readUtf8(io, file);
   if (again === null) return fail(io, 1, "file is not valid UTF-8");
   if (again.hash !== first.hash) return fail(io, 3, "changed");
-  io.write(file, planned.text);
+  io.write(file, first.bom + planned.text);
   emit(io, { removed: planned.removed });
   return 0;
 }
@@ -211,14 +216,59 @@ function readFindings(raw: string): Finding[] | null {
   return out;
 }
 
-function readUtf8(io: Io, path: string): { text: string; hash: string } | null {
+/** U+FEFF, the byte order mark. Built from its code so no invisible character sits in this file. */
+const BOM = String.fromCharCode(0xfeff);
+
+interface Decoded {
+  /** The file text after any leading byte order mark. */
+  text: string;
+  hash: string;
+  /** The byte order mark the file starts with, or "". A write puts it back. */
+  bom: string;
+}
+
+/**
+ * Decode the file. A leading byte order mark is kept apart from `text`: the
+ * frontmatter check and the block tokenizer both read the first characters of
+ * the text, and a mark in front of them would hide a `---` or `#` line.
+ */
+function readUtf8(io: Io, path: string): Decoded | null {
   const buf = io.read(path);
   try {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
-    return { text, hash: createHash("sha256").update(buf).digest("hex") };
+    // Without ignoreBOM the decoder drops the mark, and a write would then
+    // remove it from the file.
+    const decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buf);
+    const bom = decoded.startsWith(BOM) ? BOM : "";
+    return {
+      text: decoded.slice(bom.length),
+      hash: createHash("sha256").update(buf).digest("hex"),
+      bom,
+    };
   } catch {
     return null;
   }
+}
+
+/**
+ * `start` and `end` in the command's input and output index the decoded file,
+ * where a byte order mark is index 0. The planner's text has no mark. These
+ * two helpers move a range between the two. Index 0 stays 0 on the way in, so
+ * a range may start at the mark, and a value that is not a valid index stays
+ * invalid.
+ */
+function toTextRanges(findings: Finding[], bom: string): Finding[] {
+  if (bom === "") return findings;
+  const shift = (n: number) => (n > 0 ? n - bom.length : n);
+  return findings.map((f) =>
+    f.start === undefined || f.end === undefined
+      ? f
+      : { ...f, start: shift(f.start), end: shift(f.end) },
+  );
+}
+
+function toFileMatches(matches: QuoteMatch[], bom: string): QuoteMatch[] {
+  if (bom === "") return matches;
+  return matches.map((m) => ({ ...m, start: m.start + bom.length, end: m.end + bom.length }));
 }
 
 function parseArgv(argv: string[]): ParsedArgs {
