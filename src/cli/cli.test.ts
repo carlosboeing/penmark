@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { run, type Io } from "./run.js";
+import { defaultIdes, lineReaderFromLines, type IdeSpec, type SetupEnv } from "./setup.js";
 
 const ROOT = join(__dirname, "../..");
 const TSX = join(ROOT, "node_modules/.bin/tsx");
@@ -408,7 +409,7 @@ describe("penmark process", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("penmark — review comments in a markdown file");
-    for (const name of ["comment apply", "comment locate", "list", "validate", "resolve", "export-prompt", "version"]) {
+    for (const name of ["comment apply", "comment locate", "list", "validate", "resolve", "export-prompt", "setup", "doctor", "version"]) {
       expect(result.stdout).toContain(name);
     }
   });
@@ -420,6 +421,10 @@ describe("penmark process", () => {
       ["help"],
       ["comment", "apply", "--help"],
       ["comment", "apply", "--author", "--help"],
+      ["setup", "--help"],
+      ["doctor", "--help"],
+      ["help", "setup"],
+      ["help", "doctor"],
     ]) {
       const result = penmark(args);
       expect(result.status).toBe(0);
@@ -491,5 +496,346 @@ describe("penmark process", () => {
     expect(result.status).toBe(0);
     expect(result.stdout.startsWith("# Penmark review —")).toBe(true);
     expect(result.stdout).toContain("Name it.");
+  });
+
+  it("keeps status unused as an unknown command", () => {
+    const result = penmark(["status"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("unknown command: status");
+  });
+
+  it("setup asks for found editors and skill, installs chosen ones, and remembers choices", () => {
+    const files = new Map<string, string>();
+    const dirsCopied: { src: string; dest: string }[] = [];
+    const installed = new Map<string, string>([
+      ["code", "0.5.0"],
+      ["cursor", "0.5.0"],
+    ]);
+    let foundIdes: IdeSpec[] = [
+      { name: "VS Code", command: "code", fallbacks: [] },
+      { name: "Cursor", command: "cursor", fallbacks: [] },
+    ];
+    const repoSkillPath = "/repo/skills/penmark-comments/SKILL.md";
+    files.set("/repo/penmark-markdown-review-0.6.0.vsix", "vsix");
+    files.set("/repo/skills/penmark-comments", "dir");
+    files.set(repoSkillPath, "# Repo skill\n");
+
+    const runSetupWith = (stdinLines: string[]) => {
+      let stdout = "";
+      let stderr = "";
+      const env: SetupEnv = {
+        root: "/repo",
+        version: "0.6.0",
+        vsixPath: "/repo/penmark-markdown-review-0.6.0.vsix",
+        skillSourceDir: "/repo/skills/penmark-comments",
+        skillDestDir: "/home/.claude/skills/penmark-comments",
+        configPath: "/home/.config/penmark/setup.json",
+        pathEnv: "/usr/local/bin",
+        ides: foundIdes,
+        readLine: lineReaderFromLines(stdinLines),
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        exists: (p) => files.has(p),
+        readText: (p) => files.get(p) ?? "",
+        writeText: (p, t) => {
+          files.set(p, t);
+        },
+        copyDir: (src, dest) => {
+          dirsCopied.push({ src, dest });
+          files.set(join(dest, "SKILL.md"), files.get(repoSkillPath) ?? "");
+        },
+        run: (cmd, args) => {
+          if (args[0] === "--version") {
+            if (cmd === "code" || cmd === "cursor" || cmd === "/Applications/Antigravity") return "1.105.0";
+            throw new Error("not found");
+          }
+          if (args[0] === "--list-extensions") {
+            const ver = installed.get(cmd);
+            return ver ? `local.penmark-markdown-review@${ver}\n` : "";
+          }
+          if (args[0] === "--install-extension") {
+            installed.set(cmd, "0.6.0");
+            return "installed";
+          }
+          throw new Error(`unexpected ${cmd}`);
+        },
+      };
+      const io: Io = {
+        read: () => Buffer.alloc(0),
+        write: () => {},
+        stdin: () => "",
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        gitAuthor: () => null,
+        now: () => "",
+        setupEnv: () => env,
+      };
+      const code = run(["setup"], io);
+      return { code, stdout, stderr };
+    };
+
+    // First run: yes to VS Code, no to Cursor, yes to skill.
+    const first = runSetupWith(["y", "n", "y"]);
+    expect(first.code).toBe(0);
+    expect(first.stderr).toBe("");
+    expect(first.stdout).toContain("Install the Penmark extension in VS Code?");
+    expect(first.stdout).toContain("Install the Penmark extension in Cursor?");
+    expect(first.stdout).toContain("Install the penmark-comments skill in /home/.claude/skills/penmark-comments?");
+    expect(first.stdout).toContain("penmark 0.6.0");
+    expect(first.stdout).toContain("VS Code: 0.5.0 -> 0.6.0 ok");
+    expect(first.stdout).toContain("Cursor: 0.5.0 (skipped)");
+    expect(first.stdout).toContain("skill: /home/.claude/skills/penmark-comments");
+    expect(first.stdout).toContain("Reload each editor window to pick up the extension.");
+    expect(dirsCopied).toEqual([
+      { src: "/repo/skills/penmark-comments", dest: "/home/.claude/skills/penmark-comments" },
+    ]);
+
+    // Second run with the same editors: asks no questions and updates VS Code + skill.
+    const second = runSetupWith([]);
+    expect(second.code).toBe(0);
+    expect(second.stdout).not.toContain("Install the Penmark extension");
+    expect(second.stdout).not.toContain("Install the penmark-comments skill");
+    expect(second.stdout).toContain("VS Code: 0.6.0 -> 0.6.0 ok");
+    expect(second.stdout).toContain("Cursor: 0.5.0 (skipped)");
+
+    // Third run after Antigravity is installed: asks only about Antigravity.
+    foundIdes = [
+      ...foundIdes,
+      { name: "Antigravity", command: "antigravity-ide", fallbacks: ["/Applications/Antigravity"] },
+    ];
+    const third = runSetupWith(["y"]);
+    expect(third.code).toBe(0);
+    expect(third.stdout).not.toContain("Install the Penmark extension in VS Code?");
+    expect(third.stdout).not.toContain("Install the Penmark extension in Cursor?");
+    expect(third.stdout).not.toContain("Install the penmark-comments skill");
+    expect(third.stdout).toContain("Install the Penmark extension in Antigravity?");
+    expect(third.stdout).toContain("Antigravity: none -> 0.6.0 ok");
+  });
+
+  it("doctor reports PATH, editor versions, and warns on the old hand-writer skill", () => {
+    const files = new Map<string, string>();
+    const repoSkill = readFileSync(join(ROOT, "skills/penmark-comments/SKILL.md"), "utf8");
+    files.set("/repo/skills/penmark-comments/SKILL.md", repoSkill);
+    files.set("/usr/local/bin/penmark", "bin");
+    files.set(
+      "/home/.claude/skills/penmark-comments/SKILL.md",
+      "Read references/penmark-agent-contract-v1.md and Generate unique valid IDs.",
+    );
+    files.set("/home/.claude/skills/penmark-comments/scripts/validate-penmark-comments.mjs", "old");
+
+    const runDoctorOnce = () => {
+      let stdout = "";
+      let stderr = "";
+      const env: SetupEnv = {
+        root: "/repo",
+        version: "0.6.0",
+        vsixPath: "/repo/penmark-markdown-review-0.6.0.vsix",
+        skillSourceDir: "/repo/skills/penmark-comments",
+        skillDestDir: "/home/.claude/skills/penmark-comments",
+        configPath: "/home/.config/penmark/setup.json",
+        pathEnv: "/usr/bin:/usr/local/bin",
+        ides: defaultIdes("/home"),
+        readLine: lineReaderFromLines([]),
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        exists: (p) => files.has(p),
+        readText: (p) => files.get(p) ?? "",
+        writeText: () => {
+          throw new Error("doctor must not write");
+        },
+        copyDir: () => {
+          throw new Error("doctor must not copy");
+        },
+        run: (cmd, args) => {
+          if (args[0] === "--version") {
+            if (cmd === "code" || cmd === "cursor") return "1.105.0";
+            throw new Error("not installed");
+          }
+          if (args[0] === "--list-extensions") {
+            if (cmd === "code") return "local.penmark-markdown-review@0.6.0\n";
+            return "";
+          }
+          throw new Error("doctor must not install");
+        },
+      };
+      const io: Io = {
+        read: () => Buffer.alloc(0),
+        write: () => {},
+        stdin: () => "",
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        gitAuthor: () => null,
+        now: () => "",
+        setupEnv: () => env,
+      };
+      const code = run(["doctor"], io);
+      return { code, stdout, stderr };
+    };
+
+    const oldResult = runDoctorOnce();
+    expect(oldResult.code).toBe(1);
+    expect(oldResult.stdout).toContain("command: on PATH (/usr/local/bin/penmark, penmark 0.6.0)");
+    expect(oldResult.stdout).toContain("VS Code: 0.6.0");
+    expect(oldResult.stdout).toContain("Cursor: not installed");
+    expect(oldResult.stdout).toContain("skill: warning — old hand-writer loaded");
+
+    // Replace with the repo skill and remove the old validator script.
+    files.delete("/home/.claude/skills/penmark-comments/scripts/validate-penmark-comments.mjs");
+    files.set("/home/.claude/skills/penmark-comments/SKILL.md", repoSkill);
+    const currentResult = runDoctorOnce();
+    expect(currentResult.code).toBe(0);
+    expect(currentResult.stdout).toContain("skill: current (/home/.claude/skills/penmark-comments)");
+
+    // Replace with a modified skill that is neither the repo skill nor the old writer.
+    files.set("/home/.claude/skills/penmark-comments/SKILL.md", "# Custom modified skill\n");
+    const modifiedResult = runDoctorOnce();
+    expect(modifiedResult.code).toBe(1);
+    expect(modifiedResult.stdout).toContain("skill: warning — differs from repository skill");
+
+    // Remove the installed skill and the command on PATH.
+    files.delete("/home/.claude/skills/penmark-comments/SKILL.md");
+    files.delete("/usr/local/bin/penmark");
+    const missingResult = runDoctorOnce();
+    expect(missingResult.code).toBe(0);
+    expect(missingResult.stdout).toContain("command: not on PATH (penmark 0.6.0)");
+    expect(missingResult.stdout).toContain("skill: not installed (/home/.claude/skills/penmark-comments)");
+  });
+
+  it("setup packages when VSIX is absent, and reports packaging or install failures", () => {
+    const files = new Map<string, string>();
+    const repoSkill = readFileSync(join(ROOT, "skills/penmark-comments/SKILL.md"), "utf8");
+    files.set("/repo/skills/penmark-comments", "dir");
+    files.set("/repo/skills/penmark-comments/SKILL.md", repoSkill);
+
+    let packageBuildsVsix = true;
+    let installThrows = false;
+    let installedVersionAfter: string | null = "0.6.0";
+
+    const runOnce = (stdinLines: string[]) => {
+      let stdout = "";
+      let stderr = "";
+      const env: SetupEnv = {
+        root: "/repo",
+        version: "0.6.0",
+        vsixPath: "/repo/penmark-markdown-review-0.6.0.vsix",
+        skillSourceDir: "/repo/skills/penmark-comments",
+        skillDestDir: "/home/.claude/skills/penmark-comments",
+        configPath: "/home/.config/penmark/setup.json",
+        pathEnv: "",
+        ides: [{ name: "VS Code", command: "code", fallbacks: [] }],
+        readLine: lineReaderFromLines(stdinLines),
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        exists: (p) => files.has(p),
+        readText: (p) => files.get(p) ?? "",
+        writeText: (p, t) => {
+          files.set(p, t);
+        },
+        copyDir: () => {},
+        run: (cmd, args) => {
+          if (cmd === "npm" && args[1] === "package") {
+            if (packageBuildsVsix) files.set("/repo/penmark-markdown-review-0.6.0.vsix", "vsix");
+            return "packaged";
+          }
+          if (args[0] === "--version") return "1.105.0";
+          if (args[0] === "--list-extensions") {
+            return installedVersionAfter ? `local.penmark-markdown-review@${installedVersionAfter}\n` : "";
+          }
+          if (args[0] === "--install-extension") {
+            if (installThrows) throw new Error("disk full");
+            return "ok";
+          }
+          throw new Error(`unexpected ${cmd}`);
+        },
+      };
+      const io: Io = {
+        read: () => Buffer.alloc(0),
+        write: () => {},
+        stdin: () => "",
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        gitAuthor: () => null,
+        now: () => "",
+        setupEnv: () => env,
+      };
+      const code = run(["setup"], io);
+      return { code, stdout, stderr };
+    };
+
+    // Packaging succeeds and installs VSIX, declining skill.
+    const okRun = runOnce(["y", "n"]);
+    expect(okRun.code).toBe(0);
+    expect(okRun.stdout).toContain("skill: skipped");
+
+    // Version mismatch after install returns exit 1.
+    installedVersionAfter = "0.5.0";
+    const mismatchRun = runOnce([]);
+    expect(mismatchRun.code).toBe(1);
+    expect(mismatchRun.stdout).toContain("MISMATCH");
+    expect(mismatchRun.stderr).toContain("1 of 1 editors did not end up on 0.6.0.");
+
+    // Install throwing returns exit 1.
+    installThrows = true;
+    const failedRun = runOnce([]);
+    expect(failedRun.code).toBe(1);
+    expect(failedRun.stderr).toContain("VS Code: install failed — disk full");
+
+    // Missing VSIX after packaging returns exit 1.
+    files.delete("/repo/penmark-markdown-review-0.6.0.vsix");
+    packageBuildsVsix = false;
+    const noVsixRun = runOnce([]);
+    expect(noVsixRun.code).toBe(1);
+    expect(noVsixRun.stderr).toContain("No VSIX at /repo/penmark-markdown-review-0.6.0.vsix");
+  });
+
+  it("runs setup and doctor end-to-end through the CLI process in an isolated directory", () => {
+    const dir = tempDir();
+    const skillRoot = join(dir, "skills");
+    const configPath = join(dir, "config", "setup.json");
+    const env = {
+      HOME: dir,
+      PENMARK_SKILLS_DIR: skillRoot,
+      PENMARK_SETUP_CONFIG: configPath,
+      PENMARK_NO_APP_FALLBACKS: "1",
+      PATH: dirname(process.execPath),
+    };
+
+    const setupRes = penmark(["setup"], "y\n", env);
+    expect(setupRes.status).toBe(0);
+    expect(setupRes.stdout).toContain("editors: none found");
+    expect(setupRes.stdout).toContain(`skill: ${join(skillRoot, "penmark-comments")}`);
+    expect(readFileSync(join(skillRoot, "penmark-comments", "SKILL.md"), "utf8")).toBe(
+      readFileSync(join(ROOT, "skills", "penmark-comments", "SKILL.md"), "utf8"),
+    );
+
+    const doctorRes = penmark(["doctor"], undefined, env);
+    expect(doctorRes.status).toBe(0);
+    expect(doctorRes.stdout).toContain("command: not on PATH");
+    expect(doctorRes.stdout).toContain("editors: none found");
+    expect(doctorRes.stdout).toContain(`skill: current (${join(skillRoot, "penmark-comments")})`);
   });
 });

@@ -62,7 +62,7 @@ The format is specified in [`spec/penmark-format.md`](../spec/penmark-format.md)
 
 ## Local command
 
-`penmark` writes a review finding into a markdown file from the terminal. A second note on a sentence that already has a comment becomes a reply. Run `penmark` or `penmark --help` to see the commands. Every command except `help` and `version` takes `--file`. `comment apply` reads a JSON object on stdin. Command results are JSON. Help and usage mistakes are plain text.
+`penmark` writes a review finding into a markdown file from the terminal. A second note on a sentence that already has a comment becomes a reply. Run `penmark` or `penmark --help` to see the commands. `penmark setup` installs or updates the extension in the editors you pick and copies `skills/penmark-comments/` into your harness skill directory (`~/.claude/skills`), remembering your choices for the next run. `penmark doctor` reports whether `penmark` is on `PATH`, the extension version in each editor, and whether the loaded skill matches the repository or is the older hand-writer. Every other command except `help` and `version` takes `--file`. `comment apply` reads a JSON object on stdin. Command results are JSON. Help and usage mistakes are plain text.
 
 ## Commands
 
