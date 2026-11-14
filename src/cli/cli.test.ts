@@ -385,6 +385,23 @@ describe("penmark process", () => {
     expect(written).toBe("");
   });
 
+  it("writes a result larger than the pipe buffer in full", () => {
+    const dir = tempDir();
+    // About 300 KB: past the 64 KB pipe buffer, under the 1 MB spawnSync limit.
+    const note = Array.from({ length: 12000 }, (_, i) => `Line ${i} of a long note.`).join("\n");
+    const file = write(
+      dir,
+      "note.md",
+      "No anchor left.\n\n<!-- pmk:review v1 -->\n" +
+        `<!--pmk:c aaaaaaaa\nAda (human) · 2026-11-13 12:00:00 +00:00\n> missing\n\n${note}\n-->\n` +
+        "<!-- /pmk:review -->\n",
+    );
+    const result = penmark(["list", "--file", file]);
+    expect(result.status).toBe(0);
+    expect(result.stdout.endsWith("\n")).toBe(true);
+    expect(JSON.parse(result.stdout).comments[0].body).toBe(note);
+  });
+
   it("prints the review prompt as text", () => {
     const dir = tempDir();
     const file = write(dir, "note.md", "The eventual consistency model waits.\n");
