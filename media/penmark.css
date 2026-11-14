@@ -1576,6 +1576,21 @@ body.pmk-hl-strong {
   border-style: dashed;
   border-color: var(--pmk-comment-note-border);
 }
+.pmk-drawer-replies {
+  margin: 8px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--pmk-ui-border-muted);
+}
+.pmk-drawer-reply {
+  margin-top: 8px;
+  cursor: pointer;
+}
+.pmk-drawer-reply .pmk-drawer-body {
+  margin-top: 2px;
+}
+.pmk-drawer-reply .pmk-drawer-action {
+  margin-top: 4px;
+}
 .pmk-drawer-meta {
   display: flex;
   align-items: center;

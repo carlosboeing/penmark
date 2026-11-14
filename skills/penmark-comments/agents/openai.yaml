@@ -1,0 +1,4 @@
+interface:
+  display_name: "Penmark Comments"
+  short_description: "Review local Markdown inline or in chat"
+  default_prompt: "Use $penmark-comments to review this writable local Markdown file. Add inline comments when writing is allowed; otherwise return findings in chat."

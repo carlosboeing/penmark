@@ -204,6 +204,10 @@ describe("protocol/messages", () => {
           return msg.type;
         case "editComment":
           return msg.type;
+        case "replyComment":
+          return msg.type;
+        case "reanchorComment":
+          return msg.type;
         case "jumpToSource":
           return msg.type;
         case "exportReview":

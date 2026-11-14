@@ -14,6 +14,7 @@ export default defineConfig({
           name: "core",
           include: [
             "src/core/**/*.test.ts",
+            "src/cli/**/*.test.ts",
             "test/unit/core/**/*.test.ts",
             // T11 formatter golden gate: in-memory formatter matrix over the
             // anchored conformance corpus (proves the P0.1 GO verdict holds in CI).

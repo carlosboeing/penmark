@@ -4,12 +4,13 @@
  * A webview-internal slide-in panel (NOT a VS Code view, design §5.2) listing:
  *   - OPEN comments (live extent): quote + body + provenance avatar, with
  *     "Jump to source" (posts jumpToSource) and "Resolve" (posts resolveComment).
- *   - NEEDS ATTENTION (orphan / content-removed, extent === null): the preserved
- *     quote + body with "Re-anchor" and "Delete". Delete posts resolveComment
+ *   - NEEDS ATTENTION (orphan / content-removed root, or a reply whose parent
+ *     is missing): the preserved quote + body with "Re-anchor" and "Delete".
+ *     A reply whose parent is in this drawer nests on that card and is not
+ *     its own row. Delete posts resolveComment
  *     (resolve = delete, ADR 0002). Re-anchor hands off to an injected callback
- *     that drives the "select new location" flow in main.ts (resolve-old +
- *     add-new — two undo steps for v0.5; a single combined edit would need a new
- *     protocol message + host handler, outside R15's webview-only scope).
+ *     that drives the "select new location" flow in main.ts. The host receives
+ *     one `reanchorComment`. A root keeps its id, so replies on that card stay.
  *
  * Lives in <body> (outside #penmark-root) so morphdom never strips it; the open
  * comment set is re-rendered on every render/comments message. Open/closed state
@@ -55,20 +56,47 @@ interface DrawerInternals {
 let _d: DrawerInternals | null = null;
 let _open = false;
 
-/** A comment is "needs attention" when reconcile left it without a live span. */
+/**
+ * A reply nests when its parent is a root that is also in this list. A missing
+ * parent, or a parent that is itself a reply, stays a loose row.
+ */
+function nestsUnderParent(c: WireComment, byId: ReadonlyMap<string, WireComment>): boolean {
+  if (c.parentId === undefined) return false;
+  const parent = byId.get(c.parentId);
+  return parent !== undefined && parent.parentId === undefined;
+}
+
+/** A root needs attention when reconcile left it without a live span. A loose reply does too. */
 function needsAttention(c: WireComment): boolean {
   return c.extent === null;
 }
 
-/** Split comments into the open list and the needs-attention bucket (§8 states). */
+/**
+ * Split comments into the open list and the needs-attention bucket (§8 states).
+ * Open count is roots with a live extent. Nested replies are omitted from both
+ * lists; the drawer renders them on the parent card.
+ */
 export function bucketComments(comments: WireComment[]): {
   open: WireComment[];
   attention: WireComment[];
 } {
+  const byId = new Map(comments.map((c) => [c.id, c]));
   const open: WireComment[] = [];
   const attention: WireComment[] = [];
-  for (const c of comments) (needsAttention(c) ? attention : open).push(c);
+  for (const c of comments) {
+    if (nestsUnderParent(c, byId)) continue;
+    (needsAttention(c) ? attention : open).push(c);
+  }
   return { open, attention };
+}
+
+/**
+ * Replies that nest on `parentId`, in array order. A reply-to-reply does not
+ * nest: it stays one loose attention row, not a second copy inside this card.
+ */
+function repliesOf(comments: WireComment[], parentId: string): WireComment[] {
+  const byId = new Map(comments.map((c) => [c.id, c]));
+  return comments.filter((c) => c.parentId === parentId && nestsUnderParent(c, byId));
 }
 
 /** First character of `author`, upper-cased, for the avatar (fallback "?"). */
@@ -245,7 +273,43 @@ function highlightForComment(id: string): HTMLElement | null {
   );
 }
 
-function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElement {
+function replyRow(c: WireComment, cfg: DrawerConfig): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "pmk-drawer-reply";
+  el.setAttribute("data-pmk-id", c.id);
+  el.tabIndex = -1;
+
+  const who = document.createElement("div");
+  who.className = "pmk-drawer-who";
+  who.textContent = c.author;
+
+  const body = document.createElement("div");
+  body.className = "pmk-drawer-body";
+  body.textContent = c.body;
+
+  // A native button, so Tab reaches the reply and Enter or Space opens its
+  // popover (Edit, Resolve). The button has no listener of its own: its click
+  // bubbles to the row listener below, which also serves a mouse click
+  // anywhere on the row. The action key carries the reply id, so a rebuild
+  // returns focus to this reply's button and not to a neighbour's.
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "pmk-drawer-action";
+  open.dataset.pmkDrawerAction = `reply:${c.id}`;
+  open.textContent = "Open";
+  open.setAttribute("aria-label", `Open reply by ${c.author}`);
+
+  el.append(who, body, open);
+  el.addEventListener("click", () => openCommentPopover(el, c, cfg.post));
+  return el;
+}
+
+function card(
+  c: WireComment,
+  attention: boolean,
+  cfg: DrawerConfig,
+  replies: WireComment[],
+): HTMLElement {
   const el = document.createElement("div");
   el.className = attention ? "pmk-drawer-card attention" : "pmk-drawer-card";
   el.setAttribute("data-pmk-id", c.id);
@@ -265,6 +329,13 @@ function card(c: WireComment, attention: boolean, cfg: DrawerConfig): HTMLElemen
   body.className = "pmk-drawer-body";
   body.textContent = c.body;
   el.appendChild(body);
+
+  if (replies.length > 0) {
+    const list = document.createElement("div");
+    list.className = "pmk-drawer-replies";
+    for (const reply of replies) list.appendChild(replyRow(reply, cfg));
+    el.appendChild(list);
+  }
 
   const actions = document.createElement("div");
   actions.className = "pmk-drawer-actions";
@@ -322,6 +393,7 @@ export function renderDrawer(comments: WireComment[]): void {
   content.replaceChildren();
 
   const { open, attention } = bucketComments(comments);
+  const repliesFor = (id: string) => repliesOf(comments, id);
   const summary = `${open.length} open comment${open.length === 1 ? "" : "s"}, ${attention.length} need attention`;
   if (_d.lastSummary === null) {
     _d.announcement.textContent = "";
@@ -342,7 +414,7 @@ export function renderDrawer(comments: WireComment[]): void {
     empty.textContent = "No open comments";
     openSec.appendChild(empty);
   } else {
-    for (const c of open) openSec.appendChild(card(c, false, cfg));
+    for (const c of open) openSec.appendChild(card(c, false, cfg, repliesFor(c.id)));
   }
   content.appendChild(openSec);
 
@@ -357,7 +429,7 @@ export function renderDrawer(comments: WireComment[]): void {
     badge.textContent = `${attention.length} orphaned`;
     attHead.appendChild(badge);
     attSec.appendChild(attHead);
-    for (const c of attention) attSec.appendChild(card(c, true, cfg));
+    for (const c of attention) attSec.appendChild(card(c, true, cfg, repliesFor(c.id)));
     content.appendChild(attSec);
   }
 

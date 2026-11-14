@@ -161,7 +161,7 @@ describe("parseDoc — entries (§5.2)", () => {
     expect(doc.entries[0]?.body).toBe("line one\nline two");
   });
 
-  it("parses-but-ignores a v2 ` re <parent>` reply tag (§5.3)", () => {
+  it("parses a reply parent id (§5.3)", () => {
     const text =
       "<!-- pmk:review v1 -->\n<!--pmk:c bbbbbbbb re aaaaaaaa\nbob (human) · 2026-06-12 09:02 +10:00\n> q\n\nreply body\n-->\n<!-- /pmk:review -->\n";
     const doc = parseDoc(text);

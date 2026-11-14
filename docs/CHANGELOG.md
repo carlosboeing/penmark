@@ -2,6 +2,13 @@
 
 What shipped in this project, when. Most recent first. Each entry references the docs that drove the change.
 
+## Unreleased
+
+### A local command places review comments
+
+- `penmark comment apply` writes findings into the markdown file. A second note on a sentence that already has a comment is a reply and adds no second highlight. The preview shows that reply under the original comment. Reply on a root comment does the same. Resolving the original comment removes its replies. [ADR 0009](adrs/0009-replies-on-v1.md).
+- The command is a separate esbuild entry (`dist-cli/`) and is not in the VSIX. `skills/penmark-comments/` asks before anything is written, then runs the command.
+
 ## v0.6.0 — 2026-10-20
 
 ### Raw-text elements pass through the inline render path

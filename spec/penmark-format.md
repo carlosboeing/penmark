@@ -124,13 +124,13 @@ The entry grammar, line by line:
 
 | Part | Rule |
 |---|---|
-| Line 1 | `pmk:c <ID>` — the literal `<!--pmk:c ` followed by the ID. In v1 nothing else appears on line 1. (v2 replies append ` re <parent-id>`; a v1 writer MUST NOT emit it. See §5.3.) |
+| Line 1 | `pmk:c <ID>` for a root: the literal `<!--pmk:c ` followed by the ID. A reply appends ` re <parent-id>` (`pmk:c <ID> re <parent-id>`). See §5.3. |
 | Line 2 | `<author> (human\|agent) · <timestamp>` — the meta line (§5.2.1). |
 | Quote lines | Zero or more lines each beginning with `> `, or a bare `>` for an empty line, holding the advisory quote (§5.2.2). |
 | Blank line | Exactly one blank line separates the quote from the body. |
 | Body | One or more lines of plain prose, terminated by the closing `-->` of the HTML comment. |
 
-- One entry per HTML comment. There MUST be exactly one entry per live anchor ID, and exactly one anchor per entry ID (the join is 1:1 in v1).
+- One entry per HTML comment. A root entry has exactly one body anchor, and that anchor's ID is the entry's ID. A reply entry has no body anchor. Its parent is a root entry in the same review block (§5.3).
 - The order of entries in the block is not semantically significant to anchoring (the anchor is the source of truth for location), but writers append.
 
 #### 5.2.1 Meta line
@@ -154,11 +154,15 @@ The entry grammar, line by line:
 
 #### 5.2.3 Anchor type is not stored
 
-The entry MUST NOT record the anchor kind. The anchor in the body (`pmk:s` / `pmk:b` / `pmk:r`) is the single source of truth for the kind and location. A reader determines an entry's kind by finding the body anchor with the matching ID.
+The entry MUST NOT record the anchor kind. The anchor in the body (`pmk:s` / `pmk:b` / `pmk:r`) is the single source of truth for the kind and location of a root. A reader determines a root's kind by finding the body anchor with the matching ID. A reply has no anchor; its parent id on line 1 is the join.
 
-### 5.3 Replies (v2 — reserved, not written in v1)
+### 5.3 Replies
 
-The format reserves threaded replies for v2: an entry may carry ` re <parent-id>` on line 1 (`pmk:c <new-id> re <parent-id>`). A **v1 writer MUST NOT emit this form.** A v1 parser MAY ignore a trailing ` re <parent-id>` it does not understand, but documents produced under this spec do not contain it. Replies are listed here only so the v1 grammar leaves room for them.
+A reply is an entry whose line 1 is `pmk:c <ID> re <parent-id>`. A writer may emit that form under the v1 header. The parent id names a root entry in the same review block: an entry that itself has no ` re <parent-id>`. A writer MUST NOT emit a reply whose parent is missing, is in another block, or is itself a reply. One level only. A reader classifies such a reply as an orphan. That reply has no anchor and no highlight.
+
+A reply has no body anchor. Appending a reply does not modify the parent entry, including the parent's advisory quote. The reply's own advisory quote is a snapshot of the passage the reply is about.
+
+Resolving a root removes that root's anchor, that root's entry, and every reply whose parent id is that root, in one edit. Resolving a reply removes only that reply's entry. The anchor and the root stay.
 
 ## 6. Escaping (normative)
 
@@ -174,7 +178,7 @@ The HTML-comment terminator is `-->`, and `--` may not legally appear inside an 
 
 A conforming writer MUST maintain all of the following:
 
-1. **Atomic mutation.** Adding a comment inserts the anchor and the entry in a single edit (one undo step). Resolving/deleting removes the anchor(s) and the entry in a single edit. Resolve and delete are the same operation (ADR 0002).
+1. **Atomic mutation.** Adding a root comment inserts the anchor and the entry in a single edit (one undo step). Adding a reply appends the reply entry and inserts no anchor. Resolving a root removes its anchor, its entry, and every reply that names it, in a single edit. Resolving a reply removes only that entry. Resolve and delete are the same operation (ADR 0002).
 2. **Review block lifecycle.** The review block is created on the first comment and removed entirely when the last comment is removed. It is always the last meaningful content in the file (§5.1). A writer separates the block from the body with a blank line, so the block is a standalone HTML block rather than a lazy continuation of whatever precedes it; removing the block removes that separator again, leaving the body ending in exactly one newline.
 3. **Marker pair integrity.** A writer MUST NOT emit, or leave behind, half of a span pair or half of a range pair except as the transient result of destructive user edits the reconcile pass then cleans up. A writer MUST NOT re-ID, duplicate, or split an existing anchor.
 4. **ID validity.** Every emitted ID conforms to §3.
@@ -229,7 +233,7 @@ An `intact` span whose markers are adjacent with **no characters between them** 
 
 ### 8.5 Reconcile actions
 
-- Only comments whose ladder is **exhausted** (markers destroyed, quote unrecoverable) land in the **orphan bucket**, with the quote preserved and re-anchor / delete actions offered. Content-removed comments (§8.3) appear in the same needs-attention surface with their location intact.
+- A root whose ladder is **exhausted** (markers destroyed, quote unrecoverable) lands in the **orphan bucket**, with the quote preserved and re-anchor / delete actions offered. A reply whose parent is missing, is in another review block, or is itself a reply is also an orphan (§5.3). Content-removed comments (§8.3) appear in the same needs-attention surface with their location intact.
 - **Stray unmatched closers** (a `/pmk:s X` or a lone range half with no live opener) are flagged for cleanup.
 - A review block **not at EOF** is relocated to EOF — only on explicit user action.
 - A **second review block** (more than one in the document, §9) surfaces the document as corrupted: the EOF block is authoritative, and the extra block's entries are preserved for needs-attention rather than dropped; merging or removing the extra block happens only on explicit user action.
@@ -255,7 +259,7 @@ A parser MUST be able to process a document containing corruption without crashi
 
 ## 10. Conformance fixtures
 
-The conformance corpus lives in [`conformance/`](conformance/). Fixtures `01`–`11` are the anchor torture-test spike corpus (graduated here in plan task P0.6); `12`–`14` were added to close the coverage gaps from the spike amendments. Every fixture is a complete, well-formed Penmark document except `12-negative-malformed.md`, which is deliberately invalid (a negative fixture). Fixture `14-degraded-states.md` is well-formed but carries deliberately mutated spans (closer destroyed) so reconcile must apply the §8.2 fallback ladder.
+The conformance corpus lives in [`conformance/`](conformance/). Fixtures `01`–`11` are the anchor torture-test spike corpus (graduated here in plan task P0.6); `12`–`14` were added to close the coverage gaps from the spike amendments. Fixture `15-reply.md` is a root plus one reply. Every fixture is a complete, well-formed Penmark document except `12-negative-malformed.md`, which is deliberately invalid (a negative fixture). Fixture `14-degraded-states.md` is well-formed but carries deliberately mutated spans (closer destroyed) so reconcile must apply the §8.2 fallback ladder. The well-formed 1:1 anchor table covers roots only; `15` is asserted on its own because the reply has no anchor.
 
 | File | Exercises |
 |---|---|
@@ -273,6 +277,7 @@ The conformance corpus lives in [`conformance/`](conformance/). Fixtures `01`–
 | `12-negative-malformed.md` | **Negative:** invalid-alphabet IDs, wrong-length IDs, stray closer, half range, block-not-on-own-line, unknown kind, malformed review header |
 | `13-empty-span.md` | Empty span pairs (content-removed state) on their own line and inline |
 | `14-degraded-states.md` | Closer-destroyed fallback (§8.2): degraded-recovered (quote matches) and orphan (quote unrecoverable) |
+| `15-reply.md` | One root anchor and a reply entry with ` re <parent-id>` and no anchor (§5.3) |
 
 ### 10.1 Rule-to-fixture coverage
 
@@ -293,7 +298,8 @@ Every normative rule below is exercised by at least one fixture. Cells list the 
 | 4.3 | Range pair around a contiguous block run | 04 |
 | 4.3 | Range half-pair (no matching side) rejected | 12 |
 | 5.1 | Single review block, at EOF, omitted when empty | 01–11, 13, 14 |
-| 5.2 | Entry: `pmk:c ID`, meta line, quote, blank, body | 01–11, 13, 14 |
+| 5.2 | Entry: `pmk:c ID`, meta line, quote, blank, body | 01–11, 13, 14, 15 |
+| 5.3 | Reply line `pmk:c ID re <parent-id>`, no body anchor, parent is a root | 15 |
 | 5.2.1 | Meta line `author (human\|agent) · timestamp` | 01–11, 13, 14 |
 | 5.2.2 | Advisory quote as `> ` lines; multi-line quote | 01–11, 14 (multi-line: 06) |
 | 5.2.2 | Empty quote line as bare `>`; formatter survival; indented entry | `formatterSurvival.test.ts` (Prettier + trim over the whole corpus) |

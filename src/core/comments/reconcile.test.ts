@@ -94,6 +94,13 @@ describe("reconcile — span closer destroyed (§8.2)", () => {
     expect(text.slice(c!.extent!.start, c!.extent!.end)).toBe("token\nverification   path");
   });
 
+  it("a quote that would run into the review block stays an orphan", () => {
+    const text = withReview("Open <!--pmk:s aaaaaaaa-->here marker", entry("aaaaaaaa", "marker <!--"));
+    const c = run(text).comments.find((x) => x.entry.id === "aaaaaaaa");
+    expect(c?.state).toBe("orphan");
+    expect(c?.extent).toBeUndefined();
+  });
+
   it("quote no longer matches → orphan, closer-destroyed flagged, no extent", () => {
     const text = withReview(
       "Open <!--pmk:s aaaaaaaa-->here, but the quoted phrase is gone now.",
@@ -253,17 +260,45 @@ describe("reconcile — degenerate inputs", () => {
     expect(r.attentionCount).toBe(0);
   });
 
-  it("v2 reply entry is reconciled as a normal v1 entry (parentId ignored)", () => {
+  it("a reply whose parent entry is missing stays an orphan", () => {
     const text = withReview(
       "The <!--pmk:s aaaaaaaa-->quoted<!--/pmk:s aaaaaaaa--> text.",
       "<!--pmk:c bbbbbbbb re aaaaaaaa\ncarlos (human) · 2026-06-12 09:02 +10:00\n> quoted\n\na reply body\n-->",
     );
     const r = run(text);
-    // The reply entry has id bbbbbbbb but no anchor of its own → orphan,
-    // threaded/reply semantics are NOT applied (v1 ignores parentId).
     const reply = r.comments.find((x) => x.entry.id === "bbbbbbbb");
     expect(reply?.entry.parentId).toBe("aaaaaaaa");
     expect(reply?.state).toBe("orphan");
+    expect(reply?.extent).toBeUndefined();
+    expect(r.needsAttention.map((c) => c.entry.id)).toContain("bbbbbbbb");
+  });
+
+  it("a reply on a root is intact, has no extent, and is not attention", () => {
+    const text = withReview(
+      "The <!--pmk:s aaaaaaaa-->quoted<!--/pmk:s aaaaaaaa--> text.",
+      entry("aaaaaaaa", "quoted") +
+        "\n<!--pmk:c bbbbbbbb re aaaaaaaa\ncarlos (agent) · 2026-06-12 10:00 +10:00\n> quoted\n\na reply body\n-->",
+    );
+    const r = run(text);
+    const root = r.comments.find((x) => x.entry.id === "aaaaaaaa");
+    const reply = r.comments.find((x) => x.entry.id === "bbbbbbbb");
+    expect(root?.state).toBe("intact");
+    expect(reply?.state).toBe("intact");
+    expect(reply?.extent).toBeUndefined();
+    expect(r.needsAttention).toHaveLength(0);
+  });
+
+  it("a reply to a reply is an orphan", () => {
+    const text = withReview(
+      "The <!--pmk:s aaaaaaaa-->quoted<!--/pmk:s aaaaaaaa--> text.",
+      entry("aaaaaaaa", "quoted") +
+        "\n<!--pmk:c bbbbbbbb re aaaaaaaa\ncarlos (agent) · 2026-06-12 10:00 +10:00\n> quoted\n\nfirst reply\n-->" +
+        "\n<!--pmk:c cccccccc re bbbbbbbb\ncarlos (agent) · 2026-06-12 11:00 +10:00\n> quoted\n\nnested\n-->",
+    );
+    const r = run(text);
+    const nested = r.comments.find((x) => x.entry.id === "cccccccc");
+    expect(nested?.state).toBe("orphan");
+    expect(r.needsAttention.map((c) => c.entry.id)).toEqual(["cccccccc"]);
   });
 
   it("attentionCount sums needs-attention plus corruption signals", () => {

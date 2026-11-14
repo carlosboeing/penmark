@@ -88,6 +88,25 @@ describe("bucketComments", () => {
     expect(open.map((c) => c.id)).toEqual(["open0001", "open0002"]);
     expect(attention.map((c) => c.id)).toEqual(["orph0001", "rmvd0001"]);
   });
+
+  it("counts roots only and leaves a nested reply out of both buckets", () => {
+    const reply = comment({
+      id: "reply001",
+      parentId: "open0001",
+      body: "A second note on the same sentence.",
+      extent: null,
+    });
+    const loose = comment({
+      id: "loose001",
+      parentId: "missing1",
+      body: "The parent entry is gone.",
+      extent: null,
+      state: "orphan",
+    });
+    const { open, attention } = bucketComments([OPEN_HUMAN, reply, loose]);
+    expect(open.map((c) => c.id)).toEqual(["open0001"]);
+    expect(attention.map((c) => c.id)).toEqual(["loose001"]);
+  });
 });
 
 describe("drawer", () => {
@@ -166,6 +185,117 @@ describe("drawer", () => {
     expect(actions).toContain("Re-anchor");
     expect(actions).toContain("Delete");
     expect(actions.join(" ")).not.toMatch(/[✓↻🗑]/u);
+  });
+
+  it("nests replies under the parent card in append order and adds no second card", () => {
+    const first = comment({
+      id: "reply001",
+      parentId: "open0001",
+      author: "ada",
+      body: "First reply.",
+      extent: null,
+    });
+    const second = comment({
+      id: "reply002",
+      parentId: "open0001",
+      author: "grace",
+      body: "Second reply.",
+      extent: null,
+    });
+    const onOrphan = comment({
+      id: "reply003",
+      parentId: "orph0001",
+      author: "ada",
+      body: "Still on the orphan card.",
+      extent: null,
+    });
+    renderDrawer([OPEN_HUMAN, ORPHANED, second, first, onOrphan]);
+
+    const cards = openCards();
+    expect(cards.length).toBe(1);
+    expect(panel().textContent).toContain("Comments · 1 open");
+    const replies = cards[0]!.querySelectorAll(".pmk-drawer-reply");
+    expect(Array.from(replies).map((el) => el.textContent)).toEqual([
+      expect.stringContaining("Second reply."),
+      expect.stringContaining("First reply."),
+    ]);
+    expect(cards[0]!.querySelectorAll(".pmk-drawer-card").length).toBe(0);
+
+    const attention = attentionCards();
+    expect(attention.length).toBe(1);
+    expect(attention[0]!.textContent).toContain("Still on the orphan card.");
+    expect(attention[0]!.querySelectorAll(".pmk-drawer-card").length).toBe(0);
+    expect(document.querySelectorAll("mark.pmk-hl").length).toBe(0);
+  });
+
+  it("shows a reply to a loose reply once, as its own attention card", () => {
+    const loose = comment({
+      id: "loose001",
+      parentId: "missing1",
+      state: "orphan",
+      body: "Loose reply.",
+      extent: null,
+    });
+    const child = comment({
+      id: "child001",
+      parentId: "loose001",
+      state: "orphan",
+      body: "Reply to a reply.",
+      extent: null,
+    });
+    renderDrawer([loose, child]);
+    const attention = attentionCards();
+    expect(attention.length).toBe(2);
+    expect(attention[0]!.querySelectorAll(".pmk-drawer-reply").length).toBe(0);
+    expect(panel().textContent?.match(/Reply to a reply\./g)?.length).toBe(1);
+  });
+
+  it("gives a nested reply a native button that opens its Edit and Resolve actions", () => {
+    const reply = comment({
+      id: "reply001",
+      parentId: "open0001",
+      author: "ada",
+      body: "First reply.",
+      extent: null,
+    });
+    renderDrawer([OPEN_HUMAN, reply]);
+    openDrawer();
+
+    const button = openCards()[0]!.querySelector<HTMLButtonElement>(".pmk-drawer-reply button")!;
+    // A native button with no negative tabindex is a Tab stop, and the browser
+    // turns Enter or Space on it into the click sent below.
+    expect(button.type).toBe("button");
+    expect(button.tabIndex).toBe(0);
+    expect(button.getAttribute("aria-label")).toBe("Open reply by ada");
+
+    button.focus();
+    button.click();
+    const popover = document.querySelector<HTMLElement>(".pmk-popover")!;
+    expect(popover.getAttribute("aria-label")).toBe("Comment by ada");
+    const actions = Array.from(
+      popover.querySelectorAll<HTMLButtonElement>(".pmk-popover-actions button"),
+    );
+    expect(actions.map((b) => b.textContent)).toEqual(["Edit", "Resolve"]);
+
+    actions[1]!.click();
+    expect(post).toHaveBeenCalledWith({ v: 1, type: "resolveComment", id: "reply001" });
+    expect(document.querySelector(".pmk-popover")).toBeNull();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("returns focus to the same reply's button after a rebuild", () => {
+    const first = comment({ id: "reply001", parentId: "open0001", body: "First.", extent: null });
+    const second = comment({ id: "reply002", parentId: "open0001", body: "Second.", extent: null });
+    renderDrawer([OPEN_HUMAN, first, second]);
+    openDrawer();
+    const buttons = openCards()[0]!.querySelectorAll<HTMLButtonElement>(".pmk-drawer-reply button");
+    buttons[1]!.focus();
+
+    renderDrawer([OPEN_HUMAN, first, second]);
+    const focused = document.activeElement as HTMLElement;
+    expect(focused).not.toBe(buttons[1]);
+    expect(focused.tagName).toBe("BUTTON");
+    expect(focused.closest(".pmk-drawer-reply")?.getAttribute("data-pmk-id")).toBe("reply002");
   });
 
   it("renders the needs-attention section listing orphan + content-removed (quote preserved)", () => {

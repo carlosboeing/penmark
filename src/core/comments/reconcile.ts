@@ -25,9 +25,9 @@
  *   - Review block not at EOF → `reviewBlockMisplaced`; more than one block →
  *     `secondReviewBlock` (§5.1, §8.5).
  *
- * v2 reply entries (` re <parent-id>`, §5.3) are parsed-but-ignored in v1: they
- * are reconciled as ordinary entries — no threading, no reply collapse. The
- * parser already exposes `parentId`; reconcile does not act on it.
+ * A reply (§5.3) names a root entry in the same block. That reply is `intact`
+ * and has no extent, so it adds no highlight. A missing parent, or a parent
+ * that is itself a reply, is an `orphan`.
  */
 
 import type { SourceRange } from "./placement.js";
@@ -194,6 +194,7 @@ function recoverByQuote(
     // also lives verbatim inside the entry's `> ` lines, which must never be
     // mistaken for the recovered extent (§5.2.2: the quote is advisory context).
     if (start >= searchEnd) break;
+    if (end > searchEnd) continue;
     const distance = Math.abs(lineOf(text, start) - openerLine);
     if (distance < bestDistance) {
       bestDistance = distance;
@@ -270,6 +271,8 @@ function classify(
   spanClosers: Map<string, number[]>,
   bodyEnd: number,
 ): ReconciledComment {
+  if (entry.parentId !== undefined) return classifyReply(doc, entry);
+
   const anchor = doc.anchors.get(entry.id);
 
   if (anchor !== undefined) {
@@ -281,6 +284,22 @@ function classify(
 
   // No live anchor: opener/block/range absent or rejected by the parser.
   return classifyOrphanOrigin(text, entry, spanClosers);
+}
+
+/**
+ * A reply hangs off a root in the same review block and has no highlight.
+ * Anything else (missing parent, reply-to-reply, parent in another block)
+ * is an orphan and counts toward attention.
+ */
+function classifyReply(doc: ParsedDoc, entry: ParsedEntry): ReconciledComment {
+  const parent = doc.entries.find((e) => e.id === entry.parentId);
+  const sameBlock =
+    parent !== undefined &&
+    (parent.fromExtraReviewBlock === true) === (entry.fromExtraReviewBlock === true);
+  if (parent === undefined || parent.parentId !== undefined || !sameBlock) {
+    return { entry, state: "orphan", flags: [] };
+  }
+  return { entry, state: "intact", flags: [] };
 }
 
 /** A live span anchor: intact, content-removed (§8.3), or §8.2 fallback. */

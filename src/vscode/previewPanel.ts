@@ -27,8 +27,10 @@ import {
   nowTimestamp,
   offsetEditsToWorkspaceEdit,
   planAddComment,
-  planResolveComment,
   planEditComment,
+  planReanchorComment,
+  planReplyComment,
+  planResolveComment,
   resolveAuthor,
 } from "./comments.js";
 import { buildReviewPrompt } from "../core/comments/exportPrompt.js";
@@ -489,6 +491,58 @@ export async function handleAddComment(
     return;
   }
   await applyDocumentTextEdits(document, plan.edits);
+}
+
+/**
+ * Move a root comment's anchor, keeping its id and its replies. A reply, or an
+ * id with no entry, is still delete-then-add: that entry becomes a new root.
+ */
+export async function handleReanchorComment(
+  document: vscode.TextDocument,
+  id: string,
+  range: { start: number; end: number },
+  quote: string,
+  body: string,
+): Promise<void> {
+  const { tokenizeBlockOffsets } = await getRenderModule();
+  const plan = planReanchorComment({
+    source: document.getText(),
+    id,
+    range,
+    tokenize: tokenizeBlockOffsets,
+  });
+  if ("uncommentable" in plan) {
+    void vscode.window.showInformationMessage(
+      "Penmark: that selection can't carry a comment — try selecting prose, a whole block, or a range of blocks.",
+    );
+    return;
+  }
+  if (plan.kind === "replace") {
+    await handleResolveComment(document, id);
+    await handleAddComment(document, range, quote, body);
+    return;
+  }
+  await applyDocumentTextEdits(document, plan.edits);
+}
+
+/**
+ * Append a reply on the root comment `parentId` as one WorkspaceEdit. Inserts
+ * no anchor. A no-op when the parent is missing or the body is empty.
+ */
+export async function handleReplyComment(
+  document: vscode.TextDocument,
+  parentId: string,
+  body: string,
+): Promise<void> {
+  const edits = planReplyComment({
+    source: document.getText(),
+    parentId,
+    body,
+    author: resolveAuthor(),
+    timestamp: nowTimestamp(),
+  });
+  if (edits.length === 0) return;
+  await applyDocumentTextEdits(document, edits);
 }
 
 /**
@@ -973,6 +1027,35 @@ function setupPanelEntry(
         const body = message.body;
         if (typeof id !== "string" || typeof body !== "string") break;
         enqueueMutation(entry, () => handleEditComment(doc, id, body));
+        break;
+      }
+
+      case "replyComment": {
+        const doc = entry.document;
+        if (!doc) break;
+        const id = message.id;
+        const body = message.body;
+        if (typeof id !== "string" || typeof body !== "string") break;
+        enqueueMutation(entry, () => handleReplyComment(doc, id, body));
+        break;
+      }
+
+      case "reanchorComment": {
+        const doc = entry.document;
+        if (!doc) break;
+        const { id, range, quote, body } = message;
+        if (
+          typeof id !== "string" ||
+          !range ||
+          typeof range.start !== "number" ||
+          typeof range.end !== "number" ||
+          typeof quote !== "string" ||
+          typeof body !== "string"
+        ) {
+          break;
+        }
+        const r = { start: range.start, end: range.end };
+        enqueueMutation(entry, () => handleReanchorComment(doc, id, r, quote, body));
         break;
       }
 

@@ -16,6 +16,9 @@
     "Other"
   ],
   "main": "./dist/extension.js",
+  "bin": {
+    "penmark": "./dist-cli/cli.js"
+  },
   "activationEvents": [
     "onCommand:penmark.openPreview",
     "onCommand:penmark.find",

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildAddCommentEdits,
+  buildAddReplyEdits,
   buildResolveCommentEdits,
   buildQuoteRefreshEdit,
   buildEditCommentEdits,
@@ -303,6 +304,85 @@ describe("buildResolveCommentEdits", () => {
     const text = "plain text\n";
     const doc = parseDoc(text);
     expect(buildResolveCommentEdits(text, doc, "zzzzzzzz")).toEqual([]);
+  });
+
+  it("appends a reply entry and inserts no marker", () => {
+    const text = "Hello world.\n";
+    const root = newComment({
+      placement: spanPlacement(6, 11),
+      id: "aaaaaaaa",
+      quote: "world",
+      body: "note",
+    });
+    const withRoot = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), root));
+    const reply = newComment({
+      placement: spanPlacement(0, 0),
+      id: "bbbbbbbb",
+      parentId: "aaaaaaaa",
+      quote: "world",
+      body: "a reply",
+      provenance: "agent",
+    });
+    const out = applyEdits(withRoot, buildAddReplyEdits(withRoot, parseDoc(withRoot), reply));
+    expect(out).not.toContain("pmk:s bbbbbbbb");
+    expect(out).toContain("<!--pmk:c bbbbbbbb re aaaaaaaa");
+    const doc = parseDoc(out);
+    expect(doc.anchors.has("bbbbbbbb")).toBe(false);
+    expect(doc.entries.find((e) => e.id === "bbbbbbbb")?.parentId).toBe("aaaaaaaa");
+    expect(doc.entries.find((e) => e.id === "aaaaaaaa")?.quote).toBe("world");
+  });
+
+  it("resolving a root removes its anchor, its entry, and its replies", () => {
+    const text = "Hello world.\n";
+    const root = newComment({
+      placement: spanPlacement(6, 11),
+      id: "aaaaaaaa",
+      quote: "world",
+      body: "note",
+    });
+    let withThread = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), root));
+    const reply = newComment({
+      placement: spanPlacement(0, 0),
+      id: "bbbbbbbb",
+      parentId: "aaaaaaaa",
+      quote: "world",
+      body: "a reply",
+    });
+    withThread = applyEdits(withThread, buildAddReplyEdits(withThread, parseDoc(withThread), reply));
+    const out = applyEdits(
+      withThread,
+      buildResolveCommentEdits(withThread, parseDoc(withThread), "aaaaaaaa"),
+    );
+    expect(out).toBe("Hello world.\n");
+    expect(parseDoc(out).entries).toHaveLength(0);
+    expect(out).not.toContain("pmk:");
+  });
+
+  it("resolving a reply removes only that entry", () => {
+    const text = "Hello world.\n";
+    const root = newComment({
+      placement: spanPlacement(6, 11),
+      id: "aaaaaaaa",
+      quote: "world",
+      body: "note",
+    });
+    let withThread = applyEdits(text, buildAddCommentEdits(text, parseDoc(text), root));
+    const reply = newComment({
+      placement: spanPlacement(0, 0),
+      id: "bbbbbbbb",
+      parentId: "aaaaaaaa",
+      quote: "world",
+      body: "a reply",
+    });
+    withThread = applyEdits(withThread, buildAddReplyEdits(withThread, parseDoc(withThread), reply));
+    const out = applyEdits(
+      withThread,
+      buildResolveCommentEdits(withThread, parseDoc(withThread), "bbbbbbbb"),
+    );
+    const doc = parseDoc(out);
+    expect(doc.entries.map((e) => e.id)).toEqual(["aaaaaaaa"]);
+    expect(doc.anchors.has("aaaaaaaa")).toBe(true);
+    expect(out).toContain("<!--pmk:s aaaaaaaa-->world<!--/pmk:s aaaaaaaa-->");
   });
 });
 

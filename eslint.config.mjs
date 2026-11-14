@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/", "node_modules/", "spikes/", "coverage/", "*.mjs", "test/ext/suite/index.js"],
+    ignores: ["dist/", "dist-cli/", "node_modules/", "spikes/", "coverage/", "*.mjs", "test/ext/suite/index.js"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

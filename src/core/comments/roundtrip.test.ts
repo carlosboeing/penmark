@@ -33,9 +33,9 @@ const ROUNDTRIP_FIXTURES = readdirSync(CONFORMANCE)
   .filter((f) => !f.startsWith("12-") && !f.startsWith("14-"))
   .sort();
 
-describe("round-trip: resolve drops exactly one id, leaves the rest intact", () => {
+describe("round-trip: resolve drops the id and any reply that names it", () => {
   for (const file of ROUNDTRIP_FIXTURES) {
-    it(`${file}: resolving each comment removes only that id`, () => {
+    it(`${file}: resolving each anchored comment removes that id and its replies`, () => {
       const text = readFileSync(resolve(CONFORMANCE, file), "utf8");
       const doc = parseDoc(text);
       // Only resolve comments whose anchor parses intact (live anchor present).
@@ -51,9 +51,13 @@ describe("round-trip: resolve drops exactly one id, leaves the rest intact", () 
         expect(reparsed.entries.some((e) => e.id === id)).toBe(false);
         expect(reparsed.anchors.has(id)).toBe(false);
 
-        // Every OTHER originally-live entry still parses intact.
+        // A reply that names the resolved root goes with it. Every other entry stays.
         for (const other of doc.entries) {
           if (other.id === id) continue;
+          if (other.parentId === id) {
+            expect(reparsed.entries.some((e) => e.id === other.id)).toBe(false);
+            continue;
+          }
           const stillThere = reparsed.entries.find((e) => e.id === other.id);
           expect(stillThere, `entry ${other.id} survives resolving ${id}`).toBeDefined();
           expect(stillThere?.quote).toBe(other.quote);

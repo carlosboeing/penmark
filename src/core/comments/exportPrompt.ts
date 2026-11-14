@@ -18,6 +18,21 @@ import type { ReconciledComment } from "./reconcile.js";
  * entries from reconcile, in document order). Returns a markdown string ending
  * in a single newline.
  */
+function sectionLines(rc: ReconciledComment, heading: string): string[] {
+  const e = rc.entry;
+  const lines = [heading, ""];
+  // The quote is a locator: the agent greps the file for it, so it must stay
+  // byte-faithful to the document. The body is prose for the agent to read,
+  // so agent-authored character references are rendered there.
+  if (e.quote !== "") {
+    for (const q of e.quote.split("\n")) lines.push(`> ${q}`);
+    lines.push("");
+  }
+  const note = decodeDisplayText(e.body);
+  lines.push(note.trim() === "" ? "_(no note)_" : note, "");
+  return lines;
+}
+
 export function buildReviewPrompt(docPath: string, comments: ReconciledComment[]): string {
   const lines: string[] = [`# Penmark review — ${docPath}`, ""];
 
@@ -26,7 +41,28 @@ export function buildReviewPrompt(docPath: string, comments: ReconciledComment[]
     return lines.join("\n") + "\n";
   }
 
-  const count = comments.length;
+  const rootIds = new Set(
+    comments.filter((c) => c.entry.parentId === undefined).map((c) => c.entry.id),
+  );
+  const repliesOf = new Map<string, ReconciledComment[]>();
+  const roots: ReconciledComment[] = [];
+  const loose: ReconciledComment[] = [];
+  for (const c of comments) {
+    const parentId = c.entry.parentId;
+    if (parentId === undefined) {
+      roots.push(c);
+      continue;
+    }
+    if (rootIds.has(parentId)) {
+      const list = repliesOf.get(parentId) ?? [];
+      list.push(c);
+      repliesOf.set(parentId, list);
+    } else {
+      loose.push(c);
+    }
+  }
+
+  const count = roots.length + loose.length;
   lines.push(
     `You are addressing reviewer comments on the markdown file above. ` +
       `There ${count === 1 ? "is" : "are"} ${count} open comment${count === 1 ? "" : "s"}. ` +
@@ -35,21 +71,22 @@ export function buildReviewPrompt(docPath: string, comments: ReconciledComment[]
     "",
   );
 
-  comments.forEach((rc, i) => {
+  [...roots, ...loose].forEach((rc, i) => {
     const e = rc.entry;
     const orphanNote = rc.state === "orphan" ? " (location lost — quote only)" : "";
-    lines.push(`## ${i + 1}. ${e.author} (${e.provenance}) · ${e.timestamp}${orphanNote}`, "");
-    // The quote is a locator: the agent greps the file for it, so it must stay
-    // byte-faithful to the document. The body is prose for the agent to read,
-    // so agent-authored character references are rendered there.
-    if (e.quote !== "") {
-      for (const q of e.quote.split("\n")) lines.push(`> ${q}`);
-      lines.push("");
+    lines.push(
+      ...sectionLines(
+        rc,
+        `## ${i + 1}. ${e.author} (${e.provenance}) · ${e.timestamp}${orphanNote}`,
+      ),
+    );
+    if (e.parentId !== undefined) return;
+    for (const reply of repliesOf.get(e.id) ?? []) {
+      const re = reply.entry;
+      lines.push(
+        ...sectionLines(reply, `### Reply — ${re.author} (${re.provenance}) · ${re.timestamp}`),
+      );
     }
-    // A comment may carry only a quote (empty body); show a placeholder so the
-    // section is never a numbered comment with no visible instruction.
-    const note = decodeDisplayText(e.body);
-    lines.push(note.trim() === "" ? "_(no note)_" : note, "");
   });
 
   return lines.join("\n").trimEnd() + "\n";

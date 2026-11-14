@@ -45,7 +45,7 @@ export interface ParsedEntry {
   quote: string;
   /** Decoded body prose. */
   body: string;
-  /** v2 reply parent (` re <id>` on line 1); parsed-but-ignored in v1 (§5.3). */
+  /** Reply parent (` re <id>` on line 1, §5.3). Absent on a root. */
   parentId?: string;
   rawStart: number;
   rawEnd: number;
