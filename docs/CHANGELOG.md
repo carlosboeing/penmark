@@ -8,6 +8,7 @@ What shipped in this project, when. Most recent first. Each entry references the
 
 - `penmark comment apply` writes findings into the markdown file. A second note on a sentence that already has a comment is a reply and adds no second highlight. The preview shows that reply under the original comment. Reply on a root comment does the same. Resolving the original comment removes its replies. [ADR 0009](adrs/0009-replies-on-v1.md).
 - The command is a separate esbuild entry (`dist-cli/`) and is not in the VSIX. `skills/penmark-comments/` asks before anything is written, then runs the command.
+- `penmark` and `penmark --help` print usage. A usage mistake names the command to run. Command results stay JSON.
 
 ## v0.6.0 — 2026-10-20
 

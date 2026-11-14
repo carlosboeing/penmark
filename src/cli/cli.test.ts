@@ -377,6 +377,7 @@ describe("penmark process", () => {
       stdin: () =>
         JSON.stringify({ findings: [{ quote: "eventual consistency", body: "Name it." }] }),
       stdout: () => {},
+      stderr: () => {},
       gitAuthor: () => "Ada",
       now: () => "2026-11-13 12:00:00 +00:00",
     };
@@ -400,6 +401,48 @@ describe("penmark process", () => {
     expect(result.status).toBe(0);
     expect(result.stdout.endsWith("\n")).toBe(true);
     expect(JSON.parse(result.stdout).comments[0].body).toBe(note);
+  });
+
+  it("prints usage when invoked with no arguments", () => {
+    const result = penmark([]);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toContain("penmark — review comments in a markdown file");
+    for (const name of ["comment apply", "comment locate", "list", "validate", "resolve", "export-prompt", "version"]) {
+      expect(result.stdout).toContain(name);
+    }
+  });
+
+  it("prints usage for --help, -h, and help", () => {
+    for (const args of [["--help"], ["-h"], ["help"], ["comment", "apply", "--help"]]) {
+      const result = penmark(args);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("USAGE");
+      expect(result.stdout).not.toContain("missing value");
+    }
+    const apply = penmark(["comment", "apply", "--help"]);
+    expect(apply.stdout).toContain("penmark comment apply");
+    expect(apply.stdout).toContain("findings");
+  });
+
+  it("prints the version", () => {
+    const version = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version as string;
+    const result = penmark(["--version"]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe(`penmark ${version}\n`);
+  });
+
+  it("prints a usage error for a missing file and an unknown command", () => {
+    const missing = penmark(["list"]);
+    expect(missing.status).toBe(1);
+    expect(missing.stdout).toBe("");
+    expect(missing.stderr).toContain("needs --file");
+    expect(missing.stderr).toContain("Usage: penmark list --file <path>");
+
+    const unknown = penmark(["frob"]);
+    expect(unknown.status).toBe(1);
+    expect(unknown.stderr).toContain("unknown command: frob");
+    expect(unknown.stderr).toContain("penmark --help");
   });
 
   it("prints the review prompt as text", () => {
