@@ -414,7 +414,13 @@ describe("penmark process", () => {
   });
 
   it("prints usage for --help, -h, and help", () => {
-    for (const args of [["--help"], ["-h"], ["help"], ["comment", "apply", "--help"]]) {
+    for (const args of [
+      ["--help"],
+      ["-h"],
+      ["help"],
+      ["comment", "apply", "--help"],
+      ["comment", "apply", "--author", "--help"],
+    ]) {
       const result = penmark(args);
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("USAGE");
@@ -423,6 +429,35 @@ describe("penmark process", () => {
     const apply = penmark(["comment", "apply", "--help"]);
     expect(apply.stdout).toContain("penmark comment apply");
     expect(apply.stdout).toContain("findings");
+  });
+
+  it("reads -h as an option value rather than a help flag", () => {
+    const dir = tempDir();
+    const file = write(dir, "note.md", "Use -h for help.\n");
+    const located = penmark(["comment", "locate", "--file", file, "--quote", "-h"]);
+    expect(located.status).toBe(0);
+    expect(located.stdout).not.toContain("USAGE");
+    const matches = JSON.parse(located.stdout).matches as { start: number; end: number }[];
+    expect(matches.map((m) => [m.start, m.end])).toEqual([[4, 6]]);
+
+    const applied = penmark(
+      ["comment", "apply", "--file", file, "--author", "-h"],
+      JSON.stringify({ findings: [{ quote: "Use -h", body: "Name the flag." }] }),
+    );
+    expect(applied.status).toBe(0);
+    expect(JSON.parse(applied.stdout).wrote).toBe(true);
+    const listed = penmark(["list", "--file", file]);
+    expect(JSON.parse(listed.stdout).comments[0].author).toBe("-h");
+  });
+
+  it("does not treat a positional after -- as a help flag", () => {
+    const dir = tempDir();
+    const file = write(dir, "note.md", "Body.\n");
+    const result = penmark(["list", "--file", file, "--", "--help"]);
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("unexpected argument: --help");
+    expect(result.stderr).not.toContain("USAGE");
   });
 
   it("prints the version", () => {

@@ -41,12 +41,13 @@ const defaultIo: Io = {
 interface ParsedArgs {
   positionals: string[];
   flags: Map<string, string | true>;
+  help: boolean;
   error?: string;
 }
 
 export function run(argv: string[], io: Io = defaultIo): number {
-  if (wantsHelp(argv)) {
-    io.stdout(helpText(argv));
+  if (argv.length === 0) {
+    io.stdout(HELP);
     return 0;
   }
   if (wantsVersion(argv)) {
@@ -57,6 +58,10 @@ export function run(argv: string[], io: Io = defaultIo): number {
   const args = parseArgv(argv);
   const cmd = args.positionals[0];
   const sub = args.positionals[1];
+  if (args.help || cmd === "help") {
+    io.stdout(helpText(cmd === "help" ? args.positionals.slice(1) : args.positionals));
+    return 0;
+  }
   const kind = kindOf(cmd, sub);
   const usage = usageFor(kind);
   if (args.error !== undefined) {
@@ -349,18 +354,11 @@ const HELP = `
 
 `;
 
-function wantsHelp(argv: string[]): boolean {
-  if (argv.length === 0) return true;
-  if (argv.some((arg) => arg === "--help" || arg === "-h")) return true;
-  return argv[0] === "help";
-}
-
 function wantsVersion(argv: string[]): boolean {
   return argv.length > 0 && argv.every((arg) => arg === "version" || arg === "--version" || arg === "-v");
 }
 
-function helpText(argv: string[]): string {
-  const words = argv.filter((arg) => arg !== "help" && arg !== "--help" && arg !== "-h");
+function helpText(words: string[]): string {
   const cmd = words[0];
   const sub = words[1];
   if (cmd === "comment" && sub === "apply") {
@@ -461,11 +459,16 @@ function packageVersion(): string {
 function parseArgv(argv: string[]): ParsedArgs {
   const positionals: string[] = [];
   const flags = new Map<string, string | true>();
+  let help = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
     if (arg === "--") {
       positionals.push(...argv.slice(i + 1));
       break;
+    }
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+      continue;
     }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
@@ -474,14 +477,22 @@ function parseArgv(argv: string[]): ParsedArgs {
         continue;
       }
       const value = argv[i + 1];
-      if (value === undefined || value.startsWith("--")) return { positionals, flags, error: `missing value for --${key}` };
+      // A value may not start with "--", so --help here is still a help
+      // request. -h is accepted as a value.
+      if (value === "--help") {
+        help = true;
+        continue;
+      }
+      if (value === undefined || value.startsWith("--")) {
+        return { positionals, flags, help, error: `missing value for --${key}` };
+      }
       flags.set(key, value);
       i++;
       continue;
     }
     positionals.push(arg);
   }
-  return { positionals, flags };
+  return { positionals, flags, help };
 }
 
 function countFlag(argv: string[], flag: string): number {
