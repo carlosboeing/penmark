@@ -121,7 +121,7 @@ Do not install the command with `npx` from a git URL. That install path is not v
 | Exit | Meaning |
 |---|---|
 | 0 | Wrote the file, or every finding was `skipped` (same note already present). `wrote` is true only after the file is replaced. |
-| 1 | Bad invocation, bad JSON, or no git author and no `--author`. A finding with only one of `start` or `end` is bad JSON. An author that contains a line break or `--` is rejected too. Nothing written. |
+| 1 | Bad invocation, bad JSON, or no git author and no `--author`. A usage mistake, including a missing `--file`, prints the reason on stderr. Bad JSON, a missing author, and an author that contains a line break or `--` are JSON on stdout. Nothing written. |
 | 2 | A finding was rejected. Nothing written. |
 | 3 | The file changed after the read. Nothing written. Re-read before any further attempt. Do not loop. |
 | 4 | The review block is unreadable, or the file has a second review block. Leave the file untouched and report the `corruption` string. |

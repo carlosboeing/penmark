@@ -31,7 +31,7 @@ src/
   cli/         separate esbuild entry (`dist-cli/cli.js`): the `penmark` command over `src/core/comments`
 ```
 
-The `penmark` command is a separate esbuild entry over `src/core/comments`. It does not ship in the VSIX.
+The `penmark` command is a separate esbuild entry over `src/core/comments`. It does not ship in the VSIX. With no arguments it prints usage. A command's result is JSON.
 
 ## Data flow
 
