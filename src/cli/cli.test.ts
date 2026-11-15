@@ -815,6 +815,9 @@ describe("penmark process", () => {
     chmodSync(command, 0o755);
 
     expect(isExecutableFile(join(dirHit, "penmark"))).toBe(false);
+    // POSIX mode bits. Windows accepts every regular file; PATHEXT is the next test.
+    if (process.platform === "win32") return;
+
     expect(isExecutableFile(plain)).toBe(false);
     expect(isExecutableFile(command)).toBe(true);
 
