@@ -17,6 +17,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import {
+  BackError,
   CancelledError,
   askInOrder,
   confirm,
@@ -93,19 +94,31 @@ export function defaultIdes(home = homedir(), includeAppFallbacks = true): IdeSp
 export function lineReaderFromLines(lines: readonly string[]): () => string {
   let index = 0;
   return () => {
+    if (index >= lines.length) throw new CancelledError("End of input");
     const line = lines[index] ?? "";
     index += 1;
     return line;
   };
 }
 
+// A trailing newline is not an extra blank line. Empty input is no answers.
+function splitAnswerLines(text: string): string[] {
+  if (text.length === 0) return [];
+  const lines = text.split(/\r?\n/);
+  if (text.endsWith("\n")) lines.pop();
+  return lines;
+}
+
 function readNextStdinLine(state: { lines: string[] | null; index: number }): string {
   if (state.lines === null) {
     try {
-      state.lines = readFileSync(0, "utf8").split(/\r?\n/);
+      state.lines = splitAnswerLines(readFileSync(0, "utf8"));
     } catch {
       state.lines = [];
     }
+  }
+  if (state.index >= state.lines.length) {
+    throw new CancelledError("End of input");
   }
   const line = state.lines[state.index] ?? "";
   state.index += 1;
@@ -240,9 +253,27 @@ function writeChoices(env: SetupEnv, choices: SetupChoices): void {
 
 function askYesNo(prompt: string, env: SetupEnv): boolean {
   env.stdout(prompt);
+  // A blank line accepts the [Y/n] default. End of input throws before this.
   const trimmed = env.readLine().trim().toLowerCase();
   if (trimmed === "" || trimmed === "y" || trimmed === "yes" || trimmed === "1") return true;
   return false;
+}
+
+function reportCancelled(env: SetupEnv): void {
+  env.stdout("Cancelled. Nothing was written.\n");
+}
+
+function acceptWizard(env: SetupEnv, steps: readonly (() => void)[]): boolean {
+  try {
+    askInOrder(steps);
+    return true;
+  } catch (err) {
+    if (err instanceof CancelledError || err instanceof BackError) {
+      reportCancelled(env);
+      return false;
+    }
+    throw err;
+  }
 }
 
 function buildWizardSteps(
@@ -327,16 +358,7 @@ function promptInteractiveChoices(
   if (!hasSavedConfig) {
     env.stdout(`Penmark ${env.version} — setup\n\n`);
     const steps = buildWizardSteps(env, found, foundByName, choices, promptIo);
-    try {
-      askInOrder(steps);
-      return true;
-    } catch (err) {
-      if (err instanceof CancelledError) {
-        env.stdout("Cancelled. Nothing was written.\n");
-        return false;
-      }
-      throw err;
-    }
+    return acceptWizard(env, steps);
   }
 
   // When a newly installed editor appears on a configured machine, ask only for that editor.
@@ -368,16 +390,7 @@ function promptInteractiveChoices(
         choices.skill = skillDefault;
       });
     }
-    try {
-      askInOrder(steps);
-      return true;
-    } catch (err) {
-      if (err instanceof CancelledError) {
-        env.stdout("Cancelled. Nothing was written.\n");
-        return false;
-      }
-      throw err;
-    }
+    return acceptWizard(env, steps);
   }
 
   if (repair) {
@@ -413,16 +426,7 @@ function promptInteractiveChoices(
     askInOrder(buildWizardSteps(env, found, foundByName, choices, promptIo));
   };
 
-  try {
-    askInOrder([askFork, askChangeSettings]);
-    return true;
-  } catch (err) {
-    if (err instanceof CancelledError) {
-      env.stdout("Cancelled. Nothing was written.\n");
-      return false;
-    }
-    throw err;
-  }
+  return acceptWizard(env, [askFork, askChangeSettings]);
 }
 
 export function runSetup(env: SetupEnv, options: SetupOptions = {}): number {
@@ -452,19 +456,27 @@ export function runSetup(env: SetupEnv, options: SetupOptions = {}): number {
       return 0;
     }
   } else {
-    for (const { ide } of found) {
-      if (choices.editors[ide.name] === undefined) {
-        choices.editors[ide.name] = askYesNo(
-          `Install the Penmark extension in ${ide.name}? [Y/n] `,
+    try {
+      for (const { ide } of found) {
+        if (choices.editors[ide.name] === undefined) {
+          choices.editors[ide.name] = askYesNo(
+            `Install the Penmark extension in ${ide.name}? [Y/n] `,
+            env,
+          );
+        }
+      }
+      if (choices.skill === undefined) {
+        choices.skill = askYesNo(
+          `Install the penmark-comments skill in ${env.skillDestDir}? [Y/n] `,
           env,
         );
       }
-    }
-    if (choices.skill === undefined) {
-      choices.skill = askYesNo(
-        `Install the penmark-comments skill in ${env.skillDestDir}? [Y/n] `,
-        env,
-      );
+    } catch (err) {
+      if (err instanceof CancelledError) {
+        reportCancelled(env);
+        return 0;
+      }
+      throw err;
     }
   }
 

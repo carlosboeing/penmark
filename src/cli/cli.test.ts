@@ -1,11 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  BackError,
   CancelledError,
+  askInOrder,
   decodeKeyChunk,
+  decodeKeyReads,
   keyBar,
   multiselect,
   select,
@@ -34,7 +37,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function penmark(args: string[], input?: string, env?: NodeJS.ProcessEnv) {
+function penmark(args: string[], input?: string | Uint8Array, env?: NodeJS.ProcessEnv) {
   return spawnSync(TSX, [MAIN, ...args], {
     input,
     encoding: "utf8",
@@ -898,6 +901,111 @@ describe("penmark process", () => {
     expect(doctorRes.stdout).toContain(`skill: current (${join(skillRoot, "penmark-comments")})`);
   });
 
+  it("cancels setup when stdin ends before every answer, and still accepts a blank line as yes", () => {
+    const dir = tempDir();
+    const skillRoot = join(dir, "skills");
+    const configPath = join(dir, "config", "setup.json");
+    const skillFile = join(skillRoot, "penmark-comments", "SKILL.md");
+    const env = {
+      HOME: dir,
+      PENMARK_SKILLS_DIR: skillRoot,
+      PENMARK_SETUP_CONFIG: configPath,
+      PENMARK_NO_APP_FALLBACKS: "1",
+      PATH: dirname(process.execPath),
+    };
+
+    const closed = penmark(["setup"], Buffer.alloc(0), env);
+    expect(closed.status).toBe(0);
+    expect(closed.stdout).toContain("Cancelled. Nothing was written.");
+    expect(closed.stdout).not.toContain(`skill: ${join(skillRoot, "penmark-comments")}`);
+    expect(existsSync(skillFile)).toBe(false);
+    expect(existsSync(configPath)).toBe(false);
+
+    const blank = penmark(["setup"], "\n", env);
+    expect(blank.status).toBe(0);
+    expect(blank.stdout).toContain(`skill: ${join(skillRoot, "penmark-comments")}`);
+    expect(existsSync(skillFile)).toBe(true);
+    expect(existsSync(configPath)).toBe(true);
+
+    const files = new Map<string, string>();
+    const installs: string[] = [];
+    const copies: string[] = [];
+    const runPartial = (stdinLines: string[]) => {
+      let stdout = "";
+      installs.length = 0;
+      copies.length = 0;
+      const setupEnv: SetupEnv = {
+        root: "/repo",
+        version: "0.6.0",
+        vsixPath: "/repo/penmark-markdown-review-0.6.0.vsix",
+        skillSourceDir: "/repo/skills/penmark-comments",
+        skillDestDir: "/home/.claude/skills/penmark-comments",
+        configPath: "/home/.config/penmark/setup.json",
+        pathEnv: "",
+        ides: [{ name: "VS Code", command: "code", fallbacks: [] }],
+        readLine: lineReaderFromLines(stdinLines),
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: () => {},
+        exists: (p) => files.has(p),
+        readText: (p) => files.get(p) ?? "",
+        writeText: (p, t) => {
+          files.set(p, t);
+        },
+        copyDir: (_src, dest) => {
+          copies.push(dest);
+        },
+        run: (cmd, args) => {
+          if (args[0] === "--version") return "1.105.0";
+          if (args[0] === "--list-extensions") return "local.penmark-markdown-review@0.6.0\n";
+          if (args[0] === "--install-extension") {
+            installs.push(cmd);
+            return "ok";
+          }
+          throw new Error(`unexpected ${cmd}`);
+        },
+      };
+      const io: Io = {
+        read: () => Buffer.alloc(0),
+        write: () => {},
+        stdin: () => "",
+        stdout: () => {},
+        stderr: () => {},
+        gitAuthor: () => null,
+        now: () => "",
+        setupEnv: () => setupEnv,
+      };
+      return { code: run(["setup"], io), stdout };
+    };
+
+    files.set("/repo/penmark-markdown-review-0.6.0.vsix", "vsix");
+    files.set("/repo/skills/penmark-comments", "dir");
+    const missing = runPartial([]);
+    expect(missing.code).toBe(0);
+    expect(missing.stdout).toContain("Cancelled. Nothing was written.");
+    expect(files.has("/home/.config/penmark/setup.json")).toBe(false);
+    expect(installs).toEqual([]);
+    expect(copies).toEqual([]);
+
+    const short = runPartial(["n"]);
+    expect(short.code).toBe(0);
+    expect(short.stdout).toContain("Cancelled. Nothing was written.");
+    expect(files.has("/home/.config/penmark/setup.json")).toBe(false);
+    expect(installs).toEqual([]);
+    expect(copies).toEqual([]);
+
+    const blankAnswers = runPartial(["n", ""]);
+    expect(blankAnswers.code).toBe(0);
+    expect(blankAnswers.stdout).not.toContain("Cancelled");
+    expect(installs).toEqual([]);
+    expect(copies).toEqual(["/home/.claude/skills/penmark-comments"]);
+    expect(JSON.parse(files.get("/home/.config/penmark/setup.json") ?? "{}")).toEqual({
+      editors: { "VS Code": false },
+      skill: true,
+    });
+  });
+
   it("decodes raw-mode key sequences and supports interactive multiselect, select, and back-navigation", () => {
     expect(decodeKeyChunk("\x1b[A")).toBe("up");
     expect(decodeKeyChunk("\x1b[B")).toBe("down");
@@ -912,6 +1020,83 @@ describe("penmark process", () => {
     expect(decodeKeyChunk("x")).toBe("unknown");
     expect(() => decodeKeyChunk("\x03")).toThrow(CancelledError);
     expect(() => decodeKeyChunk("")).toThrow(CancelledError);
+    expect(decodeKeyChunk("\x1b[")).toBe("unknown");
+
+    const arrows: readonly [string, KeyName][] = [
+      ["\x1b[A", "up"],
+      ["\x1b[B", "down"],
+      ["\x1b[C", "right"],
+      ["\x1b[D", "left"],
+      ["\x1bOA", "up"],
+      ["\x1bOB", "down"],
+      ["\x1bOC", "right"],
+      ["\x1bOD", "left"],
+    ];
+    for (const [seq, name] of arrows) {
+      for (let cut = 1; cut < seq.length; cut++) {
+        expect(decodeKeyReads([seq.slice(0, cut), seq.slice(cut)])).toEqual([name]);
+      }
+      expect(decodeKeyReads([...seq])).toEqual([name]);
+    }
+    expect(decodeKeyReads(["\x1b", null])).toEqual(["esc"]);
+    expect(decodeKeyReads(["\x1b[", null])).toEqual(["unknown"]);
+    expect(decodeKeyReads(["\x1bO", null])).toEqual(["unknown"]);
+    expect(decodeKeyReads(["\x1b[1", null])).toEqual(["unknown"]);
+    expect(decodeKeyReads(["\x1b", null, "[A"])).toEqual(["esc", "unknown", "unknown"]);
+    expect(decodeKeyReads(["\x1b", "[1;5", "A"])).toEqual(["unknown"]);
+    expect(() => decodeKeyReads(["\x1b", "\x03"])).toThrow(CancelledError);
+
+    const stepped: string[] = [];
+    expect(() =>
+      askInOrder([
+        () => {
+          stepped.push("editors");
+        },
+        () => {
+          stepped.push("skill");
+          throw new CancelledError("Cancelled by user");
+        },
+      ]),
+    ).toThrow(CancelledError);
+    expect(stepped).toEqual(["editors", "skill"]);
+
+    let nestedHits = 0;
+    expect(() =>
+      askInOrder([
+        () => {},
+        () => {
+          askInOrder([
+            () => {},
+            () => {
+              nestedHits += 1;
+              if (nestedHits === 1) throw new CancelledError("End of input");
+            },
+          ]);
+        },
+      ]),
+    ).toThrow(CancelledError);
+    expect(nestedHits).toBe(1);
+
+    const backed: string[] = [];
+    let skillTries = 0;
+    askInOrder([
+      () => {
+        backed.push("fork");
+      },
+      () => {
+        askInOrder([
+          () => {
+            backed.push("editors");
+          },
+          () => {
+            backed.push("skill");
+            skillTries += 1;
+            if (skillTries === 1) throw new BackError();
+          },
+        ]);
+      },
+    ]);
+    expect(backed).toEqual(["fork", "editors", "skill", "editors", "skill"]);
 
     expect(keyBar("multiselect", true)).toContain("↑/↓ to navigate");
     expect(keyBar("multiselect", false)).toContain("up/down to navigate - Space to toggle");
@@ -1042,6 +1227,23 @@ describe("penmark process", () => {
       skill: false,
     });
 
+    // Ctrl-C on the skill step of the rerun wizard aborts and keeps the saved choices.
+    stdout = "";
+    let rerunHits = 0;
+    env.readKey = () => {
+      rerunHits += 1;
+      if (rerunHits === 1) return "enter";
+      if (rerunHits === 2) return "space";
+      if (rerunHits === 3) return "enter";
+      throw new CancelledError("Cancelled by user");
+    };
+    expect(run(["setup"], io)).toBe(0);
+    expect(stdout).toContain("Cancelled. Nothing was written.");
+    expect(JSON.parse(files.get("/home/.config/penmark/setup.json") ?? "{}")).toEqual({
+      editors: { "VS Code": false, Cursor: true },
+      skill: false,
+    });
+
     // Pressing Esc at the first prompt cancels without writing
     files.delete("/home/.config/penmark/setup.json");
     stdout = "";
@@ -1050,6 +1252,19 @@ describe("penmark process", () => {
     env.readKey = () => cancelKeys[keyIdx++] ?? "esc";
     const cancelCode = run(["setup"], io);
     expect(cancelCode).toBe(0);
+    expect(stdout).toContain("Cancelled. Nothing was written.");
+    expect(files.has("/home/.config/penmark/setup.json")).toBe(false);
+
+    // End of input on the skill step of a fresh wizard writes nothing.
+    files.delete("/home/.config/penmark/setup.json");
+    stdout = "";
+    let freshHits = 0;
+    env.readKey = () => {
+      freshHits += 1;
+      if (freshHits === 1) return "enter";
+      throw new CancelledError("End of input");
+    };
+    expect(run(["setup"], io)).toBe(0);
     expect(stdout).toContain("Cancelled. Nothing was written.");
     expect(files.has("/home/.config/penmark/setup.json")).toBe(false);
   });

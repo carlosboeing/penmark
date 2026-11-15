@@ -7,6 +7,14 @@ export class CancelledError extends Error {
   }
 }
 
+/** Escape asked to leave this step. Ctrl-C and end of input stay CancelledError. */
+export class BackError extends Error {
+  constructor() {
+    super("Back");
+    this.name = "BackError";
+  }
+}
+
 export interface PromptOption {
   label: string;
   consequence: string;
@@ -52,10 +60,11 @@ function isCsiFinal(code: number): boolean {
 }
 
 /**
- * Consume one logical keypress or escape sequence from the front of `buffer`,
- * returning both the decoded KeyName and any remaining unconsumed bytes.
+ * Consume one logical keypress from the front of `buffer`.
+ * `key: null` means the buffer is an unfinished Escape, CSI, or SS3 sequence:
+ * nothing was consumed, and the caller must wait for more bytes or a timeout.
  */
-export function consumeKeySequence(buffer: string): { key: KeyName; rest: string } {
+export function consumeKeySequence(buffer: string): { key: KeyName | null; rest: string } {
   if (buffer.length === 0) {
     throw new CancelledError("End of input");
   }
@@ -65,24 +74,35 @@ export function consumeKeySequence(buffer: string): { key: KeyName; rest: string
   }
   if (first === "\x1b") {
     if (buffer.length === 1) {
-      return { key: "esc", rest: "" };
+      return { key: null, rest: buffer };
     }
-    const intro = buffer[1];
+    const intro = buffer[1]!;
+    if (intro === "\x03") {
+      throw new CancelledError("Cancelled by user");
+    }
     if (intro === "[") {
+      if (buffer.length === 2) return { key: null, rest: buffer };
       let body = "";
-      let endIdx = 2;
       for (let i = 2; i < buffer.length; i++) {
         const ch = buffer[i]!;
-        body += ch;
-        endIdx = i + 1;
-        if (isCsiFinal(ch.charCodeAt(0))) {
-          break;
+        if (ch === "\x03") throw new CancelledError("Cancelled by user");
+        const code = ch.charCodeAt(0);
+        if (isCsiFinal(code)) {
+          body += ch;
+          return { key: ARROWS[body] ?? "unknown", rest: buffer.slice(i + 1) };
         }
+        if (code >= 0x20 && code <= 0x3f) {
+          body += ch;
+          continue;
+        }
+        return { key: "unknown", rest: buffer.slice(i) };
       }
-      return { key: ARROWS[body] ?? "unknown", rest: buffer.slice(endIdx) };
+      return { key: null, rest: buffer };
     }
     if (intro === "O") {
-      const code = buffer[2] ?? "";
+      if (buffer.length < 3) return { key: null, rest: buffer };
+      const code = buffer[2]!;
+      if (code === "\x03") throw new CancelledError("Cancelled by user");
       return { key: ARROWS[code] ?? "unknown", rest: buffer.slice(3) };
     }
     return { key: "unknown", rest: buffer.slice(2) };
@@ -97,50 +117,128 @@ export function consumeKeySequence(buffer: string): { key: KeyName; rest: string
   return { key: "unknown", rest: buffer.slice(1) };
 }
 
+/** A quiet stdin after an unfinished sequence. Lone Escape is Esc; a partial CSI or SS3 is not. */
+function expireIncompleteKey(buffer: string): { key: KeyName; rest: string } {
+  if (buffer === "\x1b") return { key: "esc", rest: "" };
+  return { key: "unknown", rest: "" };
+}
+
 export function decodeKeyChunk(chunk: string): KeyName {
-  return consumeKeySequence(chunk).key;
+  const parsed = consumeKeySequence(chunk);
+  if (parsed.key !== null) return parsed.key;
+  return expireIncompleteKey(chunk).key;
+}
+
+/**
+ * Replay raw reads. `null` means the escape timeout fired before another byte.
+ * A trailing unfinished sequence is resolved the same way, as if the stream then went quiet.
+ */
+export function decodeKeyReads(reads: readonly (string | null)[]): KeyName[] {
+  let pending = "";
+  const keys: KeyName[] = [];
+
+  const drain = (): void => {
+    for (;;) {
+      if (pending.length === 0) return;
+      const parsed = consumeKeySequence(pending);
+      if (parsed.key === null) return;
+      keys.push(parsed.key);
+      pending = parsed.rest;
+    }
+  };
+
+  const flushQuiet = (): void => {
+    if (pending.length === 0) return;
+    const expired = expireIncompleteKey(pending);
+    keys.push(expired.key);
+    pending = expired.rest;
+    drain();
+  };
+
+  for (const read of reads) {
+    if (read === null) {
+      flushQuiet();
+      continue;
+    }
+    pending += read;
+    drain();
+  }
+  flushQuiet();
+  return keys;
 }
 
 const SLEEP_ARRAY = new Int32Array(new SharedArrayBuffer(4));
 let pendingRawBytes = "";
 
-export function readRawKeyFromStdin(): KeyName {
-  if (pendingRawBytes.length > 0) {
-    const consumed = consumeKeySequence(pendingRawBytes);
-    pendingRawBytes = consumed.rest;
-    return consumed.key;
+// Lone Escape and the rest of a CSI or SS3 sequence may arrive in a later read.
+// The wait ends on EAGAIN. libuv leaves process.stdin non-blocking.
+const ESC_SEQUENCE_TIMEOUT_MS = 50;
+
+function readErrorCode(err: unknown): string {
+  if (err && typeof err === "object" && "code" in err) {
+    return String((err as { code?: unknown }).code);
   }
+  return "";
+}
+
+/** `null` means `timeoutMs` passed with no byte. `timeoutMs` null waits until a byte or EOF. */
+function readStdinChunk(timeoutMs: number | null): string | null {
+  const buf = Buffer.alloc(64);
+  const started = Date.now();
+  for (;;) {
+    try {
+      const n = readSync(0, buf, 0, buf.length, null);
+      if (n <= 0) throw new CancelledError("End of input");
+      return buf.subarray(0, n).toString("latin1");
+    } catch (err) {
+      if (err instanceof CancelledError) throw err;
+      const code = readErrorCode(err);
+      if (code === "EAGAIN" || code === "EWOULDBLOCK" || code === "EINTR") {
+        const elapsed = Date.now() - started;
+        if (timeoutMs !== null && elapsed >= timeoutMs) return null;
+        const wait = timeoutMs === null ? 10 : Math.max(1, Math.min(10, timeoutMs - elapsed));
+        Atomics.wait(SLEEP_ARRAY, 0, 0, wait);
+        continue;
+      }
+      throw new CancelledError("End of input");
+    }
+  }
+}
+
+export function readRawKeyFromStdin(): KeyName {
   const stdin = process.stdin;
   const canRaw = Boolean(stdin.isTTY && typeof stdin.setRawMode === "function");
   if (canRaw) {
     stdin.setRawMode(true);
   }
   try {
-    const buf = Buffer.alloc(64);
-    let bytesRead = 0;
     for (;;) {
-      try {
-        bytesRead = readSync(0, buf, 0, buf.length, null);
-        break;
-      } catch (err) {
-        const code =
-          err && typeof err === "object" && "code" in err
-            ? String((err as { code?: unknown }).code)
-            : "";
-        if (code === "EAGAIN" || code === "EWOULDBLOCK" || code === "EINTR") {
-          Atomics.wait(SLEEP_ARRAY, 0, 0, 10);
-          continue;
+      if (pendingRawBytes.length > 0) {
+        try {
+          const parsed = consumeKeySequence(pendingRawBytes);
+          if (parsed.key !== null) {
+            pendingRawBytes = parsed.rest;
+            return parsed.key;
+          }
+        } catch (err) {
+          pendingRawBytes = "";
+          throw err;
         }
-        bytesRead = 0;
-        break;
       }
+      let chunk: string | null = null;
+      try {
+        chunk = readStdinChunk(pendingRawBytes.length > 0 ? ESC_SEQUENCE_TIMEOUT_MS : null);
+      } catch (err) {
+        pendingRawBytes = "";
+        throw err;
+      }
+      if (chunk === null) {
+        const expired = expireIncompleteKey(pendingRawBytes);
+        pendingRawBytes = expired.rest;
+        return expired.key;
+      }
+      pendingRawBytes += chunk;
     }
-    if (bytesRead <= 0) {
-      throw new CancelledError("End of input");
-    }
-    const consumed = consumeKeySequence(buf.subarray(0, bytesRead).toString("latin1"));
-    pendingRawBytes = consumed.rest;
-    return consumed.key;
   } finally {
     if (canRaw) {
       stdin.setRawMode(false);
@@ -149,8 +247,8 @@ export function readRawKeyFromStdin(): KeyName {
 }
 
 /**
- * Run interactive steps in order. Pressing Esc on step N > 0 returns to step N - 1;
- * pressing Esc on step 0 rethrows CancelledError to abort the wizard.
+ * Run steps in order. BackError on a later step returns to the previous one.
+ * BackError on the first step, and every CancelledError, propagate to the caller.
  */
 export function askInOrder(steps: readonly (() => void)[]): void {
   let index = 0;
@@ -159,10 +257,8 @@ export function askInOrder(steps: readonly (() => void)[]): void {
       steps[index]!();
       index += 1;
     } catch (err) {
-      if (err instanceof CancelledError) {
-        if (index === 0) {
-          throw err;
-        }
+      if (err instanceof BackError) {
+        if (index === 0) throw err;
         index -= 1;
         continue;
       }
@@ -213,7 +309,7 @@ function selectRaw(
           return current;
         }
       } else if (key === "esc") {
-        throw new CancelledError("Cancelled by user");
+        throw new BackError();
       }
     }
   } finally {
@@ -272,7 +368,7 @@ function multiselectRaw(
       } else if (key === "enter") {
         return Array.from(selected).sort((a, b) => a - b);
       } else if (key === "esc") {
-        throw new CancelledError("Cancelled by user");
+        throw new BackError();
       }
     }
   } finally {
