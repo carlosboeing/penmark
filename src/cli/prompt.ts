@@ -52,51 +52,64 @@ function isCsiFinal(code: number): boolean {
 }
 
 /**
- * Decode a raw keypress buffer into a logical KeyName.
- * Separated from terminal I/O so escape-sequence handling is unit-testable.
+ * Consume one logical keypress or escape sequence from the front of `buffer`,
+ * returning both the decoded KeyName and any remaining unconsumed bytes.
  */
-export function decodeKeyChunk(chunk: string): KeyName {
-  if (chunk.length === 0) {
+export function consumeKeySequence(buffer: string): { key: KeyName; rest: string } {
+  if (buffer.length === 0) {
     throw new CancelledError("End of input");
   }
-  const first = chunk[0];
+  const first = buffer[0];
   if (first === "\x03") {
     throw new CancelledError("Cancelled by user");
   }
   if (first === "\x1b") {
-    if (chunk.length === 1) {
-      return "esc";
+    if (buffer.length === 1) {
+      return { key: "esc", rest: "" };
     }
-    const intro = chunk[1];
+    const intro = buffer[1];
     if (intro === "[") {
       let body = "";
-      for (let i = 2; i < chunk.length; i++) {
-        const ch = chunk[i]!;
+      let endIdx = 2;
+      for (let i = 2; i < buffer.length; i++) {
+        const ch = buffer[i]!;
         body += ch;
+        endIdx = i + 1;
         if (isCsiFinal(ch.charCodeAt(0))) {
           break;
         }
       }
-      return ARROWS[body] ?? "unknown";
+      return { key: ARROWS[body] ?? "unknown", rest: buffer.slice(endIdx) };
     }
     if (intro === "O") {
-      const code = chunk[2] ?? "";
-      return ARROWS[code] ?? "unknown";
+      const code = buffer[2] ?? "";
+      return { key: ARROWS[code] ?? "unknown", rest: buffer.slice(3) };
     }
-    return "unknown";
+    return { key: "unknown", rest: buffer.slice(2) };
   }
   if (first === "\r" || first === "\n") {
-    return "enter";
+    const rest = first === "\r" && buffer[1] === "\n" ? buffer.slice(2) : buffer.slice(1);
+    return { key: "enter", rest };
   }
   if (first === " ") {
-    return "space";
+    return { key: "space", rest: buffer.slice(1) };
   }
-  return "unknown";
+  return { key: "unknown", rest: buffer.slice(1) };
+}
+
+export function decodeKeyChunk(chunk: string): KeyName {
+  return consumeKeySequence(chunk).key;
 }
 
 const SLEEP_ARRAY = new Int32Array(new SharedArrayBuffer(4));
+let pendingRawBytes = "";
 
 export function readRawKeyFromStdin(): KeyName {
+  if (pendingRawBytes.length > 0) {
+    const consumed = consumeKeySequence(pendingRawBytes);
+    pendingRawBytes = consumed.rest;
+    return consumed.key;
+  }
   const stdin = process.stdin;
   const canRaw = Boolean(stdin.isTTY && typeof stdin.setRawMode === "function");
   if (canRaw) {
@@ -125,7 +138,9 @@ export function readRawKeyFromStdin(): KeyName {
     if (bytesRead <= 0) {
       throw new CancelledError("End of input");
     }
-    return decodeKeyChunk(buf.subarray(0, bytesRead).toString("latin1"));
+    const consumed = consumeKeySequence(buf.subarray(0, bytesRead).toString("latin1"));
+    pendingRawBytes = consumed.rest;
+    return consumed.key;
   } finally {
     if (canRaw) {
       stdin.setRawMode(false);
