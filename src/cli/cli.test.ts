@@ -3,6 +3,16 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  CancelledError,
+  decodeKeyChunk,
+  keyBar,
+  multiselect,
+  select,
+  type KeyName,
+  type PromptOption,
+  type PromptStream,
+} from "./prompt.js";
 import { run, type Io } from "./run.js";
 import { defaultIdes, lineReaderFromLines, type IdeSpec, type SetupEnv } from "./setup.js";
 
@@ -45,7 +55,9 @@ describe("penmark process", () => {
     const file = write(dir, "note.md", "The eventual consistency model waits.\n");
     const result = penmark(
       ["comment", "apply", "--file", file, "--author", "Ada"],
-      JSON.stringify({ findings: [{ quote: "eventual consistency", body: "Name the failure mode." }] }),
+      JSON.stringify({
+        findings: [{ quote: "eventual consistency", body: "Name the failure mode." }],
+      }),
     );
     expect(result.status).toBe(0);
     const body = JSON.parse(result.stdout);
@@ -60,7 +72,10 @@ describe("penmark process", () => {
     const file = write(dir, "note.md", "The eventual consistency model waits.\n");
     const input = (body: string) =>
       JSON.stringify({ findings: [{ quote: "eventual consistency", body }] });
-    penmark(["comment", "apply", "--file", file, "--author", "Ada"], input("Name the failure mode."));
+    penmark(
+      ["comment", "apply", "--file", file, "--author", "Ada"],
+      input("Name the failure mode."),
+    );
     const before = readFileSync(file, "utf8");
     const markers = before.match(/<!--pmk:s/g)?.length ?? 0;
     const result = penmark(
@@ -109,7 +124,11 @@ describe("penmark process", () => {
 
   it("refuses two passages and locate lists both", () => {
     const dir = tempDir();
-    const file = write(dir, "note.md", "See eventual consistency early.\n\nSee eventual consistency later.\n");
+    const file = write(
+      dir,
+      "note.md",
+      "See eventual consistency early.\n\nSee eventual consistency later.\n",
+    );
     const before = readFileSync(file);
     const result = penmark(
       ["comment", "apply", "--file", file, "--author", "Ada"],
@@ -118,7 +137,14 @@ describe("penmark process", () => {
     expect(result.status).toBe(2);
     expect(JSON.parse(result.stdout).results[0].reason).toBe("ambiguous-quote");
     expect(readFileSync(file)).toEqual(before);
-    const located = penmark(["comment", "locate", "--file", file, "--quote", "eventual consistency"]);
+    const located = penmark([
+      "comment",
+      "locate",
+      "--file",
+      file,
+      "--quote",
+      "eventual consistency",
+    ]);
     expect(located.status).toBe(0);
     expect(JSON.parse(located.stdout).matches).toHaveLength(2);
   });
@@ -137,7 +163,9 @@ describe("penmark process", () => {
     const bad = penmark(
       ["comment", "apply", "--file", file, "--author", "Ada"],
       JSON.stringify({
-        findings: [{ quote: "title: secret", body: "No.", start, end: start + "title: secret".length }],
+        findings: [
+          { quote: "title: secret", body: "No.", start, end: start + "title: secret".length },
+        ],
       }),
     );
     expect(bad.status).toBe(2);
@@ -215,7 +243,10 @@ describe("penmark process", () => {
       JSON.stringify({ findings: [{ quote: "eventual consistency", body }] });
     const placed = penmark(["comment", "apply", "--file", file, "--author", "Ada"], input("Root."));
     const rootId = JSON.parse(placed.stdout).results[0].id as string;
-    const replied = penmark(["comment", "apply", "--file", file, "--author", "Ada"], input("Reply."));
+    const replied = penmark(
+      ["comment", "apply", "--file", file, "--author", "Ada"],
+      input("Reply."),
+    );
     const replyId = JSON.parse(replied.stdout).results[0].id as string;
     const onlyReply = penmark(["resolve", "--file", file, replyId]);
     expect(onlyReply.status).toBe(0);
@@ -272,7 +303,14 @@ describe("penmark process", () => {
     const fileText = before.toString("utf8");
     const start = fileText.lastIndexOf("eventual consistency");
 
-    const located = penmark(["comment", "locate", "--file", file, "--quote", "eventual consistency"]);
+    const located = penmark([
+      "comment",
+      "locate",
+      "--file",
+      file,
+      "--quote",
+      "eventual consistency",
+    ]);
     expect(located.status).toBe(0);
     const matches = JSON.parse(located.stdout).matches as { start: number; end: number }[];
     expect(matches.map((m) => fileText.slice(m.start, m.end))).toEqual([
@@ -337,7 +375,9 @@ describe("penmark process", () => {
     const result = penmark(
       ["comment", "apply", "--file", file, "--author", "Ada"],
       JSON.stringify({
-        findings: [{ quote: "title: secret", body: "No.", start, end: start + "title: secret".length }],
+        findings: [
+          { quote: "title: secret", body: "No.", start, end: start + "title: secret".length },
+        ],
       }),
     );
     expect(result.status).toBe(2);
@@ -409,7 +449,17 @@ describe("penmark process", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("penmark — review comments in a markdown file");
-    for (const name of ["comment apply", "comment locate", "list", "validate", "resolve", "export-prompt", "setup", "doctor", "version"]) {
+    for (const name of [
+      "comment apply",
+      "comment locate",
+      "list",
+      "validate",
+      "resolve",
+      "export-prompt",
+      "setup",
+      "doctor",
+      "version",
+    ]) {
       expect(result.stdout).toContain(name);
     }
   });
@@ -550,7 +600,8 @@ describe("penmark process", () => {
         },
         run: (cmd, args) => {
           if (args[0] === "--version") {
-            if (cmd === "code" || cmd === "cursor" || cmd === "/Applications/Antigravity") return "1.105.0";
+            if (cmd === "code" || cmd === "cursor" || cmd === "/Applications/Antigravity")
+              return "1.105.0";
             throw new Error("not found");
           }
           if (args[0] === "--list-extensions") {
@@ -588,7 +639,9 @@ describe("penmark process", () => {
     expect(first.stderr).toBe("");
     expect(first.stdout).toContain("Install the Penmark extension in VS Code?");
     expect(first.stdout).toContain("Install the Penmark extension in Cursor?");
-    expect(first.stdout).toContain("Install the penmark-comments skill in /home/.claude/skills/penmark-comments?");
+    expect(first.stdout).toContain(
+      "Install the penmark-comments skill in /home/.claude/skills/penmark-comments?",
+    );
     expect(first.stdout).toContain("penmark 0.6.0");
     expect(first.stdout).toContain("VS Code: 0.5.0 -> 0.6.0 ok");
     expect(first.stdout).toContain("Cursor: 0.5.0 (skipped)");
@@ -700,7 +753,9 @@ describe("penmark process", () => {
     files.set("/home/.claude/skills/penmark-comments/SKILL.md", repoSkill);
     const currentResult = runDoctorOnce();
     expect(currentResult.code).toBe(0);
-    expect(currentResult.stdout).toContain("skill: current (/home/.claude/skills/penmark-comments)");
+    expect(currentResult.stdout).toContain(
+      "skill: current (/home/.claude/skills/penmark-comments)",
+    );
 
     // Replace with a modified skill that is neither the repo skill nor the old writer.
     files.set("/home/.claude/skills/penmark-comments/SKILL.md", "# Custom modified skill\n");
@@ -714,7 +769,9 @@ describe("penmark process", () => {
     const missingResult = runDoctorOnce();
     expect(missingResult.code).toBe(0);
     expect(missingResult.stdout).toContain("command: not on PATH (penmark 0.6.0)");
-    expect(missingResult.stdout).toContain("skill: not installed (/home/.claude/skills/penmark-comments)");
+    expect(missingResult.stdout).toContain(
+      "skill: not installed (/home/.claude/skills/penmark-comments)",
+    );
   });
 
   it("setup packages when VSIX is absent, and reports packaging or install failures", () => {
@@ -759,7 +816,9 @@ describe("penmark process", () => {
           }
           if (args[0] === "--version") return "1.105.0";
           if (args[0] === "--list-extensions") {
-            return installedVersionAfter ? `local.penmark-markdown-review@${installedVersionAfter}\n` : "";
+            return installedVersionAfter
+              ? `local.penmark-markdown-review@${installedVersionAfter}\n`
+              : "";
           }
           if (args[0] === "--install-extension") {
             if (installThrows) throw new Error("disk full");
@@ -837,5 +896,243 @@ describe("penmark process", () => {
     expect(doctorRes.stdout).toContain("command: not on PATH");
     expect(doctorRes.stdout).toContain("editors: none found");
     expect(doctorRes.stdout).toContain(`skill: current (${join(skillRoot, "penmark-comments")})`);
+  });
+
+  it("decodes raw-mode key sequences and supports interactive multiselect, select, and back-navigation", () => {
+    expect(decodeKeyChunk("\x1b[A")).toBe("up");
+    expect(decodeKeyChunk("\x1b[B")).toBe("down");
+    expect(decodeKeyChunk("\x1b[C")).toBe("right");
+    expect(decodeKeyChunk("\x1b[D")).toBe("left");
+    expect(decodeKeyChunk("\x1bOA")).toBe("up");
+    expect(decodeKeyChunk("\x1b[1;5A")).toBe("unknown");
+    expect(decodeKeyChunk("\x1b")).toBe("esc");
+    expect(decodeKeyChunk("\r")).toBe("enter");
+    expect(decodeKeyChunk("\n")).toBe("enter");
+    expect(decodeKeyChunk(" ")).toBe("space");
+    expect(decodeKeyChunk("x")).toBe("unknown");
+    expect(() => decodeKeyChunk("\x03")).toThrow(CancelledError);
+    expect(() => decodeKeyChunk("")).toThrow(CancelledError);
+
+    expect(keyBar("multiselect", true)).toContain("↑/↓ to navigate");
+    expect(keyBar("multiselect", false)).toContain("up/down to navigate - Space to toggle");
+
+    // Non-TTY numbered select and multiselect fallback
+    let nonTtyOut = "";
+    const nonTtyIo: PromptStream = {
+      isTTY: false,
+      readKey: () => "enter",
+      readLine: lineReaderFromLines(["invalid", "2", "1, 2"]),
+      write: (t) => {
+        nonTtyOut += t;
+      },
+    };
+    const opts: PromptOption[] = [
+      { label: "VS Code", consequence: "detected", available: true },
+      { label: "Cursor", consequence: "detected", available: true },
+      { label: "Windsurf", consequence: "not found", available: false },
+    ];
+    expect(select("Pick one", opts, 0, nonTtyIo)).toBe(1);
+    expect(multiselect("Pick many", opts, [0], nonTtyIo)).toEqual([0, 1]);
+    expect(nonTtyOut).toContain("Please enter a number from 1 to 3.");
+
+    // Interactive TTY multiselect + confirm with Esc back-navigation
+    const keys: KeyName[] = [
+      "down", // move to Cursor
+      "space", // uncheck Cursor
+      "enter", // confirm multiselect -> [0] (VS Code only)
+      "esc", // on skill confirm, press Esc to go back to editor multiselect!
+      "down", // move to Cursor again
+      "space", // re-check Cursor
+      "enter", // confirm multiselect -> [0, 1]
+      "enter", // confirm skill -> Yes
+    ];
+    let keyIdx = 0;
+    const files = new Map<string, string>();
+    const repoSkill = readFileSync(join(ROOT, "skills/penmark-comments/SKILL.md"), "utf8");
+    files.set("/repo/penmark-markdown-review-0.6.0.vsix", "vsix");
+    files.set("/repo/skills/penmark-comments", "dir");
+    files.set("/repo/skills/penmark-comments/SKILL.md", repoSkill);
+
+    let stdout = "";
+    let stderr = "";
+    const env: SetupEnv = {
+      root: "/repo",
+      version: "0.6.0",
+      vsixPath: "/repo/penmark-markdown-review-0.6.0.vsix",
+      skillSourceDir: "/repo/skills/penmark-comments",
+      skillDestDir: "/home/.claude/skills/penmark-comments",
+      configPath: "/home/.config/penmark/setup.json",
+      pathEnv: "",
+      ides: [
+        { name: "VS Code", command: "code", fallbacks: [] },
+        { name: "Cursor", command: "cursor", fallbacks: [] },
+        { name: "Windsurf", command: "windsurf", fallbacks: [] },
+      ],
+      isTTY: true,
+      readKey: () => keys[keyIdx++] ?? "enter",
+      readLine: lineReaderFromLines([]),
+      stdout: (t) => {
+        stdout += t;
+      },
+      stderr: (t) => {
+        stderr += t;
+      },
+      exists: (p) => files.has(p),
+      readText: (p) => files.get(p) ?? "",
+      writeText: (p, t) => {
+        files.set(p, t);
+      },
+      copyDir: (_src, dest) => {
+        files.set(join(dest, "SKILL.md"), repoSkill);
+      },
+      run: (cmd, args) => {
+        if (args[0] === "--version") {
+          if (cmd === "code" || cmd === "cursor") return "1.105.0";
+          throw new Error("missing");
+        }
+        if (args[0] === "--list-extensions") return "local.penmark-markdown-review@0.6.0\n";
+        if (args[0] === "--install-extension") return "ok";
+        throw new Error(`unexpected ${cmd}`);
+      },
+    };
+    const io: Io = {
+      read: () => Buffer.alloc(0),
+      write: () => {},
+      stdin: () => "",
+      stdout: (t) => {
+        stdout += t;
+      },
+      stderr: (t) => {
+        stderr += t;
+      },
+      gitAuthor: () => null,
+      now: () => "",
+      setupEnv: () => env,
+    };
+
+    const code = run(["setup"], io);
+    expect(code).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toContain("Which editors should receive the Penmark extension?");
+    expect(stdout).toContain("VS Code: 0.6.0 -> 0.6.0 ok");
+    expect(stdout).toContain("Cursor: 0.6.0 -> 0.6.0 ok");
+    expect(JSON.parse(files.get("/home/.config/penmark/setup.json") ?? "{}")).toEqual({
+      editors: { "VS Code": true, Cursor: true },
+      skill: true,
+    });
+
+    // Pressing Esc at the first prompt cancels without writing
+    files.delete("/home/.config/penmark/setup.json");
+    stdout = "";
+    keyIdx = 0;
+    const cancelKeys: KeyName[] = ["esc"];
+    env.readKey = () => cancelKeys[keyIdx++] ?? "esc";
+    const cancelCode = run(["setup"], io);
+    expect(cancelCode).toBe(0);
+    expect(stdout).toContain("Cancelled. Nothing was written.");
+    expect(files.has("/home/.config/penmark/setup.json")).toBe(false);
+  });
+
+  it("supports setup --yes, --dry-run, --reconfigure, and surfaces subprocess stderr on package failure", () => {
+    const files = new Map<string, string>();
+    const repoSkill = readFileSync(join(ROOT, "skills/penmark-comments/SKILL.md"), "utf8");
+    files.set("/repo/penmark-markdown-review-0.6.0.vsix", "vsix");
+    files.set("/repo/skills/penmark-comments", "dir");
+    files.set("/repo/skills/penmark-comments/SKILL.md", repoSkill);
+
+    let packageThrowsStderr = false;
+    const makeIo = () => {
+      let stdout = "";
+      let stderr = "";
+      const env: SetupEnv = {
+        root: "/repo",
+        version: "0.6.0",
+        vsixPath: "/repo/penmark-markdown-review-0.6.0.vsix",
+        skillSourceDir: "/repo/skills/penmark-comments",
+        skillDestDir: "/home/.claude/skills/penmark-comments",
+        configPath: "/home/.config/penmark/setup.json",
+        pathEnv: "",
+        ides: [{ name: "VS Code", command: "code", fallbacks: [] }],
+        isTTY: false,
+        readLine: lineReaderFromLines(["n", "n"]),
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        exists: (p) => files.has(p),
+        readText: (p) => files.get(p) ?? "",
+        writeText: (p, t) => {
+          files.set(p, t);
+        },
+        copyDir: (_src, dest) => {
+          files.set(join(dest, "SKILL.md"), repoSkill);
+        },
+        run: (cmd, args) => {
+          if (cmd === "npm" && args[1] === "package") {
+            if (packageThrowsStderr) {
+              const err = new Error("Command failed: npm run package") as Error & {
+                stderr?: Buffer;
+              };
+              err.stderr = Buffer.from("npm error code ELSPROBLEMS\nnpm error extraneous: pkg\n");
+              throw err;
+            }
+            return "ok";
+          }
+          if (args[0] === "--version") return "1.105.0";
+          if (args[0] === "--list-extensions") return "local.penmark-markdown-review@0.6.0\n";
+          if (args[0] === "--install-extension") return "ok";
+          throw new Error(`unexpected ${cmd}`);
+        },
+      };
+      const io: Io = {
+        read: () => Buffer.alloc(0),
+        write: () => {},
+        stdin: () => "",
+        stdout: (t) => {
+          stdout += t;
+        },
+        stderr: (t) => {
+          stderr += t;
+        },
+        gitAuthor: () => null,
+        now: () => "",
+        setupEnv: () => env,
+      };
+      return { io, getStdout: () => stdout, getStderr: () => stderr };
+    };
+
+    // --dry-run prints plan and writes nothing
+    const dry = makeIo();
+    expect(run(["setup", "--yes", "--dry-run"], dry.io)).toBe(0);
+    expect(dry.getStdout()).toContain("Penmark 0.6.0 (dry run)");
+    expect(dry.getStdout()).toContain("VS Code: would install");
+    expect(files.has("/home/.config/penmark/setup.json")).toBe(false);
+
+    // -y installs without reading stdin lines
+    const yesRun = makeIo();
+    expect(run(["setup", "-y"], yesRun.io)).toBe(0);
+    expect(yesRun.getStdout()).toContain("VS Code: 0.6.0 -> 0.6.0 ok");
+    expect(JSON.parse(files.get("/home/.config/penmark/setup.json") ?? "{}")).toEqual({
+      editors: { "VS Code": true },
+      skill: true,
+    });
+
+    // --reconfigure re-asks even when setup.json already exists
+    const reconf = makeIo();
+    expect(run(["setup", "--reconfigure"], reconf.io)).toBe(0);
+    expect(reconf.getStdout()).toContain("VS Code: 0.6.0 (skipped)");
+    expect(JSON.parse(files.get("/home/.config/penmark/setup.json") ?? "{}")).toEqual({
+      editors: { "VS Code": false },
+      skill: false,
+    });
+
+    // Subprocess stderr is surfaced when packaging fails
+    files.delete("/repo/penmark-markdown-review-0.6.0.vsix");
+    packageThrowsStderr = true;
+    const pkgFail = makeIo();
+    expect(run(["setup", "--yes", "--reconfigure"], pkgFail.io)).toBe(1);
+    expect(pkgFail.getStderr()).toContain("ELSPROBLEMS");
   });
 });

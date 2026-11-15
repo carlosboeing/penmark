@@ -1,34 +1,33 @@
 /**
  * `penmark setup` and `penmark doctor`.
  *
- * `setup` asks which found editors get the VSIX, asks whether to copy the
- * `penmark-comments` skill into the harness skill directory, saves those
- * choices so the next run only asks about a newly found editor, packages and
- * sideloads into the chosen editors, copies the skill when accepted, and
- * prints the command version, each editor's version, where the skill went, and
- * that each editor window needs a reload.
+ * `setup` installs the VSIX into user-selected editors (VS Code, VS Code
+ * Insiders, Cursor, Windsurf, Antigravity) and copies `skills/penmark-comments`
+ * into `~/.claude/skills/penmark-comments`. Choices are persisted in
+ * `~/.config/penmark/setup.json` so subsequent runs update without re-asking
+ * unless a newly installed editor is detected or `--reconfigure` is passed.
  *
- * `doctor` changes nothing. It reports whether `penmark` is on `PATH`, the
- * extension version in each editor, and whether the loaded skill is the
- * repository's current skill or the old hand-writer.
+ * `doctor` is read-only: it reports whether `penmark` is on PATH, the installed
+ * extension version in each editor, and whether the loaded skill matches the
+ * repository skill or is the older hand-writer.
  */
 
 import { execFileSync } from "node:child_process";
-import {
-  closeSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
+import {
+  CancelledError,
+  askInOrder,
+  confirm,
+  multiselect,
+  readRawKeyFromStdin,
+  type KeyName,
+  type PromptOption,
+  type PromptStream,
+} from "./prompt.js";
 
-const EXTENSION_ID = "local.penmark-markdown-review";
+export const EXTENSION_ID = "local.penmark-markdown-review";
 
 export interface IdeSpec {
   name: string;
@@ -36,28 +35,15 @@ export interface IdeSpec {
   fallbacks: string[];
 }
 
-export function defaultIdes(home = homedir(), includeAppFallbacks = true): IdeSpec[] {
-  return [
-    { name: "VS Code", command: "code", fallbacks: [] },
-    { name: "VS Code Insiders", command: "code-insiders", fallbacks: [] },
-    { name: "Cursor", command: "cursor", fallbacks: [] },
-    { name: "Windsurf", command: "windsurf", fallbacks: [] },
-    {
-      name: "Antigravity",
-      command: "antigravity-ide",
-      fallbacks: [
-        ...(includeAppFallbacks
-          ? ["/Applications/Antigravity IDE.app/Contents/Resources/app/bin/antigravity-ide"]
-          : []),
-        join(home, "Applications/Antigravity IDE.app/Contents/Resources/app/bin/antigravity-ide"),
-      ],
-    },
-  ];
-}
-
 export interface SetupChoices {
   editors: Record<string, boolean>;
   skill?: boolean;
+}
+
+export interface SetupOptions {
+  yes?: boolean;
+  reconfigure?: boolean;
+  dryRun?: boolean;
 }
 
 export interface SetupEnv {
@@ -69,69 +55,82 @@ export interface SetupEnv {
   configPath: string;
   pathEnv: string;
   ides: IdeSpec[];
-  readLine(): string;
-  stdout(text: string): void;
-  stderr(text: string): void;
-  exists(path: string): boolean;
-  readText(path: string): string;
-  writeText(path: string, text: string): void;
-  copyDir(src: string, dest: string): void;
-  run(cmd: string, args: string[], cwd?: string): string;
+  isTTY?: boolean;
+  readKey?: () => KeyName;
+  readLine: () => string;
+  stdout: (text: string) => void;
+  stderr: (text: string) => void;
+  exists: (path: string) => boolean;
+  readText: (path: string) => string;
+  writeText: (path: string, text: string) => void;
+  copyDir: (src: string, dest: string) => void;
+  run: (cmd: string, args: string[], cwd?: string) => string;
 }
 
-export function lineReaderFromLines(lines: string[]): () => string {
+export function defaultIdes(home = homedir(), includeAppFallbacks = true): IdeSpec[] {
+  const specs: IdeSpec[] = [
+    { name: "VS Code", command: "code", fallbacks: [] },
+    { name: "VS Code Insiders", command: "code-insiders", fallbacks: [] },
+    { name: "Cursor", command: "cursor", fallbacks: [] },
+    { name: "Windsurf", command: "windsurf", fallbacks: [] },
+    {
+      name: "Antigravity",
+      command: "antigravity-ide",
+      fallbacks: [
+        "/Applications/Antigravity IDE.app/Contents/Resources/app/bin/antigravity-ide",
+        join(home, "Applications/Antigravity IDE.app/Contents/Resources/app/bin/antigravity-ide"),
+      ],
+    },
+  ];
+  if (!includeAppFallbacks) {
+    return specs.map((s) => ({ ...s, fallbacks: [] }));
+  }
+  return specs;
+}
+
+export function lineReaderFromLines(lines: readonly string[]): () => string {
   let index = 0;
   return () => {
-    const val = lines[index] ?? "";
+    const line = lines[index] ?? "";
     index += 1;
-    return val;
+    return line;
   };
 }
 
 function readNextStdinLine(state: { lines: string[] | null; index: number }): string {
-  if (!process.stdin.isTTY) {
-    if (state.lines === null) {
-      try {
-        const text = readFileSync(0, "utf8");
-        state.lines = text === "" ? [] : text.replace(/\r\n/g, "\n").split("\n");
-      } catch {
-        state.lines = [];
-      }
-    }
-    const line = state.lines[state.index] ?? "";
-    state.index += 1;
-    return line;
-  }
-  let fd = 0;
-  let closeFd = false;
-  try {
-    fd = openSync("/dev/tty", "r");
-    closeFd = true;
-  } catch {
-    // Use standard input (fd 0).
-  }
-  const bytes: number[] = [];
-  const buf = Buffer.alloc(1);
-  try {
-    while (true) {
-      const n = readSync(fd, buf, 0, 1, null);
-      if (n <= 0) break;
-      const b = buf[0] ?? 0;
-      if (b === 0x0a) break;
-      if (b !== 0x0d) bytes.push(b);
-    }
-  } catch {
-    // End of input.
-  } finally {
-    if (closeFd) {
-      try {
-        closeSync(fd);
-      } catch {
-        // Ignore close errors.
-      }
+  if (state.lines === null) {
+    try {
+      state.lines = readFileSync(0, "utf8").split(/\r?\n/);
+    } catch {
+      state.lines = [];
     }
   }
-  return Buffer.from(bytes).toString("utf8");
+  const line = state.lines[state.index] ?? "";
+  state.index += 1;
+  return line;
+}
+
+function extractCommandFailure(err: unknown, fallback: string): string {
+  if (err && typeof err === "object" && "stderr" in err) {
+    const rawStderr = (err as { stderr?: unknown }).stderr;
+    const stderrText =
+      typeof rawStderr === "string"
+        ? rawStderr
+        : Buffer.isBuffer(rawStderr)
+          ? rawStderr.toString("utf8")
+          : "";
+    const trimmed = stderrText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (trimmed.length > 0) {
+      return trimmed.slice(-3).join(" | ");
+    }
+  }
+  if (err instanceof Error) {
+    return err.message.split("\n")[0] ?? fallback;
+  }
+  return fallback;
 }
 
 export function defaultSetupEnv(
@@ -154,6 +153,9 @@ export function defaultSetupEnv(
       ? process.env.PENMARK_SETUP_CONFIG
       : join(xdg, "penmark", "setup.json");
   const stdinState = { lines: null as string[] | null, index: 0 };
+  const isTTY =
+    process.env.PENMARK_FORCE_TTY === "1" ||
+    Boolean(process.stdin.isTTY && process.stdout.isTTY && process.env.PENMARK_FORCE_TTY !== "0");
   return {
     root,
     version,
@@ -163,6 +165,8 @@ export function defaultSetupEnv(
     configPath,
     pathEnv: process.env.PATH ?? "",
     ides: defaultIdes(home, process.env.PENMARK_NO_APP_FALLBACKS !== "1"),
+    isTTY,
+    readKey: readRawKeyFromStdin,
     readLine: () => readNextStdinLine(stdinState),
     stdout,
     stderr,
@@ -235,11 +239,141 @@ function writeChoices(env: SetupEnv, choices: SetupChoices): void {
 function askYesNo(prompt: string, env: SetupEnv): boolean {
   env.stdout(prompt);
   const trimmed = env.readLine().trim().toLowerCase();
-  if (trimmed === "" || trimmed === "y" || trimmed === "yes") return true;
+  if (trimmed === "" || trimmed === "y" || trimmed === "yes" || trimmed === "1") return true;
   return false;
 }
 
-export function runSetup(env: SetupEnv): number {
+function promptInteractiveChoices(
+  env: SetupEnv,
+  found: readonly { ide: IdeSpec; cli: string }[],
+  choices: SetupChoices,
+  reconfigure: boolean,
+): boolean {
+  const promptIo: PromptStream = {
+    isTTY: true,
+    utf8: true,
+    readKey: env.readKey ?? readRawKeyFromStdin,
+    readLine: env.readLine,
+    write: env.stdout,
+  };
+  const foundByName = new Map(found.map((entry) => [entry.ide.name, entry.cli]));
+  const hasSavedEditors = Object.keys(choices.editors).length > 0;
+  const unconfiguredFound = found.filter(({ ide }) => choices.editors[ide.name] === undefined);
+
+  if (!hasSavedEditors || reconfigure) {
+    if (found.length === 0 && choices.skill !== undefined && !reconfigure) {
+      return true;
+    }
+    env.stdout(`Penmark ${env.version} — setup\n\n`);
+    const steps: (() => void)[] = [];
+    if (found.length > 0) {
+      const options: PromptOption[] = env.ides.map((ide) => {
+        const cli = foundByName.get(ide.name);
+        if (cli !== undefined) {
+          const installed = readInstalledVersion(cli, env.run);
+          return {
+            label: ide.name,
+            consequence: installed !== null ? `${installed} installed` : "detected",
+            available: true,
+          };
+        }
+        return {
+          label: ide.name,
+          consequence: "not found on this machine",
+          available: false,
+        };
+      });
+      let selectedIndices = env.ides
+        .map((ide, idx) => ({ ide, idx }))
+        .filter(({ ide }) => foundByName.has(ide.name) && (choices.editors[ide.name] ?? true))
+        .map(({ idx }) => idx);
+
+      steps.push(() => {
+        selectedIndices = multiselect(
+          "Which editors should receive the Penmark extension?",
+          options,
+          selectedIndices,
+          promptIo,
+        );
+        const chosenSet = new Set(selectedIndices);
+        for (let i = 0; i < env.ides.length; i++) {
+          const ide = env.ides[i]!;
+          if (foundByName.has(ide.name)) {
+            choices.editors[ide.name] = chosenSet.has(i);
+          }
+        }
+      });
+    }
+
+    let skillDefault = choices.skill ?? true;
+    steps.push(() => {
+      skillDefault = confirm(
+        "Install the penmark-comments agent skill?",
+        skillDefault,
+        promptIo,
+        `install into ${env.skillDestDir}`,
+        "skip skill installation",
+      );
+      choices.skill = skillDefault;
+    });
+
+    try {
+      askInOrder(steps);
+      return true;
+    } catch (err) {
+      if (err instanceof CancelledError) {
+        env.stdout("Cancelled. Nothing was written.\n");
+        return false;
+      }
+      throw err;
+    }
+  }
+
+  if (unconfiguredFound.length === 0 && choices.skill !== undefined) {
+    return true;
+  }
+
+  const steps: (() => void)[] = [];
+  for (const { ide } of unconfiguredFound) {
+    let defaultYes = true;
+    steps.push(() => {
+      defaultYes = confirm(
+        `Install the Penmark extension in ${ide.name}?`,
+        defaultYes,
+        promptIo,
+        "install extension",
+        `skip ${ide.name}`,
+      );
+      choices.editors[ide.name] = defaultYes;
+    });
+  }
+  if (choices.skill === undefined) {
+    let skillDefault = true;
+    steps.push(() => {
+      skillDefault = confirm(
+        "Install the penmark-comments agent skill?",
+        skillDefault,
+        promptIo,
+        `install into ${env.skillDestDir}`,
+        "skip skill installation",
+      );
+      choices.skill = skillDefault;
+    });
+  }
+
+  try {
+    askInOrder(steps);
+    return true;
+  } catch (err) {
+    if (err instanceof CancelledError) {
+      env.stdout("Cancelled. Nothing was written.\n");
+      return false;
+    }
+    throw err;
+  }
+}
+
+export function runSetup(env: SetupEnv, options: SetupOptions = {}): number {
   const choices = readChoices(env);
   const found: { ide: IdeSpec; cli: string }[] = [];
   for (const ide of env.ides) {
@@ -247,24 +381,64 @@ export function runSetup(env: SetupEnv): number {
     if (cli !== null) found.push({ ide, cli });
   }
 
-  for (const { ide } of found) {
-    if (choices.editors[ide.name] === undefined) {
-      choices.editors[ide.name] = askYesNo(
-        `Install the Penmark extension in ${ide.name}? [Y/n] `,
+  const assumeYes = Boolean(options.yes);
+  const reconfigure = Boolean(options.reconfigure);
+  const dryRun = Boolean(options.dryRun);
+
+  if (assumeYes) {
+    for (const { ide } of found) {
+      if (reconfigure || choices.editors[ide.name] === undefined) {
+        choices.editors[ide.name] = true;
+      }
+    }
+    if (reconfigure || choices.skill === undefined) {
+      choices.skill = true;
+    }
+  } else if (env.isTTY) {
+    const ok = promptInteractiveChoices(env, found, choices, reconfigure);
+    if (!ok) {
+      return 0;
+    }
+  } else {
+    for (const { ide } of found) {
+      if (reconfigure || choices.editors[ide.name] === undefined) {
+        choices.editors[ide.name] = askYesNo(
+          `Install the Penmark extension in ${ide.name}? [Y/n] `,
+          env,
+        );
+      }
+    }
+    if (reconfigure || choices.skill === undefined) {
+      choices.skill = askYesNo(
+        `Install the penmark-comments skill in ${env.skillDestDir}? [Y/n] `,
         env,
       );
     }
   }
-  if (choices.skill === undefined) {
-    choices.skill = askYesNo(
-      `Install the penmark-comments skill in ${env.skillDestDir}? [Y/n] `,
-      env,
-    );
+
+  const selectedEditors = found.filter(({ ide }) => choices.editors[ide.name] === true);
+
+  if (dryRun) {
+    env.stdout(`Penmark ${env.version} (dry run)\n\n`);
+    env.stdout("Command\n");
+    env.stdout(`  penmark ${env.version}\n\n`);
+    env.stdout("Editors\n");
+    if (found.length === 0) {
+      env.stdout("  editors: none found\n\n");
+    } else {
+      for (const { ide } of found) {
+        const action = choices.editors[ide.name] === true ? "would install" : "skipped";
+        env.stdout(`  ${ide.name}: ${action}\n`);
+      }
+      env.stdout("\n");
+    }
+    env.stdout("Skill\n");
+    env.stdout(`  skill: ${choices.skill ? `would install (${env.skillDestDir})` : "skipped"}\n`);
+    return 0;
   }
 
   writeChoices(env, choices);
 
-  const selectedEditors = found.filter(({ ide }) => choices.editors[ide.name] === true);
   let failed = 0;
 
   if (selectedEditors.length > 0) {
@@ -272,7 +446,7 @@ export function runSetup(env: SetupEnv): number {
       try {
         env.run("npm", ["run", "package"], env.root);
       } catch (err) {
-        const msg = err instanceof Error ? err.message.split("\n")[0] : "package failed";
+        const msg = extractCommandFailure(err, "package failed");
         env.stderr(`Packaging failed: ${msg}\n`);
         return 1;
       }
@@ -283,22 +457,25 @@ export function runSetup(env: SetupEnv): number {
     }
   }
 
-  env.stdout(`penmark ${env.version}\n`);
+  env.stdout(`Penmark ${env.version}\n\n`);
+  env.stdout("Command\n");
+  env.stdout(`  penmark ${env.version}\n\n`);
+  env.stdout("Editors\n");
 
   if (found.length === 0) {
-    env.stdout("editors: none found\n");
+    env.stdout("  editors: none found\n\n");
   } else {
     for (const { ide, cli } of found) {
       if (choices.editors[ide.name] !== true) {
         const current = readInstalledVersion(cli, env.run) ?? "not installed";
-        env.stdout(`${ide.name}: ${current} (skipped)\n`);
+        env.stdout(`  ${ide.name}: ${current} (skipped)\n`);
         continue;
       }
       const before = readInstalledVersion(cli, env.run) ?? "none";
       try {
         env.run(cli, ["--install-extension", env.vsixPath, "--force"]);
       } catch (err) {
-        const msg = err instanceof Error ? err.message.split("\n")[0] : "install failed";
+        const msg = extractCommandFailure(err, "install failed");
         env.stderr(`${ide.name}: install failed — ${msg}\n`);
         failed += 1;
         continue;
@@ -306,19 +483,21 @@ export function runSetup(env: SetupEnv): number {
       const after = readInstalledVersion(cli, env.run);
       const ok = after === env.version;
       if (!ok) failed += 1;
-      env.stdout(`${ide.name}: ${before} -> ${after ?? "none"} ${ok ? "ok" : "MISMATCH"}\n`);
+      env.stdout(`  ${ide.name}: ${before} -> ${after ?? "none"} ${ok ? "ok" : "MISMATCH"}\n`);
     }
+    env.stdout("\n");
   }
 
+  env.stdout("Skill\n");
   if (choices.skill) {
     if (!env.exists(env.skillSourceDir)) {
       env.stderr(`Skill source missing at ${env.skillSourceDir}\n`);
       return 1;
     }
     env.copyDir(env.skillSourceDir, env.skillDestDir);
-    env.stdout(`skill: ${env.skillDestDir}\n`);
+    env.stdout(`  skill: ${env.skillDestDir}\n`);
   } else {
-    env.stdout(`skill: skipped\n`);
+    env.stdout("  skill: skipped\n");
   }
 
   if (failed > 0) {
@@ -329,7 +508,7 @@ export function runSetup(env: SetupEnv): number {
   }
 
   if (selectedEditors.length > 0) {
-    env.stdout("Reload each editor window to pick up the extension.\n");
+    env.stdout("\nReload each editor window to pick up the extension.\n");
   }
   return 0;
 }
@@ -374,42 +553,47 @@ export function findCommandOnPath(env: SetupEnv): string | null {
 }
 
 export function runDoctor(env: SetupEnv): number {
+  env.stdout(`Penmark ${env.version}\n\n`);
+  env.stdout("Command\n");
   const onPath = findCommandOnPath(env);
   if (onPath !== null) {
-    env.stdout(`command: on PATH (${onPath}, penmark ${env.version})\n`);
+    env.stdout(`  command: on PATH (${onPath}, penmark ${env.version})\n\n`);
   } else {
-    env.stdout(`command: not on PATH (penmark ${env.version})\n`);
+    env.stdout(`  command: not on PATH (penmark ${env.version})\n\n`);
   }
 
+  env.stdout("Editors\n");
   let anyEditor = false;
   for (const ide of env.ides) {
     const cli = resolveEditorCli(ide, env.run);
     if (cli === null) continue;
     anyEditor = true;
     const installed = readInstalledVersion(cli, env.run);
-    env.stdout(`${ide.name}: ${installed ?? "not installed"}\n`);
+    env.stdout(`  ${ide.name}: ${installed ?? "not installed"}\n`);
   }
   if (!anyEditor) {
-    env.stdout("editors: none found\n");
+    env.stdout("  editors: none found\n");
   }
+  env.stdout("\n");
 
+  env.stdout("Skill\n");
   const skill = inspectSkill(env);
   if (skill.kind === "current") {
-    env.stdout(`skill: current (${skill.path})\n`);
+    env.stdout(`  skill: current (${skill.path})\n`);
     return 0;
   }
   if (skill.kind === "old-hand-writer") {
     env.stdout(
-      `skill: warning — old hand-writer loaded at ${skill.path} (mints markers by hand; run penmark setup)\n`,
+      `  skill: warning — old hand-writer loaded at ${skill.path} (mints markers by hand; run penmark setup)\n`,
     );
     return 1;
   }
   if (skill.kind === "modified") {
     env.stdout(
-      `skill: warning — differs from repository skill at ${skill.path} (run penmark setup)\n`,
+      `  skill: warning — differs from repository skill at ${skill.path} (run penmark setup)\n`,
     );
     return 1;
   }
-  env.stdout(`skill: not installed (${skill.path})\n`);
+  env.stdout(`  skill: not installed (${skill.path})\n`);
   return 0;
 }

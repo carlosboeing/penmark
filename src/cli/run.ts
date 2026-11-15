@@ -91,10 +91,18 @@ export function run(argv: string[], io: Io = defaultIo): number {
             (text) => io.stdout(text),
             (text) => io.stderr(text),
           );
-    return kind === "setup" ? runSetup(env) : runDoctor(env);
+    if (kind === "setup") {
+      return runSetup(env, {
+        yes: args.flags.get("yes") === true || args.flags.get("defaults") === true,
+        reconfigure: args.flags.get("reconfigure") === true,
+        dryRun: args.flags.get("dry-run") === true,
+      });
+    }
+    return runDoctor(env);
   }
   const file = args.flags.get("file");
-  if (typeof file !== "string" || file === "") return usageError(io, `${commandLabel(kind)} needs --file`, usage);
+  if (typeof file !== "string" || file === "")
+    return usageError(io, `${commandLabel(kind)} needs --file`, usage);
   if (countFlag(argv, "--file") !== 1) return usageError(io, "pass --file once", usage);
 
   try {
@@ -124,7 +132,8 @@ function applyCommand(file: string, rest: string[], args: ParsedArgs, io: Io): n
   const first = readUtf8(io, file);
   if (first === null) return fail(io, 1, "file is not valid UTF-8");
   const authorFlag = args.flags.get("author");
-  const author = typeof authorFlag === "string" && authorFlag !== "" ? authorFlag : io.gitAuthor(dirname(file));
+  const author =
+    typeof authorFlag === "string" && authorFlag !== "" ? authorFlag : io.gitAuthor(dirname(file));
   if (author === null || author === "") return fail(io, 1, "missing author");
   if (/[\r\n]/.test(author) || author.includes("--")) return fail(io, 1, "bad author");
 
@@ -161,7 +170,8 @@ function applyCommand(file: string, rest: string[], args: ParsedArgs, io: Io): n
 function locateCommand(file: string, rest: string[], args: ParsedArgs, io: Io): number {
   if (rest.length > 0) return usageError(io, `unexpected argument: ${rest[0]}`, USAGE.locate);
   const quote = args.flags.get("quote");
-  if (typeof quote !== "string" || quote.trim() === "") return usageError(io, "comment locate needs --quote", USAGE.locate);
+  if (typeof quote !== "string" || quote.trim() === "")
+    return usageError(io, "comment locate needs --quote", USAGE.locate);
   const decoded = readUtf8(io, file);
   if (decoded === null) return fail(io, 1, "file is not valid UTF-8");
   const corruption = validateText(decoded.text);
@@ -315,19 +325,21 @@ function toFileMatches(matches: QuoteMatch[], bom: string): QuoteMatch[] {
 }
 
 const USAGE = {
-  apply: "Usage: penmark comment apply --file <path> [--author <name>] [--provenance agent|human] [--dry-run]",
+  apply:
+    "Usage: penmark comment apply --file <path> [--author <name>] [--provenance agent|human] [--dry-run]",
   locate: "Usage: penmark comment locate --file <path> --quote <text>",
   list: "Usage: penmark list --file <path>",
   validate: "Usage: penmark validate --file <path>",
   resolve: "Usage: penmark resolve --file <path> <id>",
   export: "Usage: penmark export-prompt --file <path>",
-  setup: "Usage: penmark setup",
+  setup: "Usage: penmark setup [--yes] [--reconfigure] [--dry-run]",
   doctor: "Usage: penmark doctor",
   comment: "Usage: penmark comment apply|locate --file <path>",
   help: "Run penmark --help for the commands.",
 } as const;
 
-type Kind = "apply" | "locate" | "list" | "validate" | "resolve" | "export" | "setup" | "doctor" | "comment";
+type Kind =
+  "apply" | "locate" | "list" | "validate" | "resolve" | "export" | "setup" | "doctor" | "comment";
 
 const FLAGS: Record<Exclude<Kind, "comment">, readonly string[]> = {
   apply: ["file", "author", "provenance", "dry-run"],
@@ -336,7 +348,7 @@ const FLAGS: Record<Exclude<Kind, "comment">, readonly string[]> = {
   validate: ["file"],
   resolve: ["file"],
   export: ["file"],
-  setup: [],
+  setup: ["yes", "defaults", "reconfigure", "dry-run"],
   doctor: [],
 };
 
@@ -379,7 +391,9 @@ const HELP = `
 `;
 
 function wantsVersion(argv: string[]): boolean {
-  return argv.length > 0 && argv.every((arg) => arg === "version" || arg === "--version" || arg === "-v");
+  return (
+    argv.length > 0 && argv.every((arg) => arg === "version" || arg === "--version" || arg === "-v")
+  );
 }
 
 function helpText(words: string[]): string {
@@ -403,24 +417,41 @@ function helpText(words: string[]): string {
 `;
   }
   if (cmd === "comment" && sub === "locate") {
-    return commandHelp("comment locate", "Find where a quoted passage sits in the file.", USAGE.locate);
+    return commandHelp(
+      "comment locate",
+      "Find where a quoted passage sits in the file.",
+      USAGE.locate,
+    );
   }
   if (cmd === "comment") {
     return commandHelp("comment", "apply writes findings. locate finds a passage.", USAGE.comment);
   }
   if (cmd === "list") return commandHelp("list", "List the comments in the file.", USAGE.list);
-  if (cmd === "validate") return commandHelp("validate", "Check that the review block is intact.", USAGE.validate);
+  if (cmd === "validate")
+    return commandHelp("validate", "Check that the review block is intact.", USAGE.validate);
   if (cmd === "resolve") {
-    return commandHelp("resolve", "Delete a comment. Deleting a root also deletes its replies.", USAGE.resolve);
+    return commandHelp(
+      "resolve",
+      "Delete a comment. Deleting a root also deletes its replies.",
+      USAGE.resolve,
+    );
   }
   if (cmd === "export-prompt") {
     return commandHelp("export-prompt", "Print the open comments as text.", USAGE.export);
   }
   if (cmd === "setup") {
-    return commandHelp("setup", "Install or update the extension in chosen editors and the review skill.", USAGE.setup);
+    return commandHelp(
+      "setup",
+      "Install or update the extension in chosen editors and the review skill.",
+      USAGE.setup,
+    );
   }
   if (cmd === "doctor") {
-    return commandHelp("doctor", "Report whether the command, editor extensions, and skill are ready.", USAGE.doctor);
+    return commandHelp(
+      "doctor",
+      "Report whether the command, editor extensions, and skill are ready.",
+      USAGE.doctor,
+    );
   }
   return HELP;
 }
@@ -459,7 +490,10 @@ function commandLabel(kind: Exclude<Kind, "comment">): string {
   return `penmark ${kind}`;
 }
 
-function unknownFlag(flags: Map<string, string | true>, kind: Exclude<Kind, "comment">): string | null {
+function unknownFlag(
+  flags: Map<string, string | true>,
+  kind: Exclude<Kind, "comment">,
+): string | null {
   for (const key of flags.keys()) {
     if (!FLAGS[kind].includes(key)) return key;
   }
@@ -511,9 +545,13 @@ function parseArgv(argv: string[]): ParsedArgs {
       help = true;
       continue;
     }
+    if (arg === "-y") {
+      flags.set("yes", true);
+      continue;
+    }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "dry-run") {
+      if (key === "dry-run" || key === "yes" || key === "defaults" || key === "reconfigure") {
         flags.set(key, true);
         continue;
       }
@@ -551,7 +589,10 @@ function fail(io: Io, code: number, error: string): number {
 
 function gitAuthor(dir: string): string | null {
   try {
-    const name = execFileSync("git", ["config", "user.name"], { cwd: dir, encoding: "utf8" }).trim();
+    const name = execFileSync("git", ["config", "user.name"], {
+      cwd: dir,
+      encoding: "utf8",
+    }).trim();
     return name === "" ? null : name;
   } catch {
     return null;
