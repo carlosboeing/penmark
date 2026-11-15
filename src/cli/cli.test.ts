@@ -961,7 +961,8 @@ describe("penmark process", () => {
         "/d",
         "/s",
         "/c",
-        'C:\\bin\\code.CMD --install-extension ^^"C:\\Program^^ Files\\a^^&b.vsix^^" --force',
+        // Three carets: the second escape also escapes the caret from the first.
+        'C:\\bin\\code.CMD --install-extension ^^^"C:\\Program^^^ Files\\a^^^&b.vsix^^^" --force',
       ],
       windowsVerbatimArguments: true,
     });

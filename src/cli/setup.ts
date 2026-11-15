@@ -691,6 +691,9 @@ export function resolveCommandFile(
  * Quote one argument for `cmd.exe`.
  * cmd.exe parses the command line, then a `.cmd` or `.bat` shim parses `%*` again,
  * so the program is escaped once and each argument twice.
+ * The second pass also escapes the carets the first pass inserted, so each
+ * metacharacter is prefixed with three carets (`^^^&`), not two (`^^&`).
+ * Two carets leave the metacharacter active and can split the command.
  */
 function quoteCmdArg(input: string, doubleEscape: boolean): string {
   let quoted: string;
