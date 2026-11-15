@@ -22,6 +22,7 @@ import {
   confirm,
   multiselect,
   readRawKeyFromStdin,
+  select,
   type KeyName,
   type PromptOption,
   type PromptStream,
@@ -42,7 +43,8 @@ export interface SetupChoices {
 
 export interface SetupOptions {
   yes?: boolean;
-  reconfigure?: boolean;
+  defaults?: boolean;
+  repair?: boolean;
   dryRun?: boolean;
 }
 
@@ -243,11 +245,71 @@ function askYesNo(prompt: string, env: SetupEnv): boolean {
   return false;
 }
 
+function buildWizardSteps(
+  env: SetupEnv,
+  found: readonly { ide: IdeSpec; cli: string }[],
+  foundByName: ReadonlyMap<string, string>,
+  choices: SetupChoices,
+  promptIo: PromptStream,
+): (() => void)[] {
+  const steps: (() => void)[] = [];
+  if (found.length > 0) {
+    const options: PromptOption[] = env.ides.map((ide) => {
+      const cli = foundByName.get(ide.name);
+      if (cli !== undefined) {
+        return {
+          label: ide.name,
+          consequence: "install VSIX extension",
+          available: true,
+        };
+      }
+      return {
+        label: ide.name,
+        consequence: "not found on this machine",
+        available: false,
+      };
+    });
+    let selectedIndices = env.ides
+      .map((ide, idx) => ({ ide, idx }))
+      .filter(({ ide }) => foundByName.has(ide.name) && (choices.editors[ide.name] ?? true))
+      .map(({ idx }) => idx);
+
+    steps.push(() => {
+      selectedIndices = multiselect(
+        "Which editors should receive the Penmark extension?",
+        options,
+        selectedIndices,
+        promptIo,
+      );
+      const chosenSet = new Set(selectedIndices);
+      for (let i = 0; i < env.ides.length; i++) {
+        const ide = env.ides[i]!;
+        if (foundByName.has(ide.name)) {
+          choices.editors[ide.name] = chosenSet.has(i);
+        }
+      }
+    });
+  }
+
+  let skillDefault = choices.skill ?? true;
+  steps.push(() => {
+    skillDefault = confirm(
+      "Install the penmark-comments agent skill?",
+      skillDefault,
+      promptIo,
+      `install into ${env.skillDestDir}`,
+      "skip skill installation",
+    );
+    choices.skill = skillDefault;
+  });
+  return steps;
+}
+
 function promptInteractiveChoices(
   env: SetupEnv,
   found: readonly { ide: IdeSpec; cli: string }[],
   choices: SetupChoices,
-  reconfigure: boolean,
+  repair: boolean,
 ): boolean {
   const promptIo: PromptStream = {
     isTTY: true,
@@ -257,66 +319,14 @@ function promptInteractiveChoices(
     write: env.stdout,
   };
   const foundByName = new Map(found.map((entry) => [entry.ide.name, entry.cli]));
-  const hasSavedEditors = Object.keys(choices.editors).length > 0;
+  const hasSavedConfig =
+    env.exists(env.configPath) &&
+    (Object.keys(choices.editors).length > 0 || choices.skill !== undefined);
   const unconfiguredFound = found.filter(({ ide }) => choices.editors[ide.name] === undefined);
 
-  if (!hasSavedEditors || reconfigure) {
-    if (found.length === 0 && choices.skill !== undefined && !reconfigure) {
-      return true;
-    }
+  if (!hasSavedConfig) {
     env.stdout(`Penmark ${env.version} — setup\n\n`);
-    const steps: (() => void)[] = [];
-    if (found.length > 0) {
-      const options: PromptOption[] = env.ides.map((ide) => {
-        const cli = foundByName.get(ide.name);
-        if (cli !== undefined) {
-          const installed = readInstalledVersion(cli, env.run);
-          return {
-            label: ide.name,
-            consequence: installed !== null ? `${installed} installed` : "detected",
-            available: true,
-          };
-        }
-        return {
-          label: ide.name,
-          consequence: "not found on this machine",
-          available: false,
-        };
-      });
-      let selectedIndices = env.ides
-        .map((ide, idx) => ({ ide, idx }))
-        .filter(({ ide }) => foundByName.has(ide.name) && (choices.editors[ide.name] ?? true))
-        .map(({ idx }) => idx);
-
-      steps.push(() => {
-        selectedIndices = multiselect(
-          "Which editors should receive the Penmark extension?",
-          options,
-          selectedIndices,
-          promptIo,
-        );
-        const chosenSet = new Set(selectedIndices);
-        for (let i = 0; i < env.ides.length; i++) {
-          const ide = env.ides[i]!;
-          if (foundByName.has(ide.name)) {
-            choices.editors[ide.name] = chosenSet.has(i);
-          }
-        }
-      });
-    }
-
-    let skillDefault = choices.skill ?? true;
-    steps.push(() => {
-      skillDefault = confirm(
-        "Install the penmark-comments agent skill?",
-        skillDefault,
-        promptIo,
-        `install into ${env.skillDestDir}`,
-        "skip skill installation",
-      );
-      choices.skill = skillDefault;
-    });
-
+    const steps = buildWizardSteps(env, found, foundByName, choices, promptIo);
     try {
       askInOrder(steps);
       return true;
@@ -329,40 +339,82 @@ function promptInteractiveChoices(
     }
   }
 
-  if (unconfiguredFound.length === 0 && choices.skill !== undefined) {
+  // When a newly installed editor appears on a configured machine, ask only for that editor.
+  if (unconfiguredFound.length > 0 || choices.skill === undefined) {
+    const steps: (() => void)[] = [];
+    for (const { ide } of unconfiguredFound) {
+      let defaultYes = true;
+      steps.push(() => {
+        defaultYes = confirm(
+          `Install the Penmark extension in ${ide.name}?`,
+          defaultYes,
+          promptIo,
+          "install extension",
+          `skip ${ide.name}`,
+        );
+        choices.editors[ide.name] = defaultYes;
+      });
+    }
+    if (choices.skill === undefined) {
+      let skillDefault = true;
+      steps.push(() => {
+        skillDefault = confirm(
+          "Install the penmark-comments agent skill?",
+          skillDefault,
+          promptIo,
+          `install into ${env.skillDestDir}`,
+          "skip skill installation",
+        );
+        choices.skill = skillDefault;
+      });
+    }
+    try {
+      askInOrder(steps);
+      return true;
+    } catch (err) {
+      if (err instanceof CancelledError) {
+        env.stdout("Cancelled. Nothing was written.\n");
+        return false;
+      }
+      throw err;
+    }
+  }
+
+  if (repair) {
     return true;
   }
 
-  const steps: (() => void)[] = [];
-  for (const { ide } of unconfiguredFound) {
-    let defaultYes = true;
-    steps.push(() => {
-      defaultYes = confirm(
-        `Install the Penmark extension in ${ide.name}?`,
-        defaultYes,
-        promptIo,
-        "install extension",
-        `skip ${ide.name}`,
-      );
-      choices.editors[ide.name] = defaultYes;
-    });
-  }
-  if (choices.skill === undefined) {
-    let skillDefault = true;
-    steps.push(() => {
-      skillDefault = confirm(
-        "Install the penmark-comments agent skill?",
-        skillDefault,
-        promptIo,
-        `install into ${env.skillDestDir}`,
-        "skip skill installation",
-      );
-      choices.skill = skillDefault;
-    });
-  }
+  // CopyDesk rerun fork when configuration already exists and no new editor appeared:
+  const forkOptions: PromptOption[] = [
+    {
+      label: "Change settings",
+      consequence: "pick editors and skill again",
+      available: true,
+    },
+    {
+      label: "Repair the install",
+      consequence: "reinstall extension and skill with saved choices",
+      available: true,
+    },
+  ];
+  let forkChoice = 0;
+  const askFork = () => {
+    forkChoice = select(
+      "Penmark is already installed. Choose an action:",
+      forkOptions,
+      forkChoice,
+      promptIo,
+    );
+  };
+  const askChangeSettings = () => {
+    if (forkChoice !== 0) {
+      return;
+    }
+    askInOrder(buildWizardSteps(env, found, foundByName, choices, promptIo));
+  };
 
   try {
-    askInOrder(steps);
+    askInOrder([askFork, askChangeSettings]);
     return true;
   } catch (err) {
     if (err instanceof CancelledError) {
@@ -381,34 +433,34 @@ export function runSetup(env: SetupEnv, options: SetupOptions = {}): number {
     if (cli !== null) found.push({ ide, cli });
   }
 
-  const assumeYes = Boolean(options.yes);
-  const reconfigure = Boolean(options.reconfigure);
+  const assumeDefaults = Boolean(options.yes || options.defaults);
+  const repair = Boolean(options.repair);
   const dryRun = Boolean(options.dryRun);
 
-  if (assumeYes) {
+  if (assumeDefaults) {
     for (const { ide } of found) {
-      if (reconfigure || choices.editors[ide.name] === undefined) {
+      if (choices.editors[ide.name] === undefined) {
         choices.editors[ide.name] = true;
       }
     }
-    if (reconfigure || choices.skill === undefined) {
+    if (choices.skill === undefined) {
       choices.skill = true;
     }
   } else if (env.isTTY) {
-    const ok = promptInteractiveChoices(env, found, choices, reconfigure);
+    const ok = promptInteractiveChoices(env, found, choices, repair);
     if (!ok) {
       return 0;
     }
   } else {
     for (const { ide } of found) {
-      if (reconfigure || choices.editors[ide.name] === undefined) {
+      if (choices.editors[ide.name] === undefined) {
         choices.editors[ide.name] = askYesNo(
           `Install the Penmark extension in ${ide.name}? [Y/n] `,
           env,
         );
       }
     }
-    if (reconfigure || choices.skill === undefined) {
+    if (choices.skill === undefined) {
       choices.skill = askYesNo(
         `Install the penmark-comments skill in ${env.skillDestDir}? [Y/n] `,
         env,

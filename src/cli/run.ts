@@ -93,8 +93,9 @@ export function run(argv: string[], io: Io = defaultIo): number {
           );
     if (kind === "setup") {
       return runSetup(env, {
-        yes: args.flags.get("yes") === true || args.flags.get("defaults") === true,
-        reconfigure: args.flags.get("reconfigure") === true,
+        yes: args.flags.get("yes") === true,
+        defaults: args.flags.get("defaults") === true,
+        repair: args.flags.get("repair") === true,
         dryRun: args.flags.get("dry-run") === true,
       });
     }
@@ -332,7 +333,7 @@ const USAGE = {
   validate: "Usage: penmark validate --file <path>",
   resolve: "Usage: penmark resolve --file <path> <id>",
   export: "Usage: penmark export-prompt --file <path>",
-  setup: "Usage: penmark setup [--yes] [--reconfigure] [--dry-run]",
+  setup: "Usage: penmark setup [--defaults] [--yes] [--dry-run] [--repair]",
   doctor: "Usage: penmark doctor",
   comment: "Usage: penmark comment apply|locate --file <path>",
   help: "Run penmark --help for the commands.",
@@ -348,7 +349,7 @@ const FLAGS: Record<Exclude<Kind, "comment">, readonly string[]> = {
   validate: ["file"],
   resolve: ["file"],
   export: ["file"],
-  setup: ["yes", "defaults", "reconfigure", "dry-run"],
+  setup: ["defaults", "yes", "dry-run", "repair"],
   doctor: [],
 };
 
@@ -551,7 +552,7 @@ function parseArgv(argv: string[]): ParsedArgs {
     }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "dry-run" || key === "yes" || key === "defaults" || key === "reconfigure") {
+      if (key === "dry-run" || key === "yes" || key === "defaults" || key === "repair") {
         flags.set(key, true);
         continue;
       }

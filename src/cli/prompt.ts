@@ -94,6 +94,8 @@ export function decodeKeyChunk(chunk: string): KeyName {
   return "unknown";
 }
 
+const SLEEP_ARRAY = new Int32Array(new SharedArrayBuffer(4));
+
 export function readRawKeyFromStdin(): KeyName {
   const stdin = process.stdin;
   const canRaw = Boolean(stdin.isTTY && typeof stdin.setRawMode === "function");
@@ -103,10 +105,22 @@ export function readRawKeyFromStdin(): KeyName {
   try {
     const buf = Buffer.alloc(64);
     let bytesRead = 0;
-    try {
-      bytesRead = readSync(0, buf, 0, buf.length, null);
-    } catch {
-      bytesRead = 0;
+    for (;;) {
+      try {
+        bytesRead = readSync(0, buf, 0, buf.length, null);
+        break;
+      } catch (err) {
+        const code =
+          err && typeof err === "object" && "code" in err
+            ? String((err as { code?: unknown }).code)
+            : "";
+        if (code === "EAGAIN" || code === "EWOULDBLOCK" || code === "EINTR") {
+          Atomics.wait(SLEEP_ARRAY, 0, 0, 10);
+          continue;
+        }
+        bytesRead = 0;
+        break;
+      }
     }
     if (bytesRead <= 0) {
       throw new CancelledError("End of input");

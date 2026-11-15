@@ -1021,6 +1021,27 @@ describe("penmark process", () => {
       skill: true,
     });
 
+    // Second interactive run shows the rerun fork ("Change settings" / "Repair the install")
+    stdout = "";
+    keyIdx = 0;
+    const rerunKeys: KeyName[] = [
+      "enter", // select "Change settings" (index 0)
+      "space", // uncheck VS Code
+      "enter", // confirm multiselect -> [1] (Cursor only)
+      "down", // move to No on skill
+      "enter", // confirm skill -> No
+    ];
+    env.readKey = () => rerunKeys[keyIdx++] ?? "enter";
+    const rerunCode = run(["setup"], io);
+    expect(rerunCode).toBe(0);
+    expect(stdout).toContain("Penmark is already installed. Choose an action:");
+    expect(stdout).toContain("VS Code: 0.6.0 (skipped)");
+    expect(stdout).toContain("Cursor: 0.6.0 -> 0.6.0 ok");
+    expect(JSON.parse(files.get("/home/.config/penmark/setup.json") ?? "{}")).toEqual({
+      editors: { "VS Code": false, Cursor: true },
+      skill: false,
+    });
+
     // Pressing Esc at the first prompt cancels without writing
     files.delete("/home/.config/penmark/setup.json");
     stdout = "";
@@ -1033,7 +1054,7 @@ describe("penmark process", () => {
     expect(files.has("/home/.config/penmark/setup.json")).toBe(false);
   });
 
-  it("supports setup --yes, --dry-run, --reconfigure, and surfaces subprocess stderr on package failure", () => {
+  it("supports setup --yes, --defaults, --dry-run, --repair, and surfaces subprocess stderr on package failure", () => {
     const files = new Map<string, string>();
     const repoSkill = readFileSync(join(ROOT, "skills/penmark-comments/SKILL.md"), "utf8");
     files.set("/repo/penmark-markdown-review-0.6.0.vsix", "vsix");
@@ -1041,7 +1062,7 @@ describe("penmark process", () => {
     files.set("/repo/skills/penmark-comments/SKILL.md", repoSkill);
 
     let packageThrowsStderr = false;
-    const makeIo = () => {
+    const makeIo = (isTTY = false) => {
       let stdout = "";
       let stderr = "";
       const env: SetupEnv = {
@@ -1053,7 +1074,7 @@ describe("penmark process", () => {
         configPath: "/home/.config/penmark/setup.json",
         pathEnv: "",
         ides: [{ name: "VS Code", command: "code", fallbacks: [] }],
-        isTTY: false,
+        isTTY,
         readLine: lineReaderFromLines(["n", "n"]),
         stdout: (t) => {
           stdout += t;
@@ -1119,20 +1140,17 @@ describe("penmark process", () => {
       skill: true,
     });
 
-    // --reconfigure re-asks even when setup.json already exists
-    const reconf = makeIo();
-    expect(run(["setup", "--reconfigure"], reconf.io)).toBe(0);
-    expect(reconf.getStdout()).toContain("VS Code: 0.6.0 (skipped)");
-    expect(JSON.parse(files.get("/home/.config/penmark/setup.json") ?? "{}")).toEqual({
-      editors: { "VS Code": false },
-      skill: false,
-    });
+    // --repair updates existing install in TTY mode without prompting
+    const repairRun = makeIo(true);
+    expect(run(["setup", "--repair"], repairRun.io)).toBe(0);
+    expect(repairRun.getStdout()).not.toContain("Choose an action:");
+    expect(repairRun.getStdout()).toContain("VS Code: 0.6.0 -> 0.6.0 ok");
 
     // Subprocess stderr is surfaced when packaging fails
     files.delete("/repo/penmark-markdown-review-0.6.0.vsix");
     packageThrowsStderr = true;
-    const pkgFail = makeIo();
-    expect(run(["setup", "--yes", "--reconfigure"], pkgFail.io)).toBe(1);
+    const pkgFail = makeIo(true);
+    expect(run(["setup", "--repair"], pkgFail.io)).toBe(1);
     expect(pkgFail.getStderr()).toContain("ELSPROBLEMS");
   });
 });
