@@ -1,7 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   BackError,
@@ -17,7 +25,16 @@ import {
   type PromptStream,
 } from "./prompt.js";
 import { run, type Io } from "./run.js";
-import { defaultIdes, lineReaderFromLines, type IdeSpec, type SetupEnv } from "./setup.js";
+import {
+  commandFileNames,
+  defaultIdes,
+  findCommandOnPath,
+  isExecutableFile,
+  lineReaderFromLines,
+  runDoctor,
+  type IdeSpec,
+  type SetupEnv,
+} from "./setup.js";
 
 const ROOT = join(__dirname, "../..");
 const TSX = join(ROOT, "node_modules/.bin/tsx");
@@ -593,6 +610,7 @@ describe("penmark process", () => {
           stderr += t;
         },
         exists: (p) => files.has(p),
+        isExecutable: (p) => files.has(p),
         readText: (p) => files.get(p) ?? "",
         writeText: (p, t) => {
           files.set(p, t);
@@ -707,6 +725,7 @@ describe("penmark process", () => {
           stderr += t;
         },
         exists: (p) => files.has(p),
+        isExecutable: (p) => files.has(p),
         readText: (p) => files.get(p) ?? "",
         writeText: () => {
           throw new Error("doctor must not write");
@@ -777,6 +796,122 @@ describe("penmark process", () => {
     );
   });
 
+  it("doctor skips a directory and a non-executable penmark, then reports a later executable", () => {
+    const root = tempDir();
+    const empty = join(root, "empty");
+    const dirHit = join(root, "dir-hit");
+    const plainHit = join(root, "plain-hit");
+    const execHit = join(root, "exec-hit");
+    mkdirSync(empty);
+    mkdirSync(dirHit);
+    mkdirSync(plainHit);
+    mkdirSync(execHit);
+    mkdirSync(join(dirHit, "penmark"));
+    const plain = join(plainHit, "penmark");
+    writeFileSync(plain, "not a command\n");
+    chmodSync(plain, 0o644);
+    const command = join(execHit, "penmark");
+    writeFileSync(command, "#!/bin/sh\n");
+    chmodSync(command, 0o755);
+
+    expect(isExecutableFile(join(dirHit, "penmark"))).toBe(false);
+    expect(isExecutableFile(plain)).toBe(false);
+    expect(isExecutableFile(command)).toBe(true);
+
+    let stdout = "";
+    const env: SetupEnv = {
+      root: "/repo",
+      version: "0.6.0",
+      vsixPath: "/repo/missing.vsix",
+      skillSourceDir: "/repo/skills/penmark-comments",
+      skillDestDir: "/home/.claude/skills/penmark-comments",
+      configPath: "/home/.config/penmark/setup.json",
+      pathEnv: [empty, dirHit, plainHit, execHit].join(delimiter),
+      ides: [],
+      readLine: lineReaderFromLines([]),
+      stdout: (t) => {
+        stdout += t;
+      },
+      stderr: () => {},
+      exists: existsSync,
+      isExecutable: isExecutableFile,
+      readText: () => "",
+      writeText: () => {
+        throw new Error("doctor must not write");
+      },
+      copyDir: () => {
+        throw new Error("doctor must not copy");
+      },
+      run: () => {
+        throw new Error("doctor must not spawn");
+      },
+    };
+
+    expect(findCommandOnPath(env)).toBe(command);
+    expect(runDoctor(env)).toBe(0);
+    expect(stdout).toContain(`command: on PATH (${command}, penmark 0.6.0)`);
+
+    stdout = "";
+    env.pathEnv = [empty, dirHit, plainHit].join(delimiter);
+    expect(findCommandOnPath(env)).toBeNull();
+    expect(runDoctor(env)).toBe(0);
+    expect(stdout).toContain("command: not on PATH (penmark 0.6.0)");
+    expect(stdout).not.toContain(dirHit);
+    expect(stdout).not.toContain(plainHit);
+  });
+
+  it("tries Windows PATHEXT names and keeps searching after a non-runnable one", () => {
+    expect(commandFileNames("penmark", "linux")).toEqual(["penmark"]);
+    expect(commandFileNames("penmark", "darwin")).toEqual(["penmark"]);
+    expect(commandFileNames("penmark", "win32", ".COM;.EXE;.BAT;.CMD")).toEqual([
+      "penmark.COM",
+      "penmark.EXE",
+      "penmark.BAT",
+      "penmark.CMD",
+    ]);
+    expect(commandFileNames("penmark.CMD", "win32", ".COM;.EXE;.BAT;.CMD")).toEqual([
+      "penmark.CMD",
+    ]);
+    expect(commandFileNames("penmark", "win32", ".EXE;.;.CMD")).toEqual([
+      "penmark.EXE",
+      "penmark",
+      "penmark.CMD",
+    ]);
+    expect(commandFileNames("penmark", "win32", "")).toEqual([
+      "penmark.COM",
+      "penmark.EXE",
+      "penmark.BAT",
+      "penmark.CMD",
+    ]);
+
+    const root = tempDir();
+    const earlier = join(root, "earlier");
+    const later = join(root, "later");
+    const exe = join(earlier, "penmark.EXE");
+    const cmd = join(earlier, "penmark.CMD");
+    const laterExe = join(later, "penmark.EXE");
+    const env: SetupEnv = {
+      root: "/repo",
+      version: "0.6.0",
+      vsixPath: "/repo/missing.vsix",
+      skillSourceDir: "/repo/skills/penmark-comments",
+      skillDestDir: "/home/.claude/skills/penmark-comments",
+      configPath: "/home/.config/penmark/setup.json",
+      pathEnv: [earlier, later].join(delimiter),
+      ides: [],
+      readLine: lineReaderFromLines([]),
+      stdout: () => {},
+      stderr: () => {},
+      exists: (p) => p === exe || p === cmd || p === laterExe,
+      isExecutable: (p) => p === cmd || p === laterExe,
+      readText: () => "",
+      writeText: () => {},
+      copyDir: () => {},
+      run: () => "",
+    };
+    expect(findCommandOnPath(env, "win32", ".EXE;.CMD")).toBe(cmd);
+  });
+
   it("setup packages when VSIX is absent, and reports packaging or install failures", () => {
     const files = new Map<string, string>();
     const repoSkill = readFileSync(join(ROOT, "skills/penmark-comments/SKILL.md"), "utf8");
@@ -807,6 +942,7 @@ describe("penmark process", () => {
           stderr += t;
         },
         exists: (p) => files.has(p),
+        isExecutable: (p) => files.has(p),
         readText: (p) => files.get(p) ?? "",
         writeText: (p, t) => {
           files.set(p, t);
@@ -949,6 +1085,7 @@ describe("penmark process", () => {
         },
         stderr: () => {},
         exists: (p) => files.has(p),
+        isExecutable: (p) => files.has(p),
         readText: (p) => files.get(p) ?? "",
         writeText: (p, t) => {
           files.set(p, t);
@@ -1163,6 +1300,7 @@ describe("penmark process", () => {
         stderr += t;
       },
       exists: (p) => files.has(p),
+      isExecutable: (p) => files.has(p),
       readText: (p) => files.get(p) ?? "",
       writeText: (p, t) => {
         files.set(p, t);
@@ -1298,6 +1436,7 @@ describe("penmark process", () => {
           stderr += t;
         },
         exists: (p) => files.has(p),
+        isExecutable: (p) => files.has(p),
         readText: (p) => files.get(p) ?? "",
         writeText: (p, t) => {
           files.set(p, t);

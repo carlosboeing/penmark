@@ -13,7 +13,17 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import {
@@ -64,6 +74,8 @@ export interface SetupEnv {
   stdout: (text: string) => void;
   stderr: (text: string) => void;
   exists: (path: string) => boolean;
+  /** True when `path` is a regular file the shell can run. */
+  isExecutable: (path: string) => boolean;
   readText: (path: string) => string;
   writeText: (path: string, text: string) => void;
   copyDir: (src: string, dest: string) => void;
@@ -186,6 +198,7 @@ export function defaultSetupEnv(
     stdout,
     stderr,
     exists: (path) => existsSync(path),
+    isExecutable: isExecutableFile,
     readText: (path) => readFileSync(path, "utf8"),
     writeText: (path, text) => {
       mkdirSync(dirname(path), { recursive: true });
@@ -607,11 +620,55 @@ export function inspectSkill(env: SetupEnv): SkillState {
   return { kind: "modified", path: env.skillDestDir };
 }
 
-export function findCommandOnPath(env: SetupEnv): string | null {
+const WINDOWS_PATHEXT = ".COM;.EXE;.BAT;.CMD";
+
+/**
+ * Names a shell tries for `command`. Windows walks PATHEXT. A PATHEXT entry of
+ * `.` is the bare name. Other platforms use the name as given.
+ */
+export function commandFileNames(
+  command: string,
+  platform: NodeJS.Platform = process.platform,
+  pathExt?: string,
+): string[] {
+  if (platform !== "win32") return [command];
+  const raw = pathExt === undefined ? process.env.PATHEXT : pathExt;
+  const source = raw === undefined || raw.trim() === "" ? WINDOWS_PATHEXT : raw;
+  const exts = source
+    .split(";")
+    .map((ext) => ext.trim())
+    .filter((ext) => ext !== "")
+    .map((ext) => (ext === "." || ext.startsWith(".") ? ext : `.${ext}`));
+  const lower = command.toLowerCase();
+  if (exts.some((ext) => ext !== "." && lower.endsWith(ext.toLowerCase()))) return [command];
+  return exts.map((ext) => (ext === "." ? command : command + ext));
+}
+
+/** Regular file the current process may execute. A directory is not a command. */
+export function isExecutableFile(filePath: string): boolean {
+  try {
+    if (!statSync(filePath).isFile()) return false;
+    // Node's X_OK does not distinguish programs on Windows. PATHEXT does.
+    if (process.platform === "win32") return true;
+    accessSync(filePath, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** First runnable `penmark` on PATH. `platform` and `pathExt` default to this process. */
+export function findCommandOnPath(
+  env: SetupEnv,
+  platform: NodeJS.Platform = process.platform,
+  pathExt?: string,
+): string | null {
   for (const entry of env.pathEnv.split(delimiter)) {
     if (entry === "") continue;
-    const candidate = resolve(entry, "penmark");
-    if (env.exists(candidate)) return candidate;
+    for (const name of commandFileNames("penmark", platform, pathExt)) {
+      const candidate = resolve(entry, name);
+      if (env.isExecutable(candidate)) return candidate;
+    }
   }
   return null;
 }
