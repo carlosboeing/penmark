@@ -27,11 +27,15 @@ import {
 import { run, type Io } from "./run.js";
 import {
   commandFileNames,
+  commandSpawn,
   defaultIdes,
   findCommandOnPath,
   isExecutableFile,
   lineReaderFromLines,
+  resolveCommandFile,
+  resolveEditorCli,
   runDoctor,
+  runFile,
   type IdeSpec,
   type SetupEnv,
 } from "./setup.js";
@@ -913,6 +917,229 @@ describe("penmark process", () => {
       run: () => "",
     };
     expect(findCommandOnPath(env, "win32", ".EXE;.CMD")).toBe(cmd);
+  });
+
+  it("runs Windows CMD shims through cmd.exe and keeps direct execution otherwise", () => {
+    const exe = "C:\\Tools\\code.EXE";
+    const npmCmd = "C:\\Program Files\\nodejs\\npm.CMD";
+    const codeCmd = "C:\\Program Files (x86)\\code.CMD";
+    expect(commandSpawn("code", ["--version"], "linux", null)).toEqual({
+      file: "code",
+      args: ["--version"],
+      windowsVerbatimArguments: false,
+    });
+    expect(commandSpawn("code", ["--version"], "win32", exe)).toEqual({
+      file: exe,
+      args: ["--version"],
+      windowsVerbatimArguments: false,
+    });
+    expect(commandSpawn("code", ["--version"], "win32", null)).toEqual({
+      file: "code",
+      args: ["--version"],
+      windowsVerbatimArguments: false,
+    });
+    expect(commandSpawn("npm", ["run", "package"], "win32", npmCmd)).toEqual({
+      file: "cmd.exe",
+      args: ["/d", "/s", "/c", '^"C:\\Program^ Files\\nodejs\\npm.CMD^" run package'],
+      windowsVerbatimArguments: true,
+    });
+    expect(commandSpawn("code", ["--version"], "win32", codeCmd)).toEqual({
+      file: "cmd.exe",
+      args: ["/d", "/s", "/c", '^"C:\\Program^ Files^ ^(x86^)\\code.CMD^" --version'],
+      windowsVerbatimArguments: true,
+    });
+    expect(
+      commandSpawn(
+        "code",
+        ["--install-extension", "C:\\Program Files\\a&b.vsix", "--force"],
+        "win32",
+        "C:\\bin\\code.CMD",
+      ),
+    ).toEqual({
+      file: "cmd.exe",
+      args: [
+        "/d",
+        "/s",
+        "/c",
+        'C:\\bin\\code.CMD --install-extension ^^"C:\\Program^^ Files\\a^^&b.vsix^^" --force',
+      ],
+      windowsVerbatimArguments: true,
+    });
+
+    const root = tempDir();
+    const earlier = join(root, "earlier");
+    const later = join(root, "later");
+    mkdirSync(earlier);
+    mkdirSync(later);
+    const earlierExe = join(earlier, "code.EXE");
+    const earlierCmd = join(earlier, "code.CMD");
+    const laterCmd = join(later, "npm.CMD");
+    const fallback = join(later, "antigravity.CMD");
+    writeFileSync(earlierExe, "");
+    writeFileSync(earlierCmd, "@echo off\r\n");
+    writeFileSync(laterCmd, "@echo off\r\n");
+    writeFileSync(fallback, "@echo off\r\n");
+    const pathEnv = [earlier, later].join(delimiter);
+    const pathExt = ".COM;.EXE;.BAT;.CMD";
+
+    expect(resolveCommandFile("code", pathEnv, "win32", pathExt, existsSync)).toBe(earlierExe);
+    expect(resolveCommandFile("code", pathEnv, "win32", pathExt, (p) => p === earlierCmd)).toBe(
+      earlierCmd,
+    );
+    expect(resolveCommandFile("npm", pathEnv, "win32", pathExt, existsSync)).toBe(laterCmd);
+    expect(resolveCommandFile(fallback, "", "win32", pathExt, existsSync)).toBe(fallback);
+    expect(resolveCommandFile("missing", pathEnv, "win32", pathExt, existsSync)).toBeNull();
+    expect(resolveCommandFile("code", pathEnv, "linux", pathExt, existsSync)).toBeNull();
+
+    const direct: string[] = [];
+    expect(
+      runFile("code", ["--version"], {
+        platform: "linux",
+        execFile: (file, args) => {
+          direct.push(`${file} ${args.join(" ")}`);
+          return "ok\n";
+        },
+      }),
+    ).toBe("ok\n");
+    expect(direct).toEqual(["code --version"]);
+
+    const exeCalls: string[] = [];
+    expect(
+      runFile("code", ["--version"], {
+        platform: "win32",
+        pathEnv,
+        pathExt,
+        exists: existsSync,
+        execFile: (file, args, opts) => {
+          exeCalls.push(`${file} ${args.join(" ")}`);
+          if (opts.windowsVerbatimArguments === true) throw new Error("exe went through cmd");
+          return "1.2.3\n";
+        },
+      }),
+    ).toBe("1.2.3\n");
+    expect(exeCalls).toEqual([`${earlierExe} --version`]);
+
+    const calls: { file: string; args: readonly string[]; cwd?: string }[] = [];
+    const execFile = (
+      file: string,
+      args: readonly string[],
+      opts: { cwd?: string; windowsVerbatimArguments?: boolean },
+    ) => {
+      calls.push({ file, args, cwd: opts.cwd });
+      if (opts.windowsVerbatimArguments !== true) throw new Error(`direct spawn ${file}`);
+      const script = args[3] ?? "";
+      if (script.includes("antigravity.CMD") && script.includes("--version")) return "1.105.0\n";
+      if (script.includes("code.CMD") && script.includes("--version")) return "1.105.0\n";
+      throw new Error(`unexpected ${script}`);
+    };
+    const shimRun = (cmd: string, args: string[], cwd?: string) =>
+      runFile(cmd, args, {
+        cwd,
+        platform: "win32",
+        pathEnv,
+        pathExt,
+        exists: (p) => p === earlierCmd || p === laterCmd || p === fallback,
+        execFile,
+      });
+
+    expect(resolveEditorCli({ name: "VS Code", command: "code", fallbacks: [] }, shimRun)).toBe(
+      "code",
+    );
+    expect(
+      resolveEditorCli(
+        { name: "Antigravity", command: "missing-ide", fallbacks: [fallback] },
+        shimRun,
+      ),
+    ).toBe(fallback);
+
+    const files = new Map<string, string>();
+    files.set("/repo/skills/penmark-comments", "dir");
+    let installed = false;
+    const setupExec = (
+      file: string,
+      args: readonly string[],
+      opts: { cwd?: string; windowsVerbatimArguments?: boolean },
+    ) => {
+      calls.push({ file, args, cwd: opts.cwd });
+      if (file !== "cmd.exe" || opts.windowsVerbatimArguments !== true) {
+        throw new Error(`direct spawn ${file}`);
+      }
+      const script = args[3] ?? "";
+      if (script.includes(`${earlierCmd}`) && script.includes(" --version")) return "1.105.0\n";
+      if (script.includes(laterCmd) && script.includes(" run package")) {
+        if (opts.cwd !== "/repo") throw new Error("package cwd");
+        files.set("/repo/penmark-markdown-review-0.6.0.vsix", "vsix");
+        return "packaged\n";
+      }
+      if (script.includes(earlierCmd) && script.includes("--list-extensions")) {
+        return installed ? "local.penmark-markdown-review@0.6.0\n" : "";
+      }
+      if (
+        script.includes(earlierCmd) &&
+        script.includes("--install-extension") &&
+        script.includes("/repo/penmark-markdown-review-0.6.0.vsix")
+      ) {
+        installed = true;
+        return "installed\n";
+      }
+      throw new Error(`unexpected ${script}`);
+    };
+    calls.length = 0;
+    let stdout = "";
+    const setupEnv: SetupEnv = {
+      root: "/repo",
+      version: "0.6.0",
+      vsixPath: "/repo/penmark-markdown-review-0.6.0.vsix",
+      skillSourceDir: "/repo/skills/penmark-comments",
+      skillDestDir: "/home/.claude/skills/penmark-comments",
+      configPath: "/home/.config/penmark/setup.json",
+      pathEnv,
+      ides: [{ name: "VS Code", command: "code", fallbacks: [] }],
+      readLine: lineReaderFromLines([]),
+      stdout: (t) => {
+        stdout += t;
+      },
+      stderr: () => {},
+      exists: (p) => files.has(p),
+      isExecutable: (p) => files.has(p),
+      readText: (p) => files.get(p) ?? "",
+      writeText: (p, t) => {
+        files.set(p, t);
+      },
+      copyDir: () => {},
+      run: (cmd, args, cwd) =>
+        runFile(cmd, args, {
+          cwd,
+          platform: "win32",
+          pathEnv,
+          pathExt,
+          exists: (p) => p === earlierCmd || p === laterCmd,
+          execFile: setupExec,
+        }),
+    };
+    const io: Io = {
+      read: () => Buffer.alloc(0),
+      write: () => {},
+      stdin: () => "",
+      stdout: (t) => {
+        stdout += t;
+      },
+      stderr: () => {},
+      gitAuthor: () => null,
+      now: () => "",
+      setupEnv: () => setupEnv,
+    };
+    expect(run(["setup", "--yes"], io)).toBe(0);
+    expect(stdout).toContain("VS Code: none -> 0.6.0 ok");
+    expect(calls.map((call) => call.args[3] ?? "")).toEqual([
+      expect.stringContaining(`${earlierCmd} --version`),
+      expect.stringContaining(`${laterCmd} run package`),
+      expect.stringContaining("--list-extensions"),
+      expect.stringContaining("--install-extension"),
+      expect.stringContaining("--list-extensions"),
+    ]);
+    expect(calls.every((call) => call.file === "cmd.exe" && call.args[0] === "/d")).toBe(true);
+    expect(calls[1]?.cwd).toBe("/repo");
   });
 
   it("setup packages when VSIX is absent, and reports packaging or install failures", () => {

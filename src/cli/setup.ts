@@ -209,12 +209,7 @@ export function defaultSetupEnv(
       rmSync(dest, { recursive: true, force: true });
       cpSync(src, dest, { recursive: true });
     },
-    run: (cmd, args, cwd) =>
-      execFileSync(cmd, args, {
-        encoding: "utf8",
-        stdio: "pipe",
-        ...(cwd !== undefined ? { cwd } : {}),
-      }),
+    run: (cmd, args, cwd) => runFile(cmd, args, { cwd }),
   };
 }
 
@@ -655,6 +650,154 @@ export function isExecutableFile(filePath: string): boolean {
   } catch {
     return false;
   }
+}
+
+const CMD_SHIM = /\.(?:cmd|bat)$/i;
+
+function commandHasDir(command: string): boolean {
+  return command.includes("/") || command.includes("\\");
+}
+
+/**
+ * First PATHEXT match for `command` on Windows. A name with a directory is not
+ * searched on PATH. Other platforms return null and the caller runs `command`.
+ */
+export function resolveCommandFile(
+  command: string,
+  pathEnv: string,
+  platform: NodeJS.Platform = process.platform,
+  pathExt?: string,
+  exists: (path: string) => boolean = isExecutableFile,
+): string | null {
+  if (platform !== "win32") return null;
+  const names = commandFileNames(command, platform, pathExt);
+  if (commandHasDir(command)) {
+    for (const name of names) {
+      if (exists(name)) return name;
+    }
+    return null;
+  }
+  for (const entry of pathEnv.split(delimiter)) {
+    if (entry === "") continue;
+    for (const name of names) {
+      const candidate = resolve(entry, name);
+      if (exists(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * Quote one argument for `cmd.exe`.
+ * cmd.exe parses the command line, then a `.cmd` or `.bat` shim parses `%*` again,
+ * so the program is escaped once and each argument twice.
+ */
+function quoteCmdArg(input: string, doubleEscape: boolean): string {
+  let quoted: string;
+  if (input.length === 0) {
+    quoted = '""';
+  } else if (!/[ \t\n\v"]/.test(input)) {
+    quoted = input;
+  } else {
+    quoted = '"';
+    let i = 0;
+    while (i <= input.length) {
+      let slashCount = 0;
+      while (input[i] === "\\") {
+        i += 1;
+        slashCount += 1;
+      }
+      const ch = input[i];
+      if (ch === undefined) {
+        quoted += "\\".repeat(slashCount * 2);
+        break;
+      }
+      quoted +=
+        ch === '"' ? "\\".repeat(slashCount * 2 + 1) + ch : "\\".repeat(slashCount) + ch;
+      i += 1;
+    }
+    quoted += '"';
+  }
+  let escaped = quoted.replace(/[ !%^&()<>|"]/g, "^$&");
+  if (doubleEscape) escaped = escaped.replace(/[ !%^&()<>|"]/g, "^$&");
+  return escaped;
+}
+
+export interface CommandSpawn {
+  file: string;
+  args: string[];
+  windowsVerbatimArguments: boolean;
+}
+
+/** argv for `execFileSync`. Windows `.cmd` and `.bat` files go through `cmd.exe`. */
+export function commandSpawn(
+  command: string,
+  args: readonly string[],
+  platform: NodeJS.Platform,
+  resolvedPath: string | null,
+): CommandSpawn {
+  if (platform === "win32" && resolvedPath !== null && CMD_SHIM.test(resolvedPath)) {
+    const script = [
+      quoteCmdArg(resolvedPath, false),
+      ...args.map((arg) => quoteCmdArg(arg, true)),
+    ].join(" ");
+    return {
+      file: "cmd.exe",
+      args: ["/d", "/s", "/c", script],
+      windowsVerbatimArguments: true,
+    };
+  }
+  return {
+    file: resolvedPath ?? command,
+    args: [...args],
+    windowsVerbatimArguments: false,
+  };
+}
+
+interface RunFileOptions {
+  cwd?: string;
+  platform?: NodeJS.Platform;
+  pathEnv?: string;
+  pathExt?: string;
+  exists?: (path: string) => boolean;
+  execFile?: (
+    file: string,
+    args: readonly string[],
+    options: {
+      encoding: "utf8";
+      stdio: "pipe";
+      cwd?: string;
+      windowsVerbatimArguments?: boolean;
+    },
+  ) => string;
+}
+
+/** Run `command`. On Windows, resolve PATHEXT and start `.cmd` and `.bat` through `cmd.exe`. */
+export function runFile(
+  command: string,
+  args: readonly string[],
+  options: RunFileOptions = {},
+): string {
+  const platform = options.platform ?? process.platform;
+  const resolved =
+    platform === "win32"
+      ? resolveCommandFile(
+          command,
+          options.pathEnv ?? process.env.PATH ?? "",
+          platform,
+          options.pathExt,
+          options.exists ?? isExecutableFile,
+        )
+      : null;
+  const spawn = commandSpawn(command, args, platform, resolved);
+  const execOptions = {
+    encoding: "utf8" as const,
+    stdio: "pipe" as const,
+    ...(spawn.windowsVerbatimArguments ? { windowsVerbatimArguments: true as const } : {}),
+    ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
+  };
+  if (options.execFile !== undefined) return options.execFile(spawn.file, spawn.args, execOptions);
+  return execFileSync(spawn.file, spawn.args, execOptions);
 }
 
 /** First runnable `penmark` on PATH. `platform` and `pathExt` default to this process. */
