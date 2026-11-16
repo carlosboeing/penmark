@@ -313,10 +313,15 @@ test("subgraph cluster title does not overlap its child nodes under the nonce CS
 
   const probe = await page.evaluate(() => {
     const cluster = document.querySelector("#penmark-root .pmk-mermaid svg .cluster")!;
+    // mermaid 12 moves the cluster title into a .cluster-label group and the
+    // child nodes out of the .cluster group, so select both by role/text
+    // rather than by DOM position inside .cluster.
     const title = cluster.querySelector(
-      "foreignObject .nodeLabel, foreignObject span, foreignObject p",
+      ".cluster-label foreignObject .nodeLabel, foreignObject .nodeLabel, foreignObject span, foreignObject p",
     ) as Element | null;
-    const node = document.querySelector("#penmark-root .pmk-mermaid svg .node") as Element | null;
+    const node = [...document.querySelectorAll("#penmark-root .pmk-mermaid svg .node")].find((n) =>
+      /Strategy analyst/.test(n.textContent ?? ""),
+    ) as Element | undefined;
     if (!title || !node) return null;
     const t = title.getBoundingClientRect();
     const n = node.getBoundingClientRect();
