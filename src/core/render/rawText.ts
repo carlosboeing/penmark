@@ -1,5 +1,4 @@
-import type MarkdownIt from "markdown-it";
-import type StateInline from "markdown-it/lib/rules_inline/state_inline.mjs";
+import type { MarkdownIt, StateInline } from "markdown-it";
 
 /**
  * Raw-text elements on the inline path (#51).

@@ -1,4 +1,4 @@
-import type MarkdownIt from "markdown-it";
+import type { MarkdownIt } from "markdown-it";
 
 /** Char offset of the start of each line in `src` (index = line number). */
 function lineStartOffsets(src: string): number[] {

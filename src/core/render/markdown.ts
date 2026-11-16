@@ -1,6 +1,4 @@
-import MarkdownIt from "markdown-it";
-import type StateBlock from "markdown-it/lib/rules_block/state_block.mjs";
-import htmlBlockRule from "markdown-it/lib/rules_block/html_block.mjs";
+import MarkdownIt, { type MarkdownIt as MarkdownItInstance, type StateBlock } from "markdown-it";
 import taskLists from "markdown-it-task-lists";
 import footnote from "markdown-it-footnote";
 import anchor from "markdown-it-anchor";
@@ -68,12 +66,17 @@ function lineText(state: StateBlock, startLine: number): string {
  * The sanitizer (T3) strips comments from the output before it reaches
  * the webview; they must never render as visible text.
  */
-export function createRenderer(opts: RendererOptions): MarkdownIt {
+export function createRenderer(opts: RendererOptions): MarkdownItInstance {
   const md = new MarkdownIt({
     html: true,
     linkify: true,
     highlight: opts.highlight ? (code, lang) => opts.highlight!(code, lang) ?? "" : undefined,
   });
+
+  // markdown-it 15 no longer exposes its lib/ rule modules, so capture the
+  // stock html_block rule from the instance before wrapping it below.
+  const htmlBlockRule = md.block.ruler.__rules__.find((r) => r.name === "html_block")?.fn;
+  if (!htmlBlockRule) throw new Error("markdown-it html_block rule not found");
 
   // CommonMark HTML-block type 2 claims any line beginning with `<!--` as raw
   // HTML through the closing `-->`, which freezes that line's inline markdown as
@@ -150,7 +153,7 @@ export function createRenderer(opts: RendererOptions): MarkdownIt {
         const offsetIndex = token.attrIndex("data-pmk-offset");
         const offsetAttr =
           offsetIndex >= 0 && token.attrs
-            ? ` data-pmk-offset="${md.utils.escapeHtml(token.attrs[offsetIndex]![1])}"`
+            ? ` data-pmk-offset="${md.utils.escapeHtml(String(token.attrs[offsetIndex]![1]))}"`
             : "";
         // Escape the source so <, >, &, " are entity-encoded — this prevents
         // both attribute breakage and XSS. The webview un-escapes via dataset.
@@ -175,7 +178,7 @@ export function createRenderer(opts: RendererOptions): MarkdownIt {
         if (srcIndex >= 0 && token.attrs) {
           const srcAttr = token.attrs[srcIndex];
           if (srcAttr && srcAttr[1]) {
-            srcAttr[1] = resolveImage(srcAttr[1]);
+            srcAttr[1] = resolveImage(String(srcAttr[1]));
           }
         }
       }

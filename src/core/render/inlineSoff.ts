@@ -1,7 +1,4 @@
-import type MarkdownIt from "markdown-it";
-import type StateCore from "markdown-it/lib/rules_core/state_core.mjs";
-import type Token from "markdown-it/lib/token.mjs";
-import type Renderer from "markdown-it/lib/renderer.mjs";
+import type { MarkdownIt, RendererRule, StateCore } from "markdown-it";
 
 /** Char offset of the start of each line in `src`. */
 function lineStartOffsets(src: string): number[] {
@@ -41,13 +38,7 @@ function annotateInlineSoff(state: StateCore): void {
   }
 }
 
-type RenderRule = (
-  tokens: Token[],
-  idx: number,
-  options: object,
-  env: unknown,
-  self: Renderer,
-) => string;
+type RenderRule = RendererRule;
 
 function wrapWithSoff(md: MarkdownIt, defaultRender: RenderRule | undefined): RenderRule {
   return (tokens, idx, options, env, self) => {
