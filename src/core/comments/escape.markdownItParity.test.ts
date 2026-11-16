@@ -1,6 +1,6 @@
 /**
  * `decodeDisplayText` reimplements markdown-it's `isValidEntityCode` rather than
- * importing it, because importing `markdown-it/lib/common/utils.mjs` drags in
+ * importing it, because importing markdown-it's utils drags in
  * `entities` and `mdurl` and triples the eager extension bundle (53 KB -> 136 KB).
  *
  * A copy is only safe while something pins it to the original. markdown-it is a
@@ -9,8 +9,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { isValidEntityCode } from "markdown-it/lib/common/utils.mjs";
+import MarkdownIt from "markdown-it";
 import { decodeDisplayText } from "./escape.js";
+
+// markdown-it 15 no longer exposes its lib/ modules; md.utils is the public
+// surface carrying the same isValidEntityCode implementation.
+const { isValidEntityCode } = new MarkdownIt().utils;
 
 /** `&#38;` is a deliberate divergence: rendering it can build a new reference. */
 const AMPERSAND = 38;
