@@ -21,6 +21,11 @@ updates:
       # restores that path; only this version is ignored.
       - dependency-name: "tsx"
         versions: ["4.23.15"]
+      # Hold @vscode/vsce 4.x: packaging-only, v3 still packages fine, and the
+      # v4 lockfile churn breaks the sanitize T9 unit test. Revisit when v3 is
+      # deprecated or stops packaging.
+      - dependency-name: "@vscode/vsce"
+        update-types: ["version-update:semver-major"]
     groups:
       # Batch low-risk minor/patch bumps into a single PR to cut review churn;
       # majors come through as individual PRs so they get scrutinized on their own.
