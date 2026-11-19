@@ -296,7 +296,7 @@
     "lint": "eslint src test vitest.config.ts playwright.config.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"*.{json,mjs,ts}\"",
     "build:production": "node esbuild.mjs --production",
-    "package": "npm run build:production && vsce package",
+    "package": "npm run build:production && vsce package --no-dependencies",
     "install:local": "node scripts/install-local.mjs",
     "test:unit": "vitest run --coverage",
     "test:browser": "playwright test",

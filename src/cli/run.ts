@@ -17,6 +17,7 @@ import {
   type Finding,
   type QuoteMatch,
 } from "../core/comments/apply.js";
+import { defaultSetupEnv, runDoctor, runSetup, type SetupEnv } from "./setup.js";
 
 export interface Io {
   read(path: string): Buffer;
@@ -26,6 +27,7 @@ export interface Io {
   stderr(text: string): void;
   gitAuthor(dir: string): string | null;
   now(): string;
+  setupEnv?(root: string, version: string): SetupEnv;
 }
 
 const defaultIo: Io = {
@@ -76,8 +78,32 @@ export function run(argv: string[], io: Io = defaultIo): number {
   if (kind === "comment") return usageError(io, "penmark comment needs apply or locate", usage);
   const unknown = unknownFlag(args.flags, kind);
   if (unknown !== null) return usageError(io, `unknown option: --${unknown}`, usage);
+  if (kind === "setup" || kind === "doctor") {
+    const rest = args.positionals.slice(1);
+    if (rest.length > 0) return usageError(io, `unexpected argument: ${rest[0]}`, usage);
+    const { root, version } = packageInfo();
+    const env =
+      io.setupEnv !== undefined
+        ? io.setupEnv(root, version)
+        : defaultSetupEnv(
+            root,
+            version,
+            (text) => io.stdout(text),
+            (text) => io.stderr(text),
+          );
+    if (kind === "setup") {
+      return runSetup(env, {
+        yes: args.flags.get("yes") === true,
+        defaults: args.flags.get("defaults") === true,
+        repair: args.flags.get("repair") === true,
+        dryRun: args.flags.get("dry-run") === true,
+      });
+    }
+    return runDoctor(env);
+  }
   const file = args.flags.get("file");
-  if (typeof file !== "string" || file === "") return usageError(io, `${commandLabel(kind)} needs --file`, usage);
+  if (typeof file !== "string" || file === "")
+    return usageError(io, `${commandLabel(kind)} needs --file`, usage);
   if (countFlag(argv, "--file") !== 1) return usageError(io, "pass --file once", usage);
 
   try {
@@ -107,7 +133,8 @@ function applyCommand(file: string, rest: string[], args: ParsedArgs, io: Io): n
   const first = readUtf8(io, file);
   if (first === null) return fail(io, 1, "file is not valid UTF-8");
   const authorFlag = args.flags.get("author");
-  const author = typeof authorFlag === "string" && authorFlag !== "" ? authorFlag : io.gitAuthor(dirname(file));
+  const author =
+    typeof authorFlag === "string" && authorFlag !== "" ? authorFlag : io.gitAuthor(dirname(file));
   if (author === null || author === "") return fail(io, 1, "missing author");
   if (/[\r\n]/.test(author) || author.includes("--")) return fail(io, 1, "bad author");
 
@@ -144,7 +171,8 @@ function applyCommand(file: string, rest: string[], args: ParsedArgs, io: Io): n
 function locateCommand(file: string, rest: string[], args: ParsedArgs, io: Io): number {
   if (rest.length > 0) return usageError(io, `unexpected argument: ${rest[0]}`, USAGE.locate);
   const quote = args.flags.get("quote");
-  if (typeof quote !== "string" || quote.trim() === "") return usageError(io, "comment locate needs --quote", USAGE.locate);
+  if (typeof quote !== "string" || quote.trim() === "")
+    return usageError(io, "comment locate needs --quote", USAGE.locate);
   const decoded = readUtf8(io, file);
   if (decoded === null) return fail(io, 1, "file is not valid UTF-8");
   const corruption = validateText(decoded.text);
@@ -298,17 +326,21 @@ function toFileMatches(matches: QuoteMatch[], bom: string): QuoteMatch[] {
 }
 
 const USAGE = {
-  apply: "Usage: penmark comment apply --file <path> [--author <name>] [--provenance agent|human] [--dry-run]",
+  apply:
+    "Usage: penmark comment apply --file <path> [--author <name>] [--provenance agent|human] [--dry-run]",
   locate: "Usage: penmark comment locate --file <path> --quote <text>",
   list: "Usage: penmark list --file <path>",
   validate: "Usage: penmark validate --file <path>",
   resolve: "Usage: penmark resolve --file <path> <id>",
   export: "Usage: penmark export-prompt --file <path>",
+  setup: "Usage: penmark setup [--defaults] [--yes] [--dry-run] [--repair]",
+  doctor: "Usage: penmark doctor",
   comment: "Usage: penmark comment apply|locate --file <path>",
   help: "Run penmark --help for the commands.",
 } as const;
 
-type Kind = "apply" | "locate" | "list" | "validate" | "resolve" | "export" | "comment";
+type Kind =
+  "apply" | "locate" | "list" | "validate" | "resolve" | "export" | "setup" | "doctor" | "comment";
 
 const FLAGS: Record<Exclude<Kind, "comment">, readonly string[]> = {
   apply: ["file", "author", "provenance", "dry-run"],
@@ -317,6 +349,8 @@ const FLAGS: Record<Exclude<Kind, "comment">, readonly string[]> = {
   validate: ["file"],
   resolve: ["file"],
   export: ["file"],
+  setup: ["defaults", "yes", "dry-run", "repair"],
+  doctor: [],
 };
 
 const HELP = `
@@ -326,6 +360,7 @@ const HELP = `
 
   USAGE
     penmark <command> --file <path>
+    penmark setup | doctor
     penmark help                  Show this text
 
   COMMANDS
@@ -335,11 +370,13 @@ const HELP = `
     validate --file <path>        Check that the review block is intact
     resolve --file <path> <id>    Delete a comment. A root takes its replies
     export-prompt --file <path>   Print the open comments as text
+    setup                         Install or update the extension and skill
+    doctor                        Report command, editor, and skill state
     version                       Print the installed version
 
   OPTIONS
     --file <path>                 The markdown file. Required on every command
-                                  except help and version
+                                  except setup, doctor, help, and version
     --author <name>               comment apply. Defaults to git user.name
     --provenance agent|human      comment apply. Defaults to agent
     --dry-run                     comment apply. Report the plan and do not write
@@ -355,7 +392,9 @@ const HELP = `
 `;
 
 function wantsVersion(argv: string[]): boolean {
-  return argv.length > 0 && argv.every((arg) => arg === "version" || arg === "--version" || arg === "-v");
+  return (
+    argv.length > 0 && argv.every((arg) => arg === "version" || arg === "--version" || arg === "-v")
+  );
 }
 
 function helpText(words: string[]): string {
@@ -379,18 +418,41 @@ function helpText(words: string[]): string {
 `;
   }
   if (cmd === "comment" && sub === "locate") {
-    return commandHelp("comment locate", "Find where a quoted passage sits in the file.", USAGE.locate);
+    return commandHelp(
+      "comment locate",
+      "Find where a quoted passage sits in the file.",
+      USAGE.locate,
+    );
   }
   if (cmd === "comment") {
     return commandHelp("comment", "apply writes findings. locate finds a passage.", USAGE.comment);
   }
   if (cmd === "list") return commandHelp("list", "List the comments in the file.", USAGE.list);
-  if (cmd === "validate") return commandHelp("validate", "Check that the review block is intact.", USAGE.validate);
+  if (cmd === "validate")
+    return commandHelp("validate", "Check that the review block is intact.", USAGE.validate);
   if (cmd === "resolve") {
-    return commandHelp("resolve", "Delete a comment. Deleting a root also deletes its replies.", USAGE.resolve);
+    return commandHelp(
+      "resolve",
+      "Delete a comment. Deleting a root also deletes its replies.",
+      USAGE.resolve,
+    );
   }
   if (cmd === "export-prompt") {
     return commandHelp("export-prompt", "Print the open comments as text.", USAGE.export);
+  }
+  if (cmd === "setup") {
+    return commandHelp(
+      "setup",
+      "Install or update the extension in chosen editors and the review skill.",
+      USAGE.setup,
+    );
+  }
+  if (cmd === "doctor") {
+    return commandHelp(
+      "doctor",
+      "Report whether the command, editor extensions, and skill are ready.",
+      USAGE.doctor,
+    );
   }
   return HELP;
 }
@@ -407,6 +469,8 @@ function kindOf(cmd: string | undefined, sub: string | undefined): Kind | null {
   if (cmd === "validate") return "validate";
   if (cmd === "export-prompt") return "export";
   if (cmd === "resolve") return "resolve";
+  if (cmd === "setup") return "setup";
+  if (cmd === "doctor") return "doctor";
   return null;
 }
 
@@ -416,7 +480,7 @@ function usageFor(kind: Kind | null): string {
 }
 
 function commandName(cmd: string, sub: string | undefined): string {
-  if (cmd === "resolve" || sub === undefined) return cmd;
+  if (cmd === "resolve" || cmd === "setup" || cmd === "doctor" || sub === undefined) return cmd;
   return `${cmd} ${sub}`;
 }
 
@@ -427,7 +491,10 @@ function commandLabel(kind: Exclude<Kind, "comment">): string {
   return `penmark ${kind}`;
 }
 
-function unknownFlag(flags: Map<string, string | true>, kind: Exclude<Kind, "comment">): string | null {
+function unknownFlag(
+  flags: Map<string, string | true>,
+  kind: Exclude<Kind, "comment">,
+): string | null {
   for (const key of flags.keys()) {
     if (!FLAGS[kind].includes(key)) return key;
   }
@@ -439,21 +506,30 @@ function usageError(io: Io, reason: string, action: string): number {
   return 1;
 }
 
-function packageVersion(): string {
+function packageInfo(): { root: string; version: string } {
   // The linked bin is a symlink, so follow it. tsx runs src/cli/main.ts and
   // the package is two levels up. The bundle is dist-cli/cli.js and the
   // package is one level up.
   const entry = process.argv[1] ?? "";
   const here = dirname(entry === "" ? entry : realpathSync(entry));
-  for (const path of [join(here, "../package.json"), join(here, "../../package.json")]) {
+  for (const dir of [join(here, ".."), join(here, "../..")]) {
     try {
-      const pkg = JSON.parse(readFileSync(path, "utf8")) as { name?: string; version?: string };
-      if (pkg.name === "penmark-markdown-review" && typeof pkg.version === "string") return pkg.version;
+      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+        name?: string;
+        version?: string;
+      };
+      if (pkg.name === "penmark-markdown-review" && typeof pkg.version === "string") {
+        return { root: dir, version: pkg.version };
+      }
     } catch {
       // Try the other depth.
     }
   }
-  return "unknown";
+  return { root: here, version: "unknown" };
+}
+
+function packageVersion(): string {
+  return packageInfo().version;
 }
 
 function parseArgv(argv: string[]): ParsedArgs {
@@ -470,9 +546,13 @@ function parseArgv(argv: string[]): ParsedArgs {
       help = true;
       continue;
     }
+    if (arg === "-y") {
+      flags.set("yes", true);
+      continue;
+    }
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "dry-run") {
+      if (key === "dry-run" || key === "yes" || key === "defaults" || key === "repair") {
         flags.set(key, true);
         continue;
       }
@@ -510,7 +590,10 @@ function fail(io: Io, code: number, error: string): number {
 
 function gitAuthor(dir: string): string | null {
   try {
-    const name = execFileSync("git", ["config", "user.name"], { cwd: dir, encoding: "utf8" }).trim();
+    const name = execFileSync("git", ["config", "user.name"], {
+      cwd: dir,
+      encoding: "utf8",
+    }).trim();
     return name === "" ? null : name;
   } catch {
     return null;

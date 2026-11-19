@@ -9,6 +9,7 @@ What shipped in this project, when. Most recent first. Each entry references the
 - `penmark comment apply` writes findings into the markdown file. A second note on a sentence that already has a comment is a reply and adds no second highlight. The preview shows that reply under the original comment. Reply on a root comment does the same. Resolving the original comment removes its replies. [ADR 0009](adrs/0009-replies-on-v1.md).
 - The command is a separate esbuild entry (`dist-cli/`) and is not in the VSIX. `skills/penmark-comments/` asks before anything is written, then runs the command.
 - `penmark` and `penmark --help` print usage. A usage mistake names the command to run. Command results stay JSON.
+- `penmark setup` asks which found editors (VS Code, Insiders, Cursor, Windsurf, Antigravity) get the extension and whether to install `skills/penmark-comments/` into the harness skill directory (`~/.claude/skills`), remembers those choices so a repeat run updates in place and only asks about a newly found editor, and prints the command version, each editor's version, where the skill went, and that each editor window needs a reload. `penmark doctor` changes nothing and reports whether `penmark` is on `PATH`, the extension version in each editor, and whether the loaded skill is the repository's current skill or the old hand-writer.
 
 ## v0.6.0 — 2026-10-20
 
